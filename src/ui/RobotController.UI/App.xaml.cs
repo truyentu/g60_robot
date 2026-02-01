@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using RobotController.Common.Services;
 using Serilog;
 using System.Windows;
 
@@ -29,9 +30,8 @@ public partial class App : Application
             .UseSerilog()
             .ConfigureServices((context, services) =>
             {
-                // TODO: Register services in IMPL_P1_02, IMPL_P1_03
-                // services.AddSingleton<IIpcClientService, IpcClientService>();
-                // services.AddSingleton<IConfigService, ConfigService>();
+                // Services
+                services.AddSingleton<IIpcClientService, IpcClientService>();
 
                 // ViewModels
                 services.AddSingleton<ViewModels.MainViewModel>();
@@ -52,8 +52,12 @@ public partial class App : Application
     {
         Log.Information("Robot Controller UI shutting down");
 
+        // Dispose IPC client
         if (_host != null)
         {
+            var ipcClient = _host.Services.GetService<IIpcClientService>();
+            ipcClient?.Dispose();
+
             await _host.StopAsync();
             _host.Dispose();
         }

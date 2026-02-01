@@ -12,10 +12,6 @@
         Background="{StaticResource PrimaryBackground}"
         WindowStartupLocation="CenterScreen">
 
-    <Window.DataContext>
-        <vm:MainViewModel/>
-    </Window.DataContext>
-
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>  <!-- Menu -->
@@ -35,8 +31,8 @@
                 <MenuItem Header="E_xit" Click="MenuItem_Exit_Click"/>
             </MenuItem>
             <MenuItem Header="_Robot">
-                <MenuItem Header="_Connect"/>
-                <MenuItem Header="_Disconnect"/>
+                <MenuItem Header="_Connect" Command="{Binding ConnectCommand}"/>
+                <MenuItem Header="_Disconnect" Command="{Binding ConnectCommand}"/>
                 <Separator/>
                 <MenuItem Header="_Home All Axes"/>
             </MenuItem>
@@ -53,12 +49,14 @@
         <!-- Toolbar -->
         <ToolBarTray Grid.Row="1" Background="{StaticResource SecondaryBackground}">
             <ToolBar Background="{StaticResource SecondaryBackground}">
-                <Button Content="Connect" Margin="2"/>
+                <Button Content="Connect" Command="{Binding ConnectCommand}" Margin="2" MinWidth="70"/>
                 <Button Content="Home" Margin="2"/>
                 <Separator/>
                 <Button Content="Run" Margin="2"/>
                 <Button Content="Pause" Margin="2"/>
                 <Button Content="Stop" Margin="2"/>
+                <Separator/>
+                <Button Content="Refresh" Command="{Binding RefreshStatusCommand}" Margin="2"/>
             </ToolBar>
         </ToolBarTray>
 

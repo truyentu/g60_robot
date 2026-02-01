@@ -51,6 +51,7 @@ set(CORE_HEADERS
     include/robot_controller/core.hpp
     src/ipc/IpcServer.hpp
     src/ipc/Message.hpp
+    src/ipc/MessageTypes.hpp
     src/config/ConfigManager.hpp
     src/config/RobotConfig.hpp
     src/robot/RobotModel.hpp
@@ -96,6 +97,7 @@ add_executable(robot_core_tests
     tests/test_ipc.cpp
     src/config/ConfigManager.cpp
     src/logging/Logger.cpp
+    src/ipc/IpcServer.cpp
 )
 
 target_include_directories(robot_core_tests
