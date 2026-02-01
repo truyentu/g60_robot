@@ -85,6 +85,11 @@ set(CORE_HEADERS
     src/welding/WeldingController.hpp
     src/welding/WeldingIO.hpp
     src/ipc/WeldingPayloads.hpp
+    src/ipc/WeavePayloads.hpp
+    src/welding/WeavingTypes.hpp
+    src/welding/WeavePatternGenerator.hpp
+    src/welding/WeaveExecutor.hpp
+    src/welding/WeaveVisualizer.hpp
 )
 
 # ============================================================================
@@ -261,6 +266,34 @@ if(WIN32)
 endif()
 
 gtest_discover_tests(test_welding)
+
+# ============================================================================
+# Weaving Tests
+# ============================================================================
+add_executable(test_weaving
+    tests/test_weaving.cpp
+)
+
+target_include_directories(test_weaving
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_weaving
+    PRIVATE
+        GTest::gtest
+        GTest::gtest_main
+        Eigen3::Eigen
+)
+
+if(WIN32)
+    target_compile_definitions(test_weaving PRIVATE
+        NOMINMAX
+    )
+endif()
+
+gtest_discover_tests(test_weaving)
 
 # ============================================================================
 # Installation
