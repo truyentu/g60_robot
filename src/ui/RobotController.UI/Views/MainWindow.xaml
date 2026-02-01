@@ -12,6 +12,25 @@
         Background="{StaticResource PrimaryBackground}"
         WindowStartupLocation="CenterScreen">
 
+    <Window.Resources>
+        <!-- Button Style -->
+        <Style TargetType="Button" x:Key="ToolbarButton">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource ForegroundBrush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="Margin" Value="2"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#3F3F46"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Foreground" Value="#666666"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>  <!-- Menu -->
@@ -24,199 +43,345 @@
         <Menu Grid.Row="0" Background="{StaticResource SecondaryBackground}"
               Foreground="{StaticResource ForegroundBrush}">
             <MenuItem Header="_File">
-                <MenuItem Header="_New Program"/>
-                <MenuItem Header="_Open Program"/>
-                <MenuItem Header="_Save Program"/>
+                <MenuItem Header="_New Program" InputGestureText="Ctrl+N"/>
+                <MenuItem Header="_Open Program" InputGestureText="Ctrl+O"/>
+                <MenuItem Header="_Save Program" InputGestureText="Ctrl+S"/>
                 <Separator/>
-                <MenuItem Header="E_xit" Click="MenuItem_Exit_Click"/>
+                <MenuItem Header="E_xit" Click="MenuItem_Exit_Click" InputGestureText="Alt+F4"/>
             </MenuItem>
             <MenuItem Header="_Robot">
                 <MenuItem Header="_Connect" Command="{Binding ConnectCommand}"/>
-                <MenuItem Header="_Disconnect" Command="{Binding ConnectCommand}"/>
+                <MenuItem Header="_Disconnect" Command="{Binding DisconnectCommand}"/>
                 <Separator/>
-                <MenuItem Header="_Home All Axes"/>
+                <MenuItem Header="_Home All Axes" IsEnabled="False"/>
+                <MenuItem Header="_Enable Motors" IsEnabled="False"/>
             </MenuItem>
             <MenuItem Header="_View">
-                <MenuItem Header="_3D Viewport" IsCheckable="True" IsChecked="True"/>
-                <MenuItem Header="_Program Editor" IsCheckable="True"/>
-                <MenuItem Header="_Diagnostics" IsCheckable="True"/>
+                <MenuItem Header="Reset _Camera" Click="MenuItem_ResetCamera_Click"/>
+                <MenuItem Header="_Top View" Click="MenuItem_TopView_Click"/>
+                <MenuItem Header="_Front View" Click="MenuItem_FrontView_Click"/>
+                <MenuItem Header="_Side View" Click="MenuItem_SideView_Click"/>
+                <Separator/>
+                <MenuItem Header="Show _Grid" IsCheckable="True" IsChecked="{Binding ShowGrid}"/>
+                <MenuItem Header="Show _Axes" IsCheckable="True" IsChecked="{Binding ShowAxes}"/>
+                <MenuItem Header="Show _TCP" IsCheckable="True" IsChecked="{Binding ShowTcp}"/>
             </MenuItem>
             <MenuItem Header="_Help">
-                <MenuItem Header="_About"/>
+                <MenuItem Header="_About" Click="MenuItem_About_Click"/>
             </MenuItem>
         </Menu>
 
         <!-- Toolbar -->
-        <ToolBarTray Grid.Row="1" Background="{StaticResource SecondaryBackground}">
-            <ToolBar Background="{StaticResource SecondaryBackground}">
-                <Button Content="Connect" Command="{Binding ConnectCommand}" Margin="2" MinWidth="70"/>
-                <Button Content="Home" Margin="2"/>
-                <Separator/>
-                <Button Content="Run" Margin="2"/>
-                <Button Content="Pause" Margin="2"/>
-                <Button Content="Stop" Margin="2"/>
-                <Separator/>
-                <Button Content="Refresh" Command="{Binding RefreshStatusCommand}" Margin="2"/>
-            </ToolBar>
-        </ToolBarTray>
+        <Border Grid.Row="1" Background="{StaticResource SecondaryBackground}"
+                BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+            <StackPanel Orientation="Horizontal" Margin="5,3">
+                <Button Content="Connect" Command="{Binding ConnectCommand}" Style="{StaticResource ToolbarButton}"/>
+                <Button Content="Disconnect" Command="{Binding DisconnectCommand}" Style="{StaticResource ToolbarButton}"/>
+                <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="5,0"/>
+                <Button Content="Refresh" Command="{Binding RefreshStatusCommand}" Style="{StaticResource ToolbarButton}"/>
+                <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="5,0"/>
+                <Button Content="Home" Style="{StaticResource ToolbarButton}" IsEnabled="False"/>
+                <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="5,0"/>
+                <Button Content="Run" Style="{StaticResource ToolbarButton}" IsEnabled="False" Foreground="LimeGreen"/>
+                <Button Content="Pause" Style="{StaticResource ToolbarButton}" IsEnabled="False" Foreground="Orange"/>
+                <Button Content="Stop" Style="{StaticResource ToolbarButton}" IsEnabled="False" Foreground="Red"/>
+                <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="5,0"/>
+                <TextBlock Text="Speed:" VerticalAlignment="Center" Foreground="Gray" Margin="5,0"/>
+                <Slider Value="{Binding SpeedOverride}" Minimum="0" Maximum="100" Width="100"
+                        VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding SpeedOverride, StringFormat={}{0:F0}%}" Width="35"
+                           VerticalAlignment="Center" Foreground="{StaticResource ForegroundBrush}"/>
+            </StackPanel>
+        </Border>
 
         <!-- Main Content -->
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="200"/>  <!-- Navigation -->
-                <ColumnDefinition Width="*"/>    <!-- 3D Viewport -->
-                <ColumnDefinition Width="250"/>  <!-- Properties -->
+                <ColumnDefinition Width="200" MinWidth="150"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="260" MinWidth="200"/>
             </Grid.ColumnDefinitions>
 
             <!-- Navigation Panel -->
-            <Border Grid.Column="0" Background="{StaticResource SecondaryBackground}"
-                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0">
-                <StackPanel Margin="5">
-                    <TextBlock Text="Navigation" FontWeight="Bold"
-                               Foreground="{StaticResource ForegroundBrush}" Margin="5"/>
-                    <ListBox Background="Transparent" BorderThickness="0"
-                             Foreground="{StaticResource ForegroundBrush}">
-                        <ListBoxItem Content="Manual Jog" IsSelected="True"/>
+            <Border Grid.Column="0" Background="{StaticResource SecondaryBackground}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="Navigation" FontWeight="Bold" Margin="10"
+                               Foreground="{StaticResource ForegroundBrush}"/>
+
+                    <ListBox Grid.Row="1" Background="Transparent" BorderThickness="0"
+                             Foreground="{StaticResource ForegroundBrush}"
+                             SelectedIndex="{Binding SelectedNavIndex}">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Padding" Value="10,8"/>
+                                <Style.Triggers>
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBoxItem Content="Manual Jog"/>
                         <ListBoxItem Content="Program"/>
                         <ListBoxItem Content="I/O"/>
                         <ListBoxItem Content="Configuration"/>
                         <ListBoxItem Content="Diagnostics"/>
                     </ListBox>
-                </StackPanel>
+                </Grid>
             </Border>
 
+            <!-- Left Splitter -->
+            <GridSplitter Grid.Column="1" Width="3" Background="{StaticResource BorderBrush}"
+                          HorizontalAlignment="Center" VerticalAlignment="Stretch"/>
+
             <!-- 3D Viewport -->
-            <helix:HelixViewport3D Grid.Column="1"
-                                   x:Name="Viewport3D"
-                                   Background="#1E1E1E"
-                                   ShowCoordinateSystem="True"
-                                   CoordinateSystemLabelForeground="White"
-                                   ZoomExtentsWhenLoaded="True">
+            <Border Grid.Column="2" Background="#1A1A1A">
+                <helix:HelixViewport3D x:Name="Viewport3D"
+                                       Background="#1E1E1E"
+                                       ShowCoordinateSystem="True"
+                                       CoordinateSystemLabelForeground="White"
+                                       ZoomExtentsWhenLoaded="True"
+                                       CameraRotationMode="Turntable"
+                                       IsRotationEnabled="True"
+                                       IsPanEnabled="True"
+                                       IsZoomEnabled="True"
+                                       ShowViewCube="True"
+                                       ViewCubeBackText="Back"
+                                       ViewCubeFrontText="Front"
+                                       ViewCubeLeftText="Left"
+                                       ViewCubeRightText="Right"
+                                       ViewCubeTopText="Top"
+                                       ViewCubeBottomText="Bottom">
 
-                <!-- Lighting -->
-                <helix:DefaultLights/>
+                    <!-- Camera -->
+                    <helix:HelixViewport3D.Camera>
+                        <PerspectiveCamera Position="1500,1500,1000"
+                                           LookDirection="-1,-1,-0.5"
+                                           UpDirection="0,0,1"
+                                           FieldOfView="45"/>
+                    </helix:HelixViewport3D.Camera>
 
-                <!-- Grid -->
-                <helix:GridLinesVisual3D Width="2000" Length="2000"
-                                         MajorDistance="100" MinorDistance="25"
-                                         Thickness="0.5" Fill="Gray"/>
+                    <!-- Lighting -->
+                    <ModelVisual3D x:Name="LightingModel">
+                        <ModelVisual3D.Content>
+                            <Model3DGroup>
+                                <AmbientLight Color="#404040"/>
+                                <DirectionalLight Color="#C8C8C8" Direction="-1,-1,-1"/>
+                                <DirectionalLight Color="#646464" Direction="1,0.5,0.5"/>
+                            </Model3DGroup>
+                        </ModelVisual3D.Content>
+                    </ModelVisual3D>
 
-                <!-- Coordinate Axes -->
-                <helix:CoordinateSystemVisual3D ArrowLengths="100"/>
+                    <!-- Grid -->
+                    <helix:GridLinesVisual3D x:Name="GridLines"
+                                             Width="2000" Length="2000"
+                                             MajorDistance="500" MinorDistance="100"
+                                             Thickness="1"
+                                             Fill="#404040"/>
 
-                <!-- Robot Model Placeholder -->
-                <ModelVisual3D x:Name="RobotModel">
-                    <!-- TODO: Load robot model in IMPL_P1_04 -->
-                    <ModelVisual3D.Content>
-                        <GeometryModel3D>
-                            <GeometryModel3D.Geometry>
-                                <MeshGeometry3D Positions="-50,-50,0 50,-50,0 50,50,0 -50,50,0
-                                                          -50,-50,100 50,-50,100 50,50,100 -50,50,100"
-                                               TriangleIndices="0,1,2 0,2,3 4,6,5 4,7,6
-                                                               0,4,5 0,5,1 2,6,7 2,7,3
-                                                               0,3,7 0,7,4 1,5,6 1,6,2"/>
-                            </GeometryModel3D.Geometry>
-                            <GeometryModel3D.Material>
-                                <DiffuseMaterial Brush="Orange"/>
-                            </GeometryModel3D.Material>
-                        </GeometryModel3D>
-                    </ModelVisual3D.Content>
-                </ModelVisual3D>
+                    <!-- Coordinate Axes -->
+                    <helix:CoordinateSystemVisual3D x:Name="CoordAxes"
+                                                    ArrowLengths="200"/>
 
-            </helix:HelixViewport3D>
+                    <!-- Robot Model Container -->
+                    <ModelVisual3D x:Name="RobotModelVisual"/>
+
+                    <!-- TCP Marker Container -->
+                    <ModelVisual3D x:Name="TcpMarkerVisual"/>
+
+                </helix:HelixViewport3D>
+            </Border>
+
+            <!-- Right Splitter -->
+            <GridSplitter Grid.Column="3" Width="3" Background="{StaticResource BorderBrush}"
+                          HorizontalAlignment="Center" VerticalAlignment="Stretch"/>
 
             <!-- Properties Panel -->
-            <Border Grid.Column="2" Background="{StaticResource SecondaryBackground}"
-                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1,0,0,0">
+            <Border Grid.Column="4" Background="{StaticResource SecondaryBackground}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="10">
-                        <TextBlock Text="Robot Status" FontWeight="Bold"
-                                   Foreground="{StaticResource ForegroundBrush}" Margin="0,0,0,10"/>
-
                         <!-- Connection Status -->
-                        <Border Background="#333333" CornerRadius="3" Padding="8" Margin="0,0,0,10">
-                            <StackPanel>
-                                <TextBlock Text="Connection" Foreground="Gray" FontSize="10"/>
-                                <TextBlock Text="{Binding ConnectionStatus}"
-                                           Foreground="{Binding ConnectionStatusColor}"
-                                           FontWeight="Bold"/>
-                            </StackPanel>
+                        <TextBlock Text="Connection" FontWeight="Bold" Margin="0,0,0,5"
+                                   Foreground="{StaticResource ForegroundBrush}"/>
+                        <Border Background="#333333" CornerRadius="3" Padding="10" Margin="0,0,0,15">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="{Binding ConnectionStatus}"
+                                               Foreground="{Binding ConnectionStatusColor}"
+                                               FontWeight="Bold" FontSize="14"/>
+                                    <TextBlock Text="{Binding CoreVersion, StringFormat=Core v{0}}"
+                                               Foreground="Gray" FontSize="10"
+                                               Visibility="{Binding IsConnected, Converter={StaticResource BoolToVisibility}}"/>
+                                </StackPanel>
+                                <Ellipse Grid.Column="1" Width="12" Height="12"
+                                         Fill="{Binding ConnectionStatusColor}"
+                                         VerticalAlignment="Center"/>
+                            </Grid>
                         </Border>
 
-                        <!-- Robot State -->
-                        <Border Background="#333333" CornerRadius="3" Padding="8" Margin="0,0,0,10">
-                            <StackPanel>
-                                <TextBlock Text="State" Foreground="Gray" FontSize="10"/>
-                                <TextBlock Text="{Binding RobotState}"
-                                           Foreground="{StaticResource ForegroundBrush}"
-                                           FontWeight="Bold"/>
-                            </StackPanel>
+                        <!-- Robot Status -->
+                        <TextBlock Text="Robot Status" FontWeight="Bold" Margin="0,0,0,5"
+                                   Foreground="{StaticResource ForegroundBrush}"/>
+                        <Border Background="#333333" CornerRadius="3" Padding="10" Margin="0,0,0,15">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition/>
+                                    <RowDefinition/>
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Row="0" Grid.Column="0">
+                                    <TextBlock Text="State" Foreground="Gray" FontSize="10"/>
+                                    <TextBlock Text="{Binding RobotState}" FontWeight="Bold"
+                                               Foreground="{StaticResource ForegroundBrush}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="0" Grid.Column="1">
+                                    <TextBlock Text="Mode" Foreground="Gray" FontSize="10"/>
+                                    <TextBlock Text="{Binding RobotMode}"
+                                               Foreground="{StaticResource ForegroundBrush}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,8,0,0">
+                                    <TextBlock Text="Homed" Foreground="Gray" FontSize="10"/>
+                                    <TextBlock Text="{Binding IsHomed}"
+                                               Foreground="{Binding IsHomed, Converter={StaticResource BoolToColor}}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,8,0,0">
+                                    <TextBlock Text="Enabled" Foreground="Gray" FontSize="10"/>
+                                    <TextBlock Text="{Binding IsEnabled}"
+                                               Foreground="{Binding IsEnabled, Converter={StaticResource BoolToColor}}"/>
+                                </StackPanel>
+                            </Grid>
                         </Border>
 
                         <!-- Joint Positions -->
-                        <TextBlock Text="Joint Positions" FontWeight="Bold"
-                                   Foreground="{StaticResource ForegroundBrush}" Margin="0,10,0,5"/>
-                        <ItemsControl ItemsSource="{Binding JointPositions}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Grid Margin="0,2">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="40"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Text="{Binding Name}" Foreground="Gray"/>
-                                        <TextBlock Grid.Column="1" Text="{Binding Value, StringFormat={}{0:F2}}"
-                                                   Foreground="{StaticResource ForegroundBrush}"
-                                                   HorizontalAlignment="Right"/>
-                                    </Grid>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+                        <TextBlock Text="Joint Positions" FontWeight="Bold" Margin="0,0,0,5"
+                                   Foreground="{StaticResource ForegroundBrush}"/>
+                        <Border Background="#333333" CornerRadius="3" Padding="10" Margin="0,0,0,15">
+                            <ItemsControl ItemsSource="{Binding JointPositions}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,3">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="35"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="70"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="{Binding Name}"
+                                                       Foreground="Gray" FontWeight="Bold"/>
+                                            <ProgressBar Grid.Column="1"
+                                                         Value="{Binding Value}" Minimum="-180" Maximum="180"
+                                                         Height="6" Margin="5,0"
+                                                         Background="#222222" Foreground="{StaticResource AccentBrush}"/>
+                                            <TextBlock Grid.Column="2" Text="{Binding Value, StringFormat={}{0:F2}°}"
+                                                       Foreground="{StaticResource ForegroundBrush}"
+                                                       HorizontalAlignment="Right"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
 
                         <!-- TCP Position -->
-                        <TextBlock Text="TCP Position" FontWeight="Bold"
-                                   Foreground="{StaticResource ForegroundBrush}" Margin="0,15,0,5"/>
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition/>
-                                <RowDefinition/>
-                                <RowDefinition/>
-                            </Grid.RowDefinitions>
-                            <TextBlock Grid.Row="0" Grid.Column="0" Text="X:" Foreground="Gray"/>
-                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding TcpX, StringFormat={}{0:F1} mm}"
-                                       Foreground="{StaticResource ForegroundBrush}" HorizontalAlignment="Right"/>
-                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Y:" Foreground="Gray"/>
-                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding TcpY, StringFormat={}{0:F1} mm}"
-                                       Foreground="{StaticResource ForegroundBrush}" HorizontalAlignment="Right"/>
-                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Z:" Foreground="Gray"/>
-                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding TcpZ, StringFormat={}{0:F1} mm}"
-                                       Foreground="{StaticResource ForegroundBrush}" HorizontalAlignment="Right"/>
-                        </Grid>
+                        <TextBlock Text="TCP Position" FontWeight="Bold" Margin="0,0,0,5"
+                                   Foreground="{StaticResource ForegroundBrush}"/>
+                        <Border Background="#333333" CornerRadius="3" Padding="10" Margin="0,0,0,15">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition/>
+                                    <RowDefinition/>
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition/>
+                                    <ColumnDefinition/>
+                                    <ColumnDefinition/>
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Position -->
+                                <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,5,5">
+                                    <TextBlock Text="X" Foreground="Red" FontSize="10" FontWeight="Bold"/>
+                                    <TextBlock Text="{Binding TcpX, StringFormat={}{0:F1}}"
+                                               Foreground="{StaticResource ForegroundBrush}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,0,5,5">
+                                    <TextBlock Text="Y" Foreground="LimeGreen" FontSize="10" FontWeight="Bold"/>
+                                    <TextBlock Text="{Binding TcpY, StringFormat={}{0:F1}}"
+                                               Foreground="{StaticResource ForegroundBrush}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="0" Grid.Column="2" Margin="0,0,0,5">
+                                    <TextBlock Text="Z" Foreground="DodgerBlue" FontSize="10" FontWeight="Bold"/>
+                                    <TextBlock Text="{Binding TcpZ, StringFormat={}{0:F1}}"
+                                               Foreground="{StaticResource ForegroundBrush}"/>
+                                </StackPanel>
+
+                                <!-- Orientation -->
+                                <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,5,0">
+                                    <TextBlock Text="Rx" Foreground="Gray" FontSize="10"/>
+                                    <TextBlock Text="{Binding TcpRx, StringFormat={}{0:F1}°}"
+                                               Foreground="{StaticResource ForegroundBrush}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,0,5,0">
+                                    <TextBlock Text="Ry" Foreground="Gray" FontSize="10"/>
+                                    <TextBlock Text="{Binding TcpRy, StringFormat={}{0:F1}°}"
+                                               Foreground="{StaticResource ForegroundBrush}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="1" Grid.Column="2">
+                                    <TextBlock Text="Rz" Foreground="Gray" FontSize="10"/>
+                                    <TextBlock Text="{Binding TcpRz, StringFormat={}{0:F1}°}"
+                                               Foreground="{StaticResource ForegroundBrush}"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- Manual Jog -->
+                        <TextBlock Text="Manual Jog" FontWeight="Bold" Margin="0,0,0,5"
+                                   Foreground="{StaticResource ForegroundBrush}"/>
+                        <Border Background="#333333" CornerRadius="3" Padding="10" Margin="0,0,0,15">
+                            <StackPanel>
+                                <TextBlock Text="(Coming in Phase 2)" Foreground="Gray"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </ScrollViewer>
             </Border>
         </Grid>
 
         <!-- Status Bar -->
-        <StatusBar Grid.Row="3" Background="{StaticResource SecondaryBackground}">
-            <StatusBarItem>
-                <StackPanel Orientation="Horizontal">
-                    <Ellipse Width="8" Height="8" Fill="{Binding ConnectionStatusColor}" Margin="0,0,5,0"/>
+        <Border Grid.Row="3" Background="{StaticResource SecondaryBackground}"
+                BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0">
+            <Grid Margin="5,3">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <Ellipse Width="10" Height="10" Fill="{Binding ConnectionStatusColor}" Margin="0,0,5,0"/>
                     <TextBlock Text="{Binding ConnectionStatus}" Foreground="{StaticResource ForegroundBrush}"/>
                 </StackPanel>
-            </StatusBarItem>
-            <Separator/>
-            <StatusBarItem>
-                <TextBlock Text="{Binding RobotState}" Foreground="{StaticResource ForegroundBrush}"/>
-            </StatusBarItem>
-            <Separator/>
-            <StatusBarItem>
-                <TextBlock Text="Robot Controller v1.0.0" Foreground="Gray"/>
-            </StatusBarItem>
-        </StatusBar>
+
+                <TextBlock Grid.Column="1" Text="|" Foreground="Gray" Margin="10,0"/>
+
+                <TextBlock Grid.Column="2" Text="{Binding RobotState}" Foreground="{StaticResource ForegroundBrush}"/>
+
+                <TextBlock Grid.Column="3" Text="Robot Controller v1.0.0" Foreground="Gray"/>
+            </Grid>
+        </Border>
     </Grid>
 </Window>

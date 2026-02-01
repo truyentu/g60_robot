@@ -42,6 +42,9 @@ public partial class App : Application
                 // IPC Client
                 services.AddSingleton<IIpcClientService, IpcClientService>();
 
+                // Viewport Service
+                services.AddSingleton<IViewportService, ViewportService>();
+
                 // ViewModels
                 services.AddSingleton<MainViewModel>();
 

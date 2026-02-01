@@ -1,9 +1,14 @@
 <Application x:Class="RobotController.UI.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             StartupUri="Views/MainWindow.xaml">
+             xmlns:converters="clr-namespace:RobotController.UI.Converters">
     <Application.Resources>
-        <!-- Global Resources -->
+        <!-- Converters -->
+        <converters:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
+        <converters:BoolToColorConverter x:Key="BoolToColor"/>
+        <converters:InverseBoolConverter x:Key="InverseBool"/>
+
+        <!-- Colors -->
         <SolidColorBrush x:Key="PrimaryBackground" Color="#1E1E1E"/>
         <SolidColorBrush x:Key="SecondaryBackground" Color="#252526"/>
         <SolidColorBrush x:Key="BorderBrush" Color="#3F3F46"/>

@@ -1,0 +1,344 @@
+using System.IO;
+using System.Windows.Media;
+using System.Windows.Media.Media3D;
+using HelixToolkit.Wpf;
+using Serilog;
+
+namespace RobotController.UI.Models;
+
+/// <summary>
+/// 3D Robot Model with Forward Kinematics
+/// </summary>
+public class RobotModel3D
+{
+    private readonly List<RobotLink> _links = new();
+    private readonly double[] _jointAngles = new double[6];
+    private Model3DGroup? _modelGroup;
+
+    /// <summary>Robot name from config</summary>
+    public string Name { get; private set; } = "Robot";
+
+    /// <summary>Number of joints (always 6)</summary>
+    public int NumJoints => 6;
+
+    /// <summary>All robot links including base</summary>
+    public IReadOnlyList<RobotLink> Links => _links;
+
+    /// <summary>Current joint angles in degrees</summary>
+    public double[] JointAnglesDegrees => _jointAngles.Select(a => a * 180.0 / Math.PI).ToArray();
+
+    /// <summary>3D model group for viewport</summary>
+    public Model3DGroup? ModelGroup => _modelGroup;
+
+    /// <summary>TCP (Tool Center Point) position</summary>
+    public Point3D TcpPosition { get; private set; }
+
+    /// <summary>TCP orientation as rotation matrix</summary>
+    public Matrix3D TcpOrientation { get; private set; } = Matrix3D.Identity;
+
+    /// <summary>
+    /// Initialize robot model from configuration
+    /// </summary>
+    public bool Initialize(RobotConfigData config, string modelsPath)
+    {
+        try
+        {
+            Name = config.Name;
+            _links.Clear();
+            _modelGroup = new Model3DGroup();
+
+            Log.Information("Initializing robot model: {Name}", Name);
+
+            // Create base link (fixed)
+            var baseLink = CreateLink(0, "Base", null, modelsPath);
+            if (baseLink != null)
+            {
+                _links.Add(baseLink);
+                if (baseLink.Geometry != null)
+                    _modelGroup.Children.Add(baseLink.Geometry);
+            }
+
+            // Create joint links (1-6)
+            for (int i = 0; i < config.DHParameters.Count && i < 6; i++)
+            {
+                var dhParam = config.DHParameters[i];
+                var link = CreateLink(i + 1, $"Link{i + 1}", dhParam, modelsPath);
+                if (link != null)
+                {
+                    _links.Add(link);
+                    if (link.Geometry != null)
+                        _modelGroup.Children.Add(link.Geometry);
+                }
+            }
+
+            // Set home position
+            if (config.HomePosition.Length >= 6)
+            {
+                for (int i = 0; i < 6; i++)
+                {
+                    _jointAngles[i] = config.HomePosition[i] * Math.PI / 180.0;
+                }
+            }
+
+            // Initial FK update
+            UpdateForwardKinematics();
+
+            Log.Information("Robot model initialized with {Count} links", _links.Count);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to initialize robot model");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Create a robot link with geometry
+    /// </summary>
+    private RobotLink? CreateLink(int jointIndex, string name, DHParameterData? dhData, string modelsPath)
+    {
+        var link = new RobotLink
+        {
+            Name = name,
+            JointIndex = jointIndex
+        };
+
+        // Set DH parameters
+        if (dhData != null)
+        {
+            link.DH = new DHParameter
+            {
+                Joint = dhData.Joint,
+                A = dhData.A,
+                Alpha = dhData.Alpha,
+                D = dhData.D,
+                ThetaOffset = dhData.ThetaOffset
+            };
+        }
+
+        // Try to load STL
+        string stlPath = Path.Combine(modelsPath, $"{name.ToLower()}.stl");
+        if (!File.Exists(stlPath))
+        {
+            stlPath = Path.Combine(modelsPath, $"link{jointIndex}.stl");
+        }
+
+        GeometryModel3D? geometry = null;
+
+        if (File.Exists(stlPath))
+        {
+            geometry = LoadStlGeometry(stlPath, GetLinkColor(jointIndex));
+            link.StlPath = stlPath;
+            Log.Debug("Loaded STL for {Name}: {Path}", name, stlPath);
+        }
+        else
+        {
+            // Create placeholder geometry
+            geometry = CreatePlaceholderGeometry(jointIndex);
+            Log.Debug("Created placeholder geometry for {Name}", name);
+        }
+
+        link.Geometry = geometry;
+        return link;
+    }
+
+    /// <summary>
+    /// Load geometry from STL file
+    /// </summary>
+    private GeometryModel3D? LoadStlGeometry(string path, Color color)
+    {
+        try
+        {
+            var reader = new StLReader();
+            var model = reader.Read(path);
+
+            if (model.Children.Count > 0 && model.Children[0] is GeometryModel3D geo)
+            {
+                geo.Material = new DiffuseMaterial(new SolidColorBrush(color));
+                geo.BackMaterial = new DiffuseMaterial(new SolidColorBrush(color));
+                return geo;
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to load STL: {Path}", path);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Create placeholder geometry when STL not available
+    /// </summary>
+    private GeometryModel3D CreatePlaceholderGeometry(int jointIndex)
+    {
+        var builder = new MeshBuilder();
+        var color = GetLinkColor(jointIndex);
+
+        switch (jointIndex)
+        {
+            case 0: // Base
+                builder.AddCylinder(new Point3D(0, 0, 0), new Point3D(0, 0, 50), 100, 32);
+                break;
+            case 1: // Link 1 (rotation around Z)
+                builder.AddCylinder(new Point3D(0, 0, 0), new Point3D(0, 0, 200), 60, 24);
+                break;
+            case 2: // Link 2 (shoulder)
+                builder.AddBox(new Point3D(0, 0, 280), 60, 60, 560);
+                break;
+            case 3: // Link 3 (elbow)
+                builder.AddBox(new Point3D(0, 0, 0), 50, 50, 50);
+                break;
+            case 4: // Link 4 (wrist 1)
+                builder.AddCylinder(new Point3D(0, 0, 0), new Point3D(0, 0, 300), 40, 20);
+                break;
+            case 5: // Link 5 (wrist 2)
+                builder.AddBox(new Point3D(0, 0, 0), 40, 40, 40);
+                break;
+            case 6: // Link 6 (flange)
+                builder.AddCylinder(new Point3D(0, 0, 0), new Point3D(0, 0, 60), 30, 16);
+                break;
+            default:
+                builder.AddBox(new Point3D(0, 0, 0), 30, 30, 30);
+                break;
+        }
+
+        var mesh = builder.ToMesh();
+        var material = new DiffuseMaterial(new SolidColorBrush(color));
+
+        return new GeometryModel3D(mesh, material)
+        {
+            BackMaterial = material
+        };
+    }
+
+    /// <summary>
+    /// Get color for each link
+    /// </summary>
+    private Color GetLinkColor(int jointIndex)
+    {
+        return jointIndex switch
+        {
+            0 => Color.FromRgb(80, 80, 80),      // Base: Dark gray
+            1 => Color.FromRgb(255, 140, 0),    // Link1: Orange
+            2 => Color.FromRgb(255, 165, 0),    // Link2: Light orange
+            3 => Color.FromRgb(255, 180, 0),    // Link3: Yellow-orange
+            4 => Color.FromRgb(100, 149, 237),  // Link4: Cornflower blue
+            5 => Color.FromRgb(65, 105, 225),   // Link5: Royal blue
+            6 => Color.FromRgb(50, 50, 50),     // Link6: Dark gray (flange)
+            _ => Color.FromRgb(128, 128, 128)   // Default: Gray
+        };
+    }
+
+    /// <summary>
+    /// Update a single joint angle (degrees)
+    /// </summary>
+    public void SetJointAngle(int jointIndex, double angleDegrees)
+    {
+        if (jointIndex < 1 || jointIndex > 6) return;
+        _jointAngles[jointIndex - 1] = angleDegrees * Math.PI / 180.0;
+        UpdateForwardKinematics();
+    }
+
+    /// <summary>
+    /// Update all joint angles (degrees)
+    /// </summary>
+    public void SetAllJointAngles(double[] anglesDegrees)
+    {
+        if (anglesDegrees.Length < 6) return;
+        for (int i = 0; i < 6; i++)
+        {
+            _jointAngles[i] = anglesDegrees[i] * Math.PI / 180.0;
+        }
+        UpdateForwardKinematics();
+    }
+
+    /// <summary>
+    /// Update forward kinematics - recalculate all transforms
+    /// </summary>
+    public void UpdateForwardKinematics()
+    {
+        Matrix3D worldTransform = Matrix3D.Identity;
+
+        for (int i = 0; i < _links.Count; i++)
+        {
+            var link = _links[i];
+
+            if (link.JointIndex == 0)
+            {
+                // Base is fixed
+                link.WorldTransform = Matrix3D.Identity;
+            }
+            else
+            {
+                // Calculate DH transform for this joint
+                int jointIdx = link.JointIndex - 1;
+                double theta = jointIdx < _jointAngles.Length ? _jointAngles[jointIdx] : 0;
+
+                Matrix3D dhTransform = link.CalculateDHTransform(theta);
+                worldTransform = Matrix3D.Multiply(dhTransform, worldTransform);
+                link.WorldTransform = worldTransform;
+            }
+
+            // Apply transform to geometry
+            if (link.Geometry != null)
+            {
+                link.Geometry.Transform = new MatrixTransform3D(link.WorldTransform);
+            }
+        }
+
+        // Update TCP position (end of last link)
+        if (_links.Count > 0)
+        {
+            var lastLink = _links[^1];
+            TcpPosition = lastLink.WorldTransform.Transform(new Point3D(0, 0, 0));
+            TcpOrientation = lastLink.WorldTransform;
+        }
+    }
+
+    /// <summary>
+    /// Get TCP position as array [X, Y, Z, Rx, Ry, Rz]
+    /// </summary>
+    public double[] GetTcpPose()
+    {
+        // Extract position
+        double x = TcpPosition.X;
+        double y = TcpPosition.Y;
+        double z = TcpPosition.Z;
+
+        // Extract Euler angles (simplified - ZYX convention)
+        double rx = 0, ry = 0, rz = 0;
+
+        if (TcpOrientation.IsAffine)
+        {
+            rz = Math.Atan2(TcpOrientation.M21, TcpOrientation.M11) * 180 / Math.PI;
+            ry = Math.Atan2(-TcpOrientation.M31,
+                Math.Sqrt(TcpOrientation.M32 * TcpOrientation.M32 + TcpOrientation.M33 * TcpOrientation.M33)) * 180 / Math.PI;
+            rx = Math.Atan2(TcpOrientation.M32, TcpOrientation.M33) * 180 / Math.PI;
+        }
+
+        return new[] { x, y, z, rx, ry, rz };
+    }
+}
+
+/// <summary>
+/// Robot config data from Core (matches JSON structure)
+/// </summary>
+public class RobotConfigData
+{
+    public string Name { get; set; } = "Robot";
+    public string Model { get; set; } = "";
+    public List<DHParameterData> DHParameters { get; set; } = new();
+    public double[] HomePosition { get; set; } = new double[6];
+}
+
+public class DHParameterData
+{
+    public int Joint { get; set; }
+    public double A { get; set; }
+    public double Alpha { get; set; }
+    public double D { get; set; }
+    public double ThetaOffset { get; set; }
+}

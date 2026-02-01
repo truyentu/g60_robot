@@ -1,29 +1,38 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Microsoft.Extensions.Logging;
 using RobotController.Common.Messages;
 using RobotController.Common.Services;
+using RobotController.UI.Models;
 using RobotController.UI.Services;
+using Serilog;
 using System.Collections.ObjectModel;
+using System.Text.Json;
 using System.Windows.Media;
+using System.Windows.Media.Media3D;
 using System.Windows.Threading;
 
 namespace RobotController.UI.ViewModels;
 
 public partial class MainViewModel : ObservableObject, IDisposable
 {
-    private readonly ILogger<MainViewModel> _logger;
     private readonly IIpcClientService _ipcClient;
     private readonly IConfigService _configService;
+    private readonly IViewportService _viewportService;
     private readonly Dispatcher _dispatcher;
     private bool _disposed;
+    private bool _robotInitialized;
 
+    // Connection
     [ObservableProperty]
     private string _connectionStatus = "Disconnected";
 
     [ObservableProperty]
     private Brush _connectionStatusColor = Brushes.Red;
 
+    [ObservableProperty]
+    private bool _isConnected;
+
+    // Robot Status
     [ObservableProperty]
     private string _robotState = "UNKNOWN";
 
@@ -36,6 +45,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _isEnabled;
 
+    // TCP Position
     [ObservableProperty]
     private double _tcpX;
 
@@ -54,11 +64,40 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private double _tcpRz;
 
+    // Core Info
     [ObservableProperty]
     private string _coreVersion = "";
 
     [ObservableProperty]
     private long _coreUptime;
+
+    [ObservableProperty]
+    private string _robotName = "";
+
+    [ObservableProperty]
+    private string _robotModel = "";
+
+    // UI State
+    [ObservableProperty]
+    private int _selectedNavIndex = 0;
+
+    [ObservableProperty]
+    private double _speedOverride = 100;
+
+    [ObservableProperty]
+    private bool _showGrid = true;
+
+    [ObservableProperty]
+    private bool _showAxes = true;
+
+    [ObservableProperty]
+    private bool _showTcp = true;
+
+    // 3D Model
+    public Model3DGroup? RobotModelGroup => _viewportService.GetModelGroup();
+    public Model3DGroup? TcpMarkerGroup { get; private set; }
+
+    public event EventHandler? RobotModelUpdated;
 
     public ObservableCollection<JointPosition> JointPositions { get; } = new()
     {
@@ -70,20 +109,26 @@ public partial class MainViewModel : ObservableObject, IDisposable
         new JointPosition { Name = "J6", Value = 0.0 },
     };
 
-    public MainViewModel(
-        ILogger<MainViewModel> logger,
-        IIpcClientService ipcClient,
-        IConfigService configService)
+    /// <summary>
+    /// Runtime constructor with DI
+    /// </summary>
+    public MainViewModel(IIpcClientService ipcClient, IConfigService configService, IViewportService viewportService)
     {
-        _logger = logger;
         _ipcClient = ipcClient;
         _configService = configService;
+        _viewportService = viewportService;
         _dispatcher = Dispatcher.CurrentDispatcher;
 
-        // Subscribe to events
+        // Subscribe to IPC events
         _ipcClient.StatusReceived += OnStatusReceived;
         _ipcClient.ConnectionStateChanged += OnConnectionStateChanged;
         _ipcClient.ErrorOccurred += OnErrorOccurred;
+
+        // Subscribe to viewport events
+        _viewportService.ModelUpdated += OnViewportModelUpdated;
+
+        // Create TCP marker
+        TcpMarkerGroup = _viewportService.CreateTcpMarker();
 
         // Auto-connect if configured
         if (_configService.Config.Connection.AutoConnect)
@@ -97,7 +142,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         if (_ipcClient.IsConnected)
         {
-            _ipcClient.Disconnect();
+            Log.Information("Already connected");
             return;
         }
 
@@ -105,7 +150,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         ConnectionStatusColor = Brushes.Yellow;
 
         var connConfig = _configService.Config.Connection;
-        _logger.LogInformation("Connecting to {Address}...", connConfig.RepAddress);
+        Log.Information("Connecting to {Address}...", connConfig.RepAddress);
 
         bool success = await _ipcClient.ConnectAsync(
             connConfig.RepAddress,
@@ -122,6 +167,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 CoreUptime = pong.UptimeMs;
             }
 
+            // Initialize robot 3D model with default config (for demo without Core)
+            await InitializeRobotModelWithDefaultAsync();
+
             // Get initial status
             var status = await _ipcClient.GetStatusAsync();
             if (status != null)
@@ -129,6 +177,57 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 UpdateStatus(status);
             }
         }
+    }
+
+    private async Task InitializeRobotModelWithDefaultAsync()
+    {
+        if (_robotInitialized) return;
+
+        try
+        {
+            // Create default robot config for demonstration
+            var robotConfig = new RobotConfigData
+            {
+                Name = "Robot6DOF",
+                Model = "6-Axis Industrial",
+                DHParameters = new List<DHParameterData>
+                {
+                    new() { Joint = 1, A = 0, Alpha = -90, D = 400, ThetaOffset = 0 },
+                    new() { Joint = 2, A = 560, Alpha = 0, D = 0, ThetaOffset = -90 },
+                    new() { Joint = 3, A = 35, Alpha = -90, D = 0, ThetaOffset = 0 },
+                    new() { Joint = 4, A = 0, Alpha = 90, D = 515, ThetaOffset = 0 },
+                    new() { Joint = 5, A = 0, Alpha = -90, D = 0, ThetaOffset = 0 },
+                    new() { Joint = 6, A = 0, Alpha = 0, D = 80, ThetaOffset = 0 },
+                },
+                HomePosition = new double[] { 0, -45, 90, 0, 45, 0 }
+            };
+
+            RobotName = robotConfig.Name;
+            RobotModel = robotConfig.Model;
+
+            // Initialize 3D model
+            bool modelOk = await _viewportService.InitializeAsync(robotConfig);
+            if (modelOk)
+            {
+                _robotInitialized = true;
+                _dispatcher.Invoke(() =>
+                {
+                    OnPropertyChanged(nameof(RobotModelGroup));
+                    RobotModelUpdated?.Invoke(this, EventArgs.Empty);
+                });
+                Log.Information("Robot 3D model initialized: {Name}", robotConfig.Name);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to initialize robot model");
+        }
+    }
+
+    [RelayCommand]
+    private void Disconnect()
+    {
+        _ipcClient.Disconnect();
     }
 
     [RelayCommand]
@@ -155,6 +254,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         _dispatcher.InvokeAsync(() =>
         {
+            IsConnected = isConnected;
             if (isConnected)
             {
                 ConnectionStatus = "Connected";
@@ -171,7 +271,16 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     private void OnErrorOccurred(object? sender, string error)
     {
-        _logger.LogError("IPC Error: {Error}", error);
+        Log.Error("IPC Error: {Error}", error);
+    }
+
+    private void OnViewportModelUpdated(object? sender, EventArgs e)
+    {
+        _dispatcher.InvokeAsync(() =>
+        {
+            OnPropertyChanged(nameof(RobotModelGroup));
+            RobotModelUpdated?.Invoke(this, EventArgs.Empty);
+        });
     }
 
     private void UpdateStatus(StatusPayload status)
@@ -184,11 +293,16 @@ public partial class MainViewModel : ObservableObject, IDisposable
         // Update joint positions
         if (status.Joints.Count >= 6)
         {
+            double[] angles = new double[6];
             for (int i = 0; i < 6; i++)
             {
                 JointPositions[i].Value = status.Joints[i];
+                angles[i] = status.Joints[i];
             }
             OnPropertyChanged(nameof(JointPositions));
+
+            // Update 3D model
+            _viewportService.UpdateJointAngles(angles);
         }
 
         // Update TCP position
@@ -205,14 +319,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
-        if (_disposed)
-        {
-            return;
-        }
+        if (_disposed) return;
 
         _ipcClient.StatusReceived -= OnStatusReceived;
         _ipcClient.ConnectionStateChanged -= OnConnectionStateChanged;
         _ipcClient.ErrorOccurred -= OnErrorOccurred;
+        _viewportService.ModelUpdated -= OnViewportModelUpdated;
         _ipcClient.Dispose();
 
         _disposed = true;
