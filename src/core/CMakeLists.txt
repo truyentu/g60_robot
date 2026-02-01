@@ -35,6 +35,7 @@ find_package(nlohmann_json CONFIG REQUIRED)
 find_package(cppzmq CONFIG REQUIRED)
 find_package(yaml-cpp CONFIG REQUIRED)
 find_package(GTest CONFIG REQUIRED)
+find_package(Eigen3 CONFIG REQUIRED)
 
 # ============================================================================
 # Source Files
@@ -64,6 +65,11 @@ set(CORE_HEADERS
     src/state/IStateMachine.hpp
     src/state/StateMachine.hpp
     src/controller/RobotController.hpp
+    src/kinematics/MathTypes.hpp
+    src/kinematics/DHParameters.hpp
+    src/kinematics/ForwardKinematics.hpp
+    src/kinematics/InverseKinematics.hpp
+    src/kinematics/KinematicsService.hpp
 )
 
 # ============================================================================
@@ -83,6 +89,7 @@ target_link_libraries(robot_core
         nlohmann_json::nlohmann_json
         cppzmq
         yaml-cpp::yaml-cpp
+        Eigen3::Eigen
 )
 
 # Windows-specific settings
@@ -127,6 +134,34 @@ target_link_libraries(robot_core_tests
 
 include(GoogleTest)
 gtest_discover_tests(robot_core_tests)
+
+# ============================================================================
+# Kinematics Tests
+# ============================================================================
+add_executable(test_kinematics
+    tests/test_kinematics.cpp
+)
+
+target_include_directories(test_kinematics
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_kinematics
+    PRIVATE
+        GTest::gtest
+        GTest::gtest_main
+        Eigen3::Eigen
+)
+
+if(WIN32)
+    target_compile_definitions(test_kinematics PRIVATE
+        NOMINMAX
+    )
+endif()
+
+gtest_discover_tests(test_kinematics)
 
 # ============================================================================
 # Installation
