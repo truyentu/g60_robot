@@ -45,6 +45,8 @@ set(CORE_SOURCES
     src/config/ConfigManager.cpp
     src/robot/RobotModel.cpp
     src/logging/Logger.cpp
+    src/state/StateMachine.cpp
+    src/controller/RobotController.cpp
 )
 
 set(CORE_HEADERS
@@ -54,9 +56,14 @@ set(CORE_HEADERS
     src/ipc/MessageTypes.hpp
     src/config/ConfigManager.hpp
     src/config/RobotConfig.hpp
+    src/config/SystemConfig.hpp
     src/robot/RobotModel.hpp
     src/robot/DHParameters.hpp
     src/logging/Logger.hpp
+    src/state/States.hpp
+    src/state/IStateMachine.hpp
+    src/state/StateMachine.hpp
+    src/controller/RobotController.hpp
 )
 
 # ============================================================================
@@ -95,9 +102,11 @@ add_executable(robot_core_tests
     tests/test_main.cpp
     tests/test_config.cpp
     tests/test_ipc.cpp
+    tests/test_state_machine.cpp
     src/config/ConfigManager.cpp
     src/logging/Logger.cpp
     src/ipc/IpcServer.cpp
+    src/state/StateMachine.cpp
 )
 
 target_include_directories(robot_core_tests
