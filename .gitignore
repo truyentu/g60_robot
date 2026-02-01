@@ -1,0 +1,51 @@
+# Build outputs
+build/
+out/
+bin/
+obj/
+x64/
+x86/
+Debug/
+Release/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+
+# .NET
+*.dll
+*.exe
+*.pdb
+project.lock.json
+
+# Logs
+logs/*.log
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*~
+
+# Dependencies (managed by vcpkg/nuget)
+packages/
+vcpkg_installed/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary
+*.tmp
+*.temp
