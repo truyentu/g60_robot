@@ -22,6 +22,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private bool _disposed;
     private bool _robotInitialized;
 
+    // Motion Control
+    [ObservableProperty]
+    private MotionControlViewModel? _motionControl;
+
     // Connection
     [ObservableProperty]
     private string _connectionStatus = "Disconnected";
@@ -129,6 +133,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         // Create TCP marker
         TcpMarkerGroup = _viewportService.CreateTcpMarker();
+
+        // Initialize motion control
+        MotionControl = new MotionControlViewModel(_ipcClient);
 
         // Auto-connect if configured
         if (_configService.Config.Connection.AutoConnect)

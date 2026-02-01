@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Media.Media3D;
 using RobotController.UI.ViewModels;
 using Serilog;
@@ -20,6 +21,27 @@ public partial class MainWindow : Window
             _viewModel.RobotModelUpdated += OnRobotModelUpdated;
             _viewModel.PropertyChanged += OnViewModelPropertyChanged;
         }
+
+        // Handle keyboard events for motion control
+        PreviewKeyDown += MainWindow_PreviewKeyDown;
+        PreviewKeyUp += MainWindow_PreviewKeyUp;
+    }
+
+    private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        // Don't handle if typing in a text box
+        if (e.OriginalSource is System.Windows.Controls.TextBox)
+            return;
+
+        _viewModel?.MotionControl?.HandleKeyDown(e.Key);
+    }
+
+    private void MainWindow_PreviewKeyUp(object sender, KeyEventArgs e)
+    {
+        if (e.OriginalSource is System.Windows.Controls.TextBox)
+            return;
+
+        _viewModel?.MotionControl?.HandleKeyUp(e.Key);
     }
 
     private void OnRobotModelUpdated(object? sender, EventArgs e)

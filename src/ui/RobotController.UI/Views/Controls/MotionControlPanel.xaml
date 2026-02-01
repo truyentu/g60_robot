@@ -1,0 +1,193 @@
+<UserControl x:Class="RobotController.UI.Views.Controls.MotionControlPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DesignHeight="300" d:DesignWidth="400">
+
+    <UserControl.Resources>
+        <!-- Control Button Style -->
+        <Style x:Key="ControlButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="48"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Opacity" Value="0.9"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.5"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+    </UserControl.Resources>
+
+    <Border Background="#2D2D2D" CornerRadius="8" Padding="12">
+        <StackPanel>
+            <!-- Status Bar -->
+            <Border CornerRadius="4" Padding="12,8" Margin="0,0,0,12">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Background" Value="#808080"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding MachineState}" Value="Idle">
+                                <Setter Property="Background" Value="#00AA00"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding MachineState}" Value="Running">
+                                <Setter Property="Background" Value="#00FF00"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding MachineState}" Value="Paused">
+                                <Setter Property="Background" Value="#FFAA00"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding MachineState}" Value="Jogging">
+                                <Setter Property="Background" Value="#00AAFF"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding MachineState}" Value="Homing...">
+                                <Setter Property="Background" Value="#AAAA00"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding MachineState}" Value="ALARM">
+                                <Setter Property="Background" Value="#FF0000"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <Grid>
+                    <TextBlock Text="{Binding MachineState}"
+                              FontSize="16" FontWeight="Bold"
+                              Foreground="White"/>
+                    <TextBlock Text="{Binding AlarmMessage}"
+                              HorizontalAlignment="Right"
+                              Foreground="White"
+                              Visibility="{Binding HasAlarm, Converter={StaticResource BoolToVis}}"/>
+                </Grid>
+            </Border>
+
+            <!-- Home All Button -->
+            <Button Content="HOME ALL"
+                   Style="{StaticResource ControlButtonStyle}"
+                   Background="#AA6600"
+                   Command="{Binding HomeAllCommand}"
+                   IsEnabled="{Binding IsConnected}"
+                   Margin="0,0,0,12"/>
+
+            <!-- Motion Control Buttons -->
+            <Grid Margin="0,0,0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Stop button (always visible and red) -->
+                <Button Grid.Column="0" Content="STOP"
+                       Style="{StaticResource ControlButtonStyle}"
+                       Background="#CC0000"
+                       Command="{Binding StopMotionCommand}"
+                       IsEnabled="{Binding IsConnected}"
+                       Margin="0,0,4,0"/>
+
+                <!-- Pause -->
+                <Button Grid.Column="1" Content="PAUSE"
+                       Style="{StaticResource ControlButtonStyle}"
+                       Background="#AA8800"
+                       Command="{Binding PauseMotionCommand}"
+                       IsEnabled="{Binding IsMoving}"
+                       Margin="4,0,4,0"/>
+
+                <!-- Clear Alarm -->
+                <Button Grid.Column="2" Content="CLEAR ALARM"
+                       Style="{StaticResource ControlButtonStyle}"
+                       Background="#AA0066"
+                       Command="{Binding ClearAlarmCommand}"
+                       IsEnabled="{Binding HasAlarm}"
+                       Margin="4,0,0,0"/>
+            </Grid>
+
+            <!-- Feed Override -->
+            <Border Background="#353535" CornerRadius="4" Padding="12">
+                <StackPanel>
+                    <Grid Margin="0,0,0,8">
+                        <TextBlock Text="Feed Override"
+                                  Foreground="#888888" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding FeedOverride, StringFormat={}{0}%}"
+                                  Foreground="White" FontSize="18" FontWeight="Bold"
+                                  HorizontalAlignment="Right"/>
+                    </Grid>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Button Grid.Column="0" Content="-"
+                               Width="36" Height="36"
+                               Background="#404040" Foreground="White"
+                               FontSize="20" FontWeight="Bold"
+                               BorderThickness="0"
+                               Command="{Binding DecreaseFeedOverrideCommand}"/>
+
+                        <Slider Grid.Column="1"
+                               Value="{Binding FeedOverride}"
+                               Minimum="10" Maximum="200"
+                               TickFrequency="10"
+                               IsSnapToTickEnabled="True"
+                               Margin="8,0"/>
+
+                        <Button Grid.Column="2" Content="+"
+                               Width="36" Height="36"
+                               Background="#404040" Foreground="White"
+                               FontSize="20" FontWeight="Bold"
+                               BorderThickness="0"
+                               Command="{Binding IncreaseFeedOverrideCommand}"/>
+
+                        <Button Grid.Column="3" Content="100%"
+                               Width="50" Height="36"
+                               Background="#505050" Foreground="White"
+                               BorderThickness="0"
+                               Command="{Binding ResetFeedOverrideCommand}"
+                               Margin="8,0,0,0"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- Trajectory Progress -->
+            <Border Background="#353535" CornerRadius="4"
+                   Padding="12" Margin="0,12,0,0"
+                   Visibility="{Binding IsMoving, Converter={StaticResource BoolToVis}}">
+                <StackPanel>
+                    <Grid Margin="0,0,0,4">
+                        <TextBlock Text="Trajectory:" Foreground="#888888"/>
+                        <TextBlock Text="{Binding TrajectoryState}"
+                                  Foreground="White"
+                                  HorizontalAlignment="Right"/>
+                    </Grid>
+                    <ProgressBar Value="{Binding TrajectoryProgress}"
+                               Minimum="0" Maximum="100"
+                               Height="8"
+                               Background="#252525"
+                               Foreground="#0078D7"/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </Border>
+</UserControl>

@@ -5,6 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:helix="http://helix-toolkit.org/wpf"
         xmlns:vm="clr-namespace:RobotController.UI.ViewModels"
+        xmlns:controls="clr-namespace:RobotController.UI.Views.Controls"
         mc:Ignorable="d"
         Title="Robot Controller"
         Height="800" Width="1400"
@@ -347,14 +348,13 @@
                         </Border>
 
                         <!-- Manual Jog -->
-                        <TextBlock Text="Manual Jog" FontWeight="Bold" Margin="0,0,0,5"
+                        <TextBlock Text="Motion Control" FontWeight="Bold" Margin="0,0,0,5"
                                    Foreground="{StaticResource ForegroundBrush}"/>
-                        <Border Background="#333333" CornerRadius="3" Padding="10" Margin="0,0,0,15">
-                            <StackPanel>
-                                <TextBlock Text="(Coming in Phase 2)" Foreground="Gray"
-                                           HorizontalAlignment="Center"/>
-                            </StackPanel>
-                        </Border>
+                        <controls:MotionControlPanel DataContext="{Binding MotionControl}"
+                                                     Margin="0,0,0,10"/>
+
+                        <controls:JogPanel DataContext="{Binding MotionControl}"
+                                           Margin="0,0,0,15"/>
                     </StackPanel>
                 </ScrollViewer>
             </Border>
