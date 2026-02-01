@@ -70,6 +70,11 @@ set(CORE_HEADERS
     src/kinematics/ForwardKinematics.hpp
     src/kinematics/InverseKinematics.hpp
     src/kinematics/KinematicsService.hpp
+    src/trajectory/TrajectoryTypes.hpp
+    src/trajectory/VelocityProfile.hpp
+    src/trajectory/Interpolators.hpp
+    src/trajectory/TrajectoryPlanner.hpp
+    src/trajectory/TrajectoryExecutor.hpp
 )
 
 # ============================================================================
@@ -162,6 +167,34 @@ if(WIN32)
 endif()
 
 gtest_discover_tests(test_kinematics)
+
+# ============================================================================
+# Trajectory Tests
+# ============================================================================
+add_executable(test_trajectory
+    tests/test_trajectory.cpp
+)
+
+target_include_directories(test_trajectory
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_trajectory
+    PRIVATE
+        GTest::gtest
+        GTest::gtest_main
+        Eigen3::Eigen
+)
+
+if(WIN32)
+    target_compile_definitions(test_trajectory PRIVATE
+        NOMINMAX
+    )
+endif()
+
+gtest_discover_tests(test_trajectory)
 
 # ============================================================================
 # Installation
