@@ -10,8 +10,13 @@
 #include <chrono>
 
 #include "logging/Logger.hpp"
+#include "config/ConfigManager.hpp"
 #include "ipc/IpcServer.hpp"
 #include "ipc/Message.hpp"
+
+using namespace robot_controller;
+using namespace robot_controller::config;
+using namespace robot_controller::ipc;
 
 // Global flag for graceful shutdown
 std::atomic<bool> g_running{true};
@@ -26,23 +31,58 @@ int main(int argc, char* argv[]) {
     std::signal(SIGINT, signalHandler);
     std::signal(SIGTERM, signalHandler);
 
-    // Initialize logging
-    robot_controller::Logger::init("../../logs/core.log", "debug");
+    // Determine config directory (relative to executable or from arg)
+    std::string config_dir = "../../config";
+    if (argc > 1) {
+        config_dir = argv[1];
+    }
+
+    // Initialize logging (basic setup, will reconfigure after loading config)
+    Logger::init("../../logs/core.log", "debug");
+
     LOG_INFO("========================================");
-    LOG_INFO("Robot Controller Core v1.0.0 starting...");
+    LOG_INFO("Robot Controller Core v1.0.0");
     LOG_INFO("========================================");
+    LOG_INFO("Config directory: {}", config_dir);
+
+    // Load configuration
+    auto& config = ConfigManager::instance();
+    if (!config.loadAll(config_dir)) {
+        LOG_ERROR("Failed to load configuration files");
+        LOG_ERROR("Make sure robot_config.yaml and system_config.yaml exist in: {}", config_dir);
+        return 1;
+    }
+
+    // Reconfigure logger based on loaded config
+    const auto& logConfig = config.systemConfig().logging;
+    Logger::init(
+        "../../" + logConfig.file,
+        logConfig.level,
+        logConfig.max_size_mb * 1024 * 1024,
+        logConfig.max_files
+    );
+
+    LOG_INFO("Configuration loaded successfully");
+    LOG_INFO("Robot: {} ({})", config.robotConfig().name, config.robotConfig().model);
+    LOG_INFO("Joints: {}", config.robotConfig().numJoints());
+
+    // Get IPC config
+    const auto& ipcConfig = config.systemConfig().ipc;
+    std::string rep_addr = "tcp://" + ipcConfig.bind_address + ":" + std::to_string(ipcConfig.rep_port);
+    std::string pub_addr = "tcp://" + ipcConfig.bind_address + ":" + std::to_string(ipcConfig.pub_port);
 
     // Create IPC server
-    robot_controller::ipc::IpcServer server("tcp://*:5555", "tcp://*:5556");
+    IpcServer server(rep_addr, pub_addr);
 
     // Register message handlers
-    server.registerHandler(robot_controller::ipc::MessageType::GET_STATUS,
-        [](const robot_controller::ipc::Message& request) -> nlohmann::json {
+    server.registerHandler(MessageType::GET_STATUS,
+        [&config](const Message& request) -> nlohmann::json {
             LOG_DEBUG("Handling GET_STATUS request");
+            const auto& robotConfig = config.robotConfig();
             return {
                 {"state", "IDLE"},
                 {"mode", "MANUAL"},
-                {"joints", {0.0, -45.0, 90.0, 0.0, 45.0, 0.0}},
+                {"joints", robotConfig.home_position},
                 {"tcp_position", {500.0, 0.0, 600.0, 0.0, 180.0, 0.0}},
                 {"homed", false},
                 {"enabled", false},
@@ -50,13 +90,20 @@ int main(int argc, char* argv[]) {
             };
         });
 
-    server.registerHandler(robot_controller::ipc::MessageType::GET_JOINT_POSITIONS,
-        [](const robot_controller::ipc::Message& request) -> nlohmann::json {
+    server.registerHandler(MessageType::GET_JOINT_POSITIONS,
+        [&config](const Message& request) -> nlohmann::json {
             LOG_DEBUG("Handling GET_JOINT_POSITIONS request");
+            const auto& robotConfig = config.robotConfig();
             return {
-                {"joints", {0.0, -45.0, 90.0, 0.0, 45.0, 0.0}},
+                {"joints", robotConfig.home_position},
                 {"unit", "degrees"}
             };
+        });
+
+    server.registerHandler(MessageType::GET_CONFIG,
+        [&config](const Message& request) -> nlohmann::json {
+            LOG_DEBUG("Handling GET_CONFIG request");
+            return nlohmann::json::parse(config.robotConfigToJson());
         });
 
     // Start server
@@ -65,11 +112,13 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    LOG_INFO("IPC Server running on ports 5555 (REP) and 5556 (PUB)");
+    LOG_INFO("IPC Server running on ports {} (REP) and {} (PUB)",
+             ipcConfig.rep_port, ipcConfig.pub_port);
     LOG_INFO("Press Ctrl+C to exit");
 
     // Main loop - publish status periodically
-    int status_interval_ms = 100;  // 10 Hz
+    const auto& controlConfig = config.systemConfig().control;
+    int status_interval_ms = 1000 / controlConfig.status_publish_hz;
     auto last_status = std::chrono::steady_clock::now();
 
     while (g_running) {
@@ -78,10 +127,11 @@ int main(int argc, char* argv[]) {
 
         if (elapsed.count() >= status_interval_ms) {
             // Publish status
+            const auto& robotConfig = config.robotConfig();
             nlohmann::json status = {
                 {"state", "IDLE"},
                 {"mode", "MANUAL"},
-                {"joints", {0.0, -45.0, 90.0, 0.0, 45.0, 0.0}},
+                {"joints", robotConfig.home_position},
                 {"tcp_position", {500.0, 0.0, 600.0, 0.0, 180.0, 0.0}},
                 {"homed", false},
                 {"enabled", false},

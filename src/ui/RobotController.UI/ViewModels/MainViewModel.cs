@@ -3,15 +3,20 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using RobotController.Common.Messages;
 using RobotController.Common.Services;
+using RobotController.UI.Services;
 using System.Collections.ObjectModel;
 using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace RobotController.UI.ViewModels;
 
-public partial class MainViewModel : ObservableObject
+public partial class MainViewModel : ObservableObject, IDisposable
 {
     private readonly ILogger<MainViewModel> _logger;
     private readonly IIpcClientService _ipcClient;
+    private readonly IConfigService _configService;
+    private readonly Dispatcher _dispatcher;
+    private bool _disposed;
 
     [ObservableProperty]
     private string _connectionStatus = "Disconnected";
@@ -20,7 +25,7 @@ public partial class MainViewModel : ObservableObject
     private Brush _connectionStatusColor = Brushes.Red;
 
     [ObservableProperty]
-    private string _robotState = "IDLE";
+    private string _robotState = "UNKNOWN";
 
     [ObservableProperty]
     private string _robotMode = "MANUAL";
@@ -32,67 +37,96 @@ public partial class MainViewModel : ObservableObject
     private bool _isEnabled;
 
     [ObservableProperty]
-    private double _tcpX = 500.0;
+    private double _tcpX;
 
     [ObservableProperty]
-    private double _tcpY = 0.0;
+    private double _tcpY;
 
     [ObservableProperty]
-    private double _tcpZ = 600.0;
+    private double _tcpZ;
 
     [ObservableProperty]
-    private double _tcpRx = 0.0;
+    private double _tcpRx;
 
     [ObservableProperty]
-    private double _tcpRy = 180.0;
+    private double _tcpRy;
 
     [ObservableProperty]
-    private double _tcpRz = 0.0;
+    private double _tcpRz;
 
     [ObservableProperty]
-    private bool _isConnected;
+    private string _coreVersion = "";
+
+    [ObservableProperty]
+    private long _coreUptime;
 
     public ObservableCollection<JointPosition> JointPositions { get; } = new()
     {
         new JointPosition { Name = "J1", Value = 0.0 },
-        new JointPosition { Name = "J2", Value = -45.0 },
-        new JointPosition { Name = "J3", Value = 90.0 },
+        new JointPosition { Name = "J2", Value = 0.0 },
+        new JointPosition { Name = "J3", Value = 0.0 },
         new JointPosition { Name = "J4", Value = 0.0 },
-        new JointPosition { Name = "J5", Value = 45.0 },
+        new JointPosition { Name = "J5", Value = 0.0 },
         new JointPosition { Name = "J6", Value = 0.0 },
     };
 
-    public MainViewModel(ILogger<MainViewModel> logger, IIpcClientService ipcClient)
+    public MainViewModel(
+        ILogger<MainViewModel> logger,
+        IIpcClientService ipcClient,
+        IConfigService configService)
     {
         _logger = logger;
         _ipcClient = ipcClient;
+        _configService = configService;
+        _dispatcher = Dispatcher.CurrentDispatcher;
 
+        // Subscribe to events
         _ipcClient.StatusReceived += OnStatusReceived;
         _ipcClient.ConnectionStateChanged += OnConnectionStateChanged;
+        _ipcClient.ErrorOccurred += OnErrorOccurred;
+
+        // Auto-connect if configured
+        if (_configService.Config.Connection.AutoConnect)
+        {
+            _ = ConnectAsync();
+        }
     }
 
     [RelayCommand]
     private async Task ConnectAsync()
     {
-        if (IsConnected)
+        if (_ipcClient.IsConnected)
         {
             _ipcClient.Disconnect();
             return;
         }
 
-        _logger.LogInformation("Connecting to Core...");
         ConnectionStatus = "Connecting...";
         ConnectionStatusColor = Brushes.Yellow;
 
-        var success = await _ipcClient.ConnectAsync("tcp://localhost:5555", "tcp://localhost:5556");
+        var connConfig = _configService.Config.Connection;
+        _logger.LogInformation("Connecting to {Address}...", connConfig.RepAddress);
+
+        bool success = await _ipcClient.ConnectAsync(
+            connConfig.RepAddress,
+            connConfig.SubAddress
+        );
 
         if (success)
         {
+            // Get version info
             var pong = await _ipcClient.PingAsync();
             if (pong != null)
             {
-                _logger.LogInformation("Core version: {Version}, Uptime: {Uptime}ms",
-                    pong.CoreVersion, pong.UptimeMs);
+                CoreVersion = pong.CoreVersion;
+                CoreUptime = pong.UptimeMs;
+            }
+
+            // Get initial status
+            var status = await _ipcClient.GetStatusAsync();
+            if (status != null)
+            {
+                UpdateStatus(status);
             }
         }
     }
@@ -100,50 +134,65 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task RefreshStatusAsync()
     {
-        if (!IsConnected)
+        if (!_ipcClient.IsConnected)
+        {
             return;
+        }
 
         var status = await _ipcClient.GetStatusAsync();
         if (status != null)
         {
-            UpdateFromStatus(status);
+            UpdateStatus(status);
         }
     }
 
     private void OnStatusReceived(object? sender, StatusPayload status)
     {
-        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
-        {
-            UpdateFromStatus(status);
-        });
+        _dispatcher.InvokeAsync(() => UpdateStatus(status));
     }
 
-    private void OnConnectionStateChanged(object? sender, bool connected)
+    private void OnConnectionStateChanged(object? sender, bool isConnected)
     {
-        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        _dispatcher.InvokeAsync(() =>
         {
-            IsConnected = connected;
-            if (connected)
+            if (isConnected)
             {
                 ConnectionStatus = "Connected";
-                ConnectionStatusColor = Brushes.Green;
+                ConnectionStatusColor = Brushes.LimeGreen;
             }
             else
             {
                 ConnectionStatus = "Disconnected";
                 ConnectionStatusColor = Brushes.Red;
+                RobotState = "UNKNOWN";
             }
         });
     }
 
-    private void UpdateFromStatus(StatusPayload status)
+    private void OnErrorOccurred(object? sender, string error)
+    {
+        _logger.LogError("IPC Error: {Error}", error);
+    }
+
+    private void UpdateStatus(StatusPayload status)
     {
         RobotState = status.State;
         RobotMode = status.Mode;
         IsHomed = status.Homed;
         IsEnabled = status.Enabled;
 
-        if (status.TcpPosition?.Count >= 6)
+        // Update joint positions
+        if (status.Joints.Count >= 6)
+        {
+            for (int i = 0; i < 6; i++)
+            {
+                JointPositions[i].Value = status.Joints[i];
+            }
+            OnPropertyChanged(nameof(JointPositions));
+        }
+
+        // Update TCP position
+        if (status.TcpPosition.Count >= 6)
         {
             TcpX = status.TcpPosition[0];
             TcpY = status.TcpPosition[1];
@@ -152,31 +201,30 @@ public partial class MainViewModel : ObservableObject
             TcpRy = status.TcpPosition[4];
             TcpRz = status.TcpPosition[5];
         }
+    }
 
-        if (status.Joints?.Count >= 6)
+    public void Dispose()
+    {
+        if (_disposed)
         {
-            for (int i = 0; i < 6; i++)
-            {
-                JointPositions[i].Value = status.Joints[i];
-            }
+            return;
         }
+
+        _ipcClient.StatusReceived -= OnStatusReceived;
+        _ipcClient.ConnectionStateChanged -= OnConnectionStateChanged;
+        _ipcClient.ErrorOccurred -= OnErrorOccurred;
+        _ipcClient.Dispose();
+
+        _disposed = true;
+        GC.SuppressFinalize(this);
     }
 }
 
-public class JointPosition : ObservableObject
+public partial class JointPosition : ObservableObject
 {
+    [ObservableProperty]
     private string _name = string.Empty;
+
+    [ObservableProperty]
     private double _value;
-
-    public string Name
-    {
-        get => _name;
-        set => SetProperty(ref _name, value);
-    }
-
-    public double Value
-    {
-        get => _value;
-        set => SetProperty(ref _value, value);
-    }
 }

@@ -7,8 +7,8 @@
 #include "config/ConfigManager.hpp"
 
 TEST(ConfigManager, SingletonInstance) {
-    auto& instance1 = robot_controller::ConfigManager::instance();
-    auto& instance2 = robot_controller::ConfigManager::instance();
+    auto& instance1 = robot_controller::config::ConfigManager::instance();
+    auto& instance2 = robot_controller::config::ConfigManager::instance();
     EXPECT_EQ(&instance1, &instance2);
 }
 

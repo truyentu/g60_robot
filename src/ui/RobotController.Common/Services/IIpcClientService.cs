@@ -8,6 +8,7 @@ public interface IIpcClientService : IDisposable
 
     event EventHandler<StatusPayload>? StatusReceived;
     event EventHandler<bool>? ConnectionStateChanged;
+    event EventHandler<string>? ErrorOccurred;
 
     Task<bool> ConnectAsync(string requestAddress, string subscribeAddress, CancellationToken cancellationToken = default);
 

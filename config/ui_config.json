@@ -1,0 +1,34 @@
+{
+  "ui": {
+    "theme": "dark",
+    "language": "en-US",
+    "viewport": {
+      "background_color": "#1E1E1E",
+      "grid_visible": true,
+      "grid_size": 100,
+      "axis_visible": true,
+      "show_tcp_marker": true
+    },
+    "panels": {
+      "navigation_width": 200,
+      "properties_width": 250,
+      "show_properties": true
+    }
+  },
+  "connection": {
+    "core_address": "tcp://localhost",
+    "rep_port": 5555,
+    "pub_port": 5556,
+    "auto_connect": true,
+    "reconnect_interval_ms": 5000,
+    "request_timeout_ms": 5000
+  },
+  "recent_files": [],
+  "window": {
+    "width": 1400,
+    "height": 800,
+    "left": 100,
+    "top": 100,
+    "maximized": false
+  }
+}

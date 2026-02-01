@@ -21,6 +21,7 @@ public class IpcClientService : IIpcClientService
 
     public event EventHandler<StatusPayload>? StatusReceived;
     public event EventHandler<bool>? ConnectionStateChanged;
+    public event EventHandler<string>? ErrorOccurred;
 
     public IpcClientService(ILogger<IpcClientService> logger)
     {

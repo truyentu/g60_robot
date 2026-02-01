@@ -1,0 +1,119 @@
+# Robot Configuration
+# Robot Controller v1.0
+# Last Modified: 2026-02-01
+
+robot:
+  # Robot identification
+  name: "Robot6DOF"
+  type: "6-axis-articulated"
+  manufacturer: "Custom"
+  model: "RC-6DOF-01"
+
+  # DH Parameters (Modified DH Convention)
+  # Units: a, d in mm; alpha, theta_offset in degrees
+  dh_parameters:
+    # Joint 1: Base rotation
+    - joint: 1
+      a: 0
+      alpha: 0
+      d: 400
+      theta_offset: 0
+
+    # Joint 2: Shoulder
+    - joint: 2
+      a: 25
+      alpha: -90
+      d: 0
+      theta_offset: -90
+
+    # Joint 3: Elbow
+    - joint: 3
+      a: 560
+      alpha: 0
+      d: 0
+      theta_offset: 0
+
+    # Joint 4: Wrist 1
+    - joint: 4
+      a: 35
+      alpha: -90
+      d: 515
+      theta_offset: 0
+
+    # Joint 5: Wrist 2
+    - joint: 5
+      a: 0
+      alpha: 90
+      d: 0
+      theta_offset: 0
+
+    # Joint 6: Wrist 3 (Tool flange)
+    - joint: 6
+      a: 0
+      alpha: -90
+      d: 80
+      theta_offset: 0
+
+  # Joint limits
+  # Units: min/max in degrees, velocity in deg/s, acceleration in deg/s²
+  joint_limits:
+    - joint: 1
+      min: -170
+      max: 170
+      max_velocity: 120
+      max_acceleration: 500
+
+    - joint: 2
+      min: -120
+      max: 60
+      max_velocity: 120
+      max_acceleration: 500
+
+    - joint: 3
+      min: -80
+      max: 165
+      max_velocity: 120
+      max_acceleration: 500
+
+    - joint: 4
+      min: -185
+      max: 185
+      max_velocity: 190
+      max_acceleration: 800
+
+    - joint: 5
+      min: -120
+      max: 120
+      max_velocity: 190
+      max_acceleration: 800
+
+    - joint: 6
+      min: -360
+      max: 360
+      max_velocity: 250
+      max_acceleration: 1000
+
+  # TCP (Tool Center Point) offset from flange
+  # Units: x, y, z in mm; rx, ry, rz in degrees
+  tcp_offset:
+    x: 0
+    y: 0
+    z: 150
+    rx: 0
+    ry: 0
+    rz: 0
+
+  # Home position (joint angles in degrees)
+  home_position:
+    - 0      # J1
+    - -45    # J2
+    - 90     # J3
+    - 0      # J4
+    - 45     # J5
+    - 0      # J6
+
+  # Payload
+  max_payload_kg: 6.0
+
+  # Work envelope
+  reach_mm: 1200
