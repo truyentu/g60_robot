@@ -80,6 +80,11 @@ set(CORE_HEADERS
     src/firmware/SerialPort.hpp
     src/firmware/FirmwareInterface.hpp
     src/firmware/MotionStreamer.hpp
+    src/welding/WeldingTypes.hpp
+    src/welding/WeldingStateMachine.hpp
+    src/welding/WeldingController.hpp
+    src/welding/WeldingIO.hpp
+    src/ipc/WeldingPayloads.hpp
 )
 
 # ============================================================================
@@ -229,6 +234,33 @@ if(WIN32)
 endif()
 
 gtest_discover_tests(test_firmware)
+
+# ============================================================================
+# Welding Tests
+# ============================================================================
+add_executable(test_welding
+    tests/test_welding.cpp
+)
+
+target_include_directories(test_welding
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_welding
+    PRIVATE
+        GTest::gtest
+        GTest::gtest_main
+)
+
+if(WIN32)
+    target_compile_definitions(test_welding PRIVATE
+        NOMINMAX
+    )
+endif()
+
+gtest_discover_tests(test_welding)
 
 # ============================================================================
 # Installation
