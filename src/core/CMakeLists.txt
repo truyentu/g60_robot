@@ -90,6 +90,11 @@ set(CORE_HEADERS
     src/welding/WeavePatternGenerator.hpp
     src/welding/WeaveExecutor.hpp
     src/welding/WeaveVisualizer.hpp
+    src/vision/VisionTypes.hpp
+    src/vision/ILaserProfiler.hpp
+    src/vision/HikrobotLaserProfiler.hpp
+    src/vision/SensorManager.hpp
+    src/ipc/SensorPayloads.hpp
 )
 
 # ============================================================================
@@ -294,6 +299,37 @@ if(WIN32)
 endif()
 
 gtest_discover_tests(test_weaving)
+
+# ============================================================================
+# Vision Tests
+# ============================================================================
+add_executable(test_vision
+    tests/test_vision.cpp
+    src/vision/HikrobotLaserProfiler.cpp
+    src/vision/SensorManager.cpp
+)
+
+target_include_directories(test_vision
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_vision
+    PRIVATE
+        GTest::gtest
+        GTest::gtest_main
+        spdlog::spdlog
+        nlohmann_json::nlohmann_json
+)
+
+if(WIN32)
+    target_compile_definitions(test_vision PRIVATE
+        NOMINMAX
+    )
+endif()
+
+gtest_discover_tests(test_vision)
 
 # ============================================================================
 # Installation
