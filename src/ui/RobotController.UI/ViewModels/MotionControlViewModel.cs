@@ -288,16 +288,19 @@ public partial class MotionControlViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void SelectJoint(int index)
+    private void SelectJoint(object? parameter)
     {
-        if (index >= 0 && index < 6)
+        if (parameter is int index || (parameter is string s && int.TryParse(s, out index)))
         {
-            foreach (var joint in Joints)
+            if (index >= 0 && index < 6)
             {
-                joint.IsSelected = false;
+                foreach (var joint in Joints)
+                {
+                    joint.IsSelected = false;
+                }
+                Joints[index].IsSelected = true;
+                SelectedJointIndex = index;
             }
-            Joints[index].IsSelected = true;
-            SelectedJointIndex = index;
         }
     }
 

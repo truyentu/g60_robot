@@ -18,6 +18,7 @@ public class IpcMessage
     public long Timestamp { get; set; }
 
     [JsonPropertyName("payload")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Payload { get; set; }
 
     /// <summary>
