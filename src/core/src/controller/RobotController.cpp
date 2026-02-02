@@ -53,7 +53,8 @@ bool RobotController::initialize(const std::string& configDir) {
     m_stateMachine->setStateChangeCallback(
         [this](RobotState oldState, RobotState newState) {
             LOG_INFO("State changed: {} -> {}", toString(oldState), toString(newState));
-            updateStatus();
+            // Note: Don't call updateStatus() here to avoid deadlock
+            // Status will be updated in control loop
         });
 
     m_stateMachine->setErrorCallback(
@@ -245,7 +246,7 @@ void RobotController::updateStatus() {
 }
 
 void RobotController::publishStatus() {
-    if (!m_ipcServer) return;
+    if (!m_ipcServer || !m_running) return;
 
     RobotStatus status = getStatus();
 

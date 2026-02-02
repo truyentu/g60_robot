@@ -68,28 +68,30 @@ public class ViewportService : IViewportService
 
     public async Task<bool> InitializeAsync(RobotConfigData config)
     {
-        return await Task.Run(() =>
+        try
         {
-            try
-            {
-                Log.Information("Initializing viewport with robot: {Name}", config.Name);
+            Log.Information("Initializing viewport with robot: {Name}", config.Name);
 
+            // WPF 3D objects must be created on UI thread, but we can use Task to not block
+            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+            {
                 _robot = new RobotModel3D();
-                bool success = _robot.Initialize(config, _modelsPath);
+                _robot.Initialize(config, _modelsPath);
+            });
 
-                if (success)
-                {
-                    ModelUpdated?.Invoke(this, EventArgs.Empty);
-                }
-
-                return success;
-            }
-            catch (Exception ex)
+            if (_robot != null)
             {
-                Log.Error(ex, "Failed to initialize viewport");
-                return false;
+                ModelUpdated?.Invoke(this, EventArgs.Empty);
+                return true;
             }
-        });
+
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to initialize viewport");
+            return false;
+        }
     }
 
     public void UpdateJointAngles(double[] anglesDegrees)
