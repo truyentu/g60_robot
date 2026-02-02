@@ -95,6 +95,11 @@ set(CORE_HEADERS
     src/vision/HikrobotLaserProfiler.hpp
     src/vision/SensorManager.hpp
     src/ipc/SensorPayloads.hpp
+    src/vision/SeamTypes.hpp
+    src/vision/ProfileProcessor.hpp
+    src/vision/JointDetector.hpp
+    src/vision/SeamTracker.hpp
+    src/ipc/SeamPayloads.hpp
 )
 
 # ============================================================================
@@ -330,6 +335,37 @@ if(WIN32)
 endif()
 
 gtest_discover_tests(test_vision)
+
+# ============================================================================
+# Seam Detection Tests
+# ============================================================================
+add_executable(test_seam
+    tests/test_seam.cpp
+    src/vision/ProfileProcessor.cpp
+    src/vision/JointDetector.cpp
+    src/vision/SeamTracker.cpp
+)
+
+target_include_directories(test_seam
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_seam
+    PRIVATE
+        GTest::gtest
+        GTest::gtest_main
+        spdlog::spdlog
+)
+
+if(WIN32)
+    target_compile_definitions(test_seam PRIVATE
+        NOMINMAX
+    )
+endif()
+
+gtest_discover_tests(test_seam)
 
 # ============================================================================
 # Installation
