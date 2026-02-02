@@ -8,6 +8,7 @@
 #include <atomic>
 #include <thread>
 #include <chrono>
+#include <fstream>
 
 #include "logging/Logger.hpp"
 #include "controller/RobotController.hpp"
@@ -27,14 +28,29 @@ int main(int argc, char* argv[]) {
     std::signal(SIGINT, signalHandler);
     std::signal(SIGTERM, signalHandler);
 
-    // Determine config directory
-    std::string configDir = "../../config";
+    // Determine config directory - try multiple locations
+    std::string configDir = "config";  // Try local first
     if (argc > 1) {
         configDir = argv[1];
+    } else {
+        // Check common locations
+        const char* configPaths[] = {
+            "config",           // Local (VS working dir)
+            "../../config",     // From build/bin/Release
+            "../../../config",  // From build/bin
+            "../../../../config" // Alternative
+        };
+        for (const char* path : configPaths) {
+            std::string testPath = std::string(path) + "/robot_config.yaml";
+            if (std::ifstream(testPath).good()) {
+                configDir = path;
+                break;
+            }
+        }
     }
 
     // Initialize logging
-    robot_controller::Logger::init("../../logs/core.log", "debug");
+    robot_controller::Logger::init("logs/core.log", "debug");
 
     LOG_INFO("========================================");
     LOG_INFO("Robot Controller Core v1.0.0");
