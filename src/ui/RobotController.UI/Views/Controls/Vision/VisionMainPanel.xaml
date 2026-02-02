@@ -1,0 +1,98 @@
+<UserControl x:Class="RobotController.UI.Views.Controls.Vision.VisionMainPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vision="clr-namespace:RobotController.UI.Views.Controls.Vision"
+             mc:Ignorable="d"
+             d:DesignHeight="700" d:DesignWidth="1100">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Mode selector -->
+        <Border Grid.Row="0" Background="#2D2D2D" CornerRadius="8"
+               Padding="8" Margin="0,0,0,8">
+            <StackPanel Orientation="Horizontal">
+                <RadioButton Content="Live View" GroupName="Mode"
+                            IsChecked="True"
+                            Foreground="White" Margin="0,0,16,0"/>
+                <RadioButton Content="Tracking" GroupName="Mode"
+                            Foreground="White" Margin="0,0,16,0"/>
+                <RadioButton Content="Scan-to-Path" GroupName="Mode"
+                            Foreground="White" Margin="0,0,16,0"/>
+                <RadioButton Content="Calibration" GroupName="Mode"
+                            Foreground="White"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Main content area -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="300"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Left: Profile display -->
+            <vision:ProfileDisplayControl Grid.Column="0"
+                                         DataContext="{Binding ProfileDisplay}"
+                                         Margin="0,0,8,0"/>
+
+            <!-- Right: Status panels -->
+            <StackPanel Grid.Column="1">
+                <vision:TrackingStatusPanel DataContext="{Binding TrackingStatus}"
+                                           Margin="0,0,0,8"/>
+                <vision:SensorStatusPanel DataContext="{Binding SensorStatus}"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- Bottom: Control buttons -->
+        <Border Grid.Row="2" Background="#2D2D2D" CornerRadius="8"
+               Padding="12" Margin="0,8,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Tracking controls -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <Button Content="START TRACKING" Padding="20,8"
+                           Background="#00AA00" Foreground="White"
+                           Command="{Binding StartTrackingCommand}"
+                           Margin="0,0,8,0"/>
+                    <Button Content="STOP" Padding="20,8"
+                           Background="#AA0000" Foreground="White"
+                           Command="{Binding StopTrackingCommand}"
+                           Margin="0,0,8,0"/>
+                    <Button Content="Reset" Padding="12,8"
+                           Command="{Binding ResetTrackingCommand}"/>
+                </StackPanel>
+
+                <!-- Detection config -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal"
+                           HorizontalAlignment="Center">
+                    <TextBlock Text="Joint Type:" Foreground="#888888"
+                              VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <ComboBox ItemsSource="{Binding JointTypes}"
+                             SelectedItem="{Binding JointType}"
+                             Width="100"/>
+                </StackPanel>
+
+                <!-- Mode buttons -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <Button Content="Calibrate" Padding="12,8"
+                           Command="{Binding ShowCalibrationCommand}"
+                           Margin="0,0,8,0"/>
+                    <Button Content="Scan Path" Padding="12,8"
+                           Command="{Binding ShowScanToPathCommand}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>
