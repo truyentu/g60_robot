@@ -1,0 +1,74 @@
+<?xml version="1.0"?>
+<SyntaxDefinition name="RPL" xmlns="http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008">
+    <Color name="Comment" foreground="#6A9955" fontStyle="italic"/>
+    <Color name="String" foreground="#CE9178"/>
+    <Color name="Number" foreground="#B5CEA8"/>
+    <Color name="Keyword" foreground="#569CD6" fontWeight="bold"/>
+    <Color name="Motion" foreground="#4EC9B0" fontWeight="bold"/>
+    <Color name="Point" foreground="#DCDCAA"/>
+    <Color name="SystemVar" foreground="#9CDCFE"/>
+    <Color name="Operator" foreground="#D4D4D4"/>
+
+    <RuleSet ignoreCase="true">
+        <!-- Comments -->
+        <Span color="Comment" begin=";"/>
+
+        <!-- Strings -->
+        <Span color="String">
+            <Begin>"</Begin>
+            <End>"</End>
+        </Span>
+
+        <!-- Keywords -->
+        <Keywords color="Keyword">
+            <Word>DEF</Word>
+            <Word>END</Word>
+            <Word>DECL</Word>
+            <Word>REAL</Word>
+            <Word>INT</Word>
+            <Word>BOOL</Word>
+            <Word>IF</Word>
+            <Word>THEN</Word>
+            <Word>ELSE</Word>
+            <Word>ENDIF</Word>
+            <Word>LOOP</Word>
+            <Word>ENDLOOP</Word>
+            <Word>WHILE</Word>
+            <Word>ENDWHILE</Word>
+            <Word>WAIT</Word>
+            <Word>SEC</Word>
+            <Word>FOR</Word>
+            <Word>TRUE</Word>
+            <Word>FALSE</Word>
+            <Word>AND</Word>
+            <Word>OR</Word>
+            <Word>NOT</Word>
+        </Keywords>
+
+        <!-- Motion commands -->
+        <Keywords color="Motion">
+            <Word>PTP</Word>
+            <Word>LIN</Word>
+            <Word>CIRC</Word>
+            <Word>HOME</Word>
+            <Word>VEL</Word>
+            <Word>ACC</Word>
+            <Word>CONT</Word>
+        </Keywords>
+
+        <!-- System variables -->
+        <Rule color="SystemVar">
+            \$[A-Za-z_][A-Za-z0-9_]*(\[[0-9]+\])?
+        </Rule>
+
+        <!-- Points (P followed by number) -->
+        <Rule color="Point">
+            \bP[0-9]+\b
+        </Rule>
+
+        <!-- Numbers -->
+        <Rule color="Number">
+            \b[0-9]+\.?[0-9]*\b
+        </Rule>
+    </RuleSet>
+</SyntaxDefinition>
