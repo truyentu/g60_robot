@@ -101,25 +101,34 @@ public class ViewportService : IViewportService
     {
         try
         {
-            Log.Information("Initializing viewport from package: {Name}", package.Name);
+            Log.Information("[ViewportService] InitializeFromPackageAsync called for: {Name}", package.Name);
+            Log.Information("[ViewportService] Package path: {Path}", package.PackagePath);
+            Log.Information("[ViewportService] Base mesh: {Mesh}", package.BaseMesh);
+            Log.Information("[ViewportService] Joints count: {Count}", package.Joints.Count);
 
             await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
             {
+                Log.Information("[ViewportService] Creating new RobotModel3D on UI thread");
                 _robot = new RobotModel3D();
-                _robot.InitializeFromPackage(package);
+
+                Log.Information("[ViewportService] Calling InitializeFromPackage...");
+                var result = _robot.InitializeFromPackage(package);
+                Log.Information("[ViewportService] InitializeFromPackage returned: {Result}", result);
             });
 
             if (_robot != null)
             {
+                Log.Information("[ViewportService] Robot model created successfully, raising ModelUpdated event");
                 ModelUpdated?.Invoke(this, EventArgs.Empty);
                 return true;
             }
 
+            Log.Warning("[ViewportService] Robot model is null after initialization!");
             return false;
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Failed to initialize viewport from package");
+            Log.Error(ex, "[ViewportService] EXCEPTION in InitializeFromPackageAsync");
             return false;
         }
     }
