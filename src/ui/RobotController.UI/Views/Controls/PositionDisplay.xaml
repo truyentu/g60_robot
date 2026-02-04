@@ -4,177 +4,150 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
-             d:DesignHeight="500" d:DesignWidth="350">
+             d:DesignHeight="280" d:DesignWidth="280">
 
     <UserControl.Resources>
+        <!-- Mode Button Style -->
+        <Style x:Key="ModeButtonStyle" TargetType="RadioButton">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="border"
+                                Background="#353535"
+                                BorderBrush="#454545"
+                                BorderThickness="1"
+                                CornerRadius="3"
+                                Padding="10,4"
+                                Cursor="Hand">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#0078D7"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="BorderBrush" Value="#0078D7"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Foreground" Value="#AAAAAA"/>
+            <Setter Property="FontSize" Value="11"/>
+        </Style>
+
         <!-- Position Row Style -->
         <Style x:Key="PositionRowStyle" TargetType="Border">
             <Setter Property="Background" Value="#353535"/>
-            <Setter Property="CornerRadius" Value="4"/>
-            <Setter Property="Padding" Value="8,6"/>
-            <Setter Property="Margin" Value="0,2"/>
+            <Setter Property="CornerRadius" Value="3"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="Margin" Value="0,1"/>
         </Style>
     </UserControl.Resources>
 
     <Border Background="#2D2D2D" CornerRadius="8" Padding="12">
         <StackPanel>
-            <!-- Header with coordinate system -->
-            <Grid Margin="0,0,0,12">
-                <TextBlock Text="POSITION"
-                          FontSize="14" FontWeight="Bold"
-                          Foreground="#AAAAAA"/>
-                <ComboBox ItemsSource="{Binding CoordinateSystems}"
-                         SelectedItem="{Binding CoordinateSystem}"
-                         HorizontalAlignment="Right"
-                         Width="100"/>
+            <!-- Header with mode buttons -->
+            <Grid Margin="0,0,0,8">
+                <TextBlock Text="POSITION" FontSize="12" FontWeight="Bold"
+                          Foreground="#AAAAAA" VerticalAlignment="Center"/>
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <RadioButton Content="Joint"
+                                 Style="{StaticResource ModeButtonStyle}"
+                                 IsChecked="{Binding IsJointMode, Mode=OneWay}"
+                                 Command="{Binding SetJointModeCommand}"
+                                 Margin="0,0,2,0"/>
+                    <RadioButton Content="World"
+                                 Style="{StaticResource ModeButtonStyle}"
+                                 IsChecked="{Binding IsWorldMode, Mode=OneWay}"
+                                 Command="{Binding SetWorldModeCommand}"
+                                 Margin="0,0,2,0"/>
+                    <RadioButton Content="Base"
+                                 Style="{StaticResource ModeButtonStyle}"
+                                 IsChecked="{Binding IsBaseMode, Mode=OneWay}"
+                                 Command="{Binding SetBaseModeCommand}"/>
+                </StackPanel>
             </Grid>
 
-            <!-- Joint Positions -->
-            <TextBlock Text="Joint Positions" Foreground="#888888"
-                      FontWeight="SemiBold" Margin="0,0,0,4"/>
+            <!-- Active frame info -->
+            <Border Background="#252525" CornerRadius="3" Padding="6,3" Margin="0,0,0,8">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Base: " Foreground="#666666" FontSize="10"/>
+                    <TextBlock Text="{Binding ActiveBaseId}" Foreground="#AAAAAA" FontSize="10" Margin="0,0,12,0"/>
+                    <TextBlock Text="Tool: " Foreground="#666666" FontSize="10"/>
+                    <TextBlock Text="{Binding ActiveToolId}" Foreground="#AAAAAA" FontSize="10"/>
+                </StackPanel>
+            </Border>
 
-            <ItemsControl ItemsSource="{Binding Joints}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <Border Style="{StaticResource PositionRowStyle}">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="70"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="80"/>
-                                    <ColumnDefinition Width="20"/>
-                                </Grid.ColumnDefinitions>
-
-                                <!-- Joint name -->
-                                <TextBlock Grid.Column="0"
-                                          Text="{Binding Name}"
-                                          Foreground="#AAAAAA"
-                                          VerticalAlignment="Center"/>
-
-                                <!-- Position bar -->
-                                <Grid Grid.Column="1" Margin="8,0">
-                                    <ProgressBar Value="{Binding PositionPercent}"
-                                               Minimum="0" Maximum="100"
-                                               Height="8"
-                                               Background="#252525"
-                                               Foreground="#0078D7"/>
-                                </Grid>
-
-                                <!-- Position value -->
-                                <TextBlock Grid.Column="2"
-                                          Text="{Binding PositionDisplay}"
-                                          Foreground="White"
-                                          FontFamily="Consolas"
-                                          FontSize="13"
-                                          TextAlignment="Right"
-                                          VerticalAlignment="Center"/>
-
-                                <!-- Homed indicator -->
-                                <Ellipse Grid.Column="3"
-                                        Width="8" Height="8"
-                                        VerticalAlignment="Center"
-                                        HorizontalAlignment="Center">
-                                    <Ellipse.Style>
-                                        <Style TargetType="Ellipse">
-                                            <Setter Property="Fill" Value="#AA0000"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsHomed}" Value="True">
-                                                    <Setter Property="Fill" Value="#00AA00"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Ellipse.Style>
-                                </Ellipse>
-                            </Grid>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-
-            <!-- Separator -->
-            <Rectangle Height="1" Fill="#404040" Margin="0,12"/>
-
-            <!-- TCP Position -->
-            <TextBlock Text="TCP Position" Foreground="#888888"
-                      FontWeight="SemiBold" Margin="0,0,0,8"/>
-
+            <!-- Position values grid -->
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
 
-                <!-- X -->
-                <TextBlock Grid.Row="0" Grid.Column="0" Text="X:"
-                          Foreground="#888888" Margin="0,2"/>
-                <TextBlock Grid.Row="0" Grid.Column="1"
-                          Text="{Binding TcpPosition.X, StringFormat={}{0:F2} mm}"
-                          Foreground="White" FontFamily="Consolas"
-                          TextAlignment="Right" Margin="0,2"/>
+                <!-- Left column: Axis 1-3 -->
+                <StackPanel Grid.Column="0" Margin="0,0,4,0">
+                    <Border Style="{StaticResource PositionRowStyle}">
+                        <Grid>
+                            <TextBlock Text="{Binding Label1}" Foreground="#0078D7" FontWeight="Bold" Width="28"/>
+                            <TextBlock Text="{Binding Position1, StringFormat='{}{0:F3}'}"
+                                      Foreground="White" FontFamily="Consolas" FontSize="12"
+                                      HorizontalAlignment="Right"/>
+                        </Grid>
+                    </Border>
+                    <Border Style="{StaticResource PositionRowStyle}">
+                        <Grid>
+                            <TextBlock Text="{Binding Label2}" Foreground="#00AA00" FontWeight="Bold" Width="28"/>
+                            <TextBlock Text="{Binding Position2, StringFormat='{}{0:F3}'}"
+                                      Foreground="White" FontFamily="Consolas" FontSize="12"
+                                      HorizontalAlignment="Right"/>
+                        </Grid>
+                    </Border>
+                    <Border Style="{StaticResource PositionRowStyle}">
+                        <Grid>
+                            <TextBlock Text="{Binding Label3}" Foreground="#CC0000" FontWeight="Bold" Width="28"/>
+                            <TextBlock Text="{Binding Position3, StringFormat='{}{0:F3}'}"
+                                      Foreground="White" FontFamily="Consolas" FontSize="12"
+                                      HorizontalAlignment="Right"/>
+                        </Grid>
+                    </Border>
+                </StackPanel>
 
-                <!-- Y -->
-                <TextBlock Grid.Row="1" Grid.Column="0" Text="Y:"
-                          Foreground="#888888" Margin="0,2"/>
-                <TextBlock Grid.Row="1" Grid.Column="1"
-                          Text="{Binding TcpPosition.Y, StringFormat={}{0:F2} mm}"
-                          Foreground="White" FontFamily="Consolas"
-                          TextAlignment="Right" Margin="0,2"/>
-
-                <!-- Z -->
-                <TextBlock Grid.Row="2" Grid.Column="0" Text="Z:"
-                          Foreground="#888888" Margin="0,2"/>
-                <TextBlock Grid.Row="2" Grid.Column="1"
-                          Text="{Binding TcpPosition.Z, StringFormat={}{0:F2} mm}"
-                          Foreground="White" FontFamily="Consolas"
-                          TextAlignment="Right" Margin="0,2"/>
-
-                <!-- Roll -->
-                <TextBlock Grid.Row="3" Grid.Column="0" Text="Roll:"
-                          Foreground="#888888" Margin="0,2"/>
-                <TextBlock Grid.Row="3" Grid.Column="1"
-                          Text="{Binding TcpPosition.Roll, StringFormat={}{0:F1} deg}"
-                          Foreground="White" FontFamily="Consolas"
-                          TextAlignment="Right" Margin="0,2"/>
-
-                <!-- Pitch -->
-                <TextBlock Grid.Row="4" Grid.Column="0" Text="Pitch:"
-                          Foreground="#888888" Margin="0,2"/>
-                <TextBlock Grid.Row="4" Grid.Column="1"
-                          Text="{Binding TcpPosition.Pitch, StringFormat={}{0:F1} deg}"
-                          Foreground="White" FontFamily="Consolas"
-                          TextAlignment="Right" Margin="0,2"/>
-
-                <!-- Yaw -->
-                <TextBlock Grid.Row="5" Grid.Column="0" Text="Yaw:"
-                          Foreground="#888888" Margin="0,2"/>
-                <TextBlock Grid.Row="5" Grid.Column="1"
-                          Text="{Binding TcpPosition.Yaw, StringFormat={}{0:F1} deg}"
-                          Foreground="White" FontFamily="Consolas"
-                          TextAlignment="Right" Margin="0,2"/>
+                <!-- Right column: Axis 4-6 -->
+                <StackPanel Grid.Column="1" Margin="4,0,0,0">
+                    <Border Style="{StaticResource PositionRowStyle}">
+                        <Grid>
+                            <TextBlock Text="{Binding Label4}" Foreground="#888888" FontWeight="Bold" Width="28"/>
+                            <TextBlock Text="{Binding Position4, StringFormat='{}{0:F3}'}"
+                                      Foreground="White" FontFamily="Consolas" FontSize="12"
+                                      HorizontalAlignment="Right"/>
+                        </Grid>
+                    </Border>
+                    <Border Style="{StaticResource PositionRowStyle}">
+                        <Grid>
+                            <TextBlock Text="{Binding Label5}" Foreground="#888888" FontWeight="Bold" Width="28"/>
+                            <TextBlock Text="{Binding Position5, StringFormat='{}{0:F3}'}"
+                                      Foreground="White" FontFamily="Consolas" FontSize="12"
+                                      HorizontalAlignment="Right"/>
+                        </Grid>
+                    </Border>
+                    <Border Style="{StaticResource PositionRowStyle}">
+                        <Grid>
+                            <TextBlock Text="{Binding Label6}" Foreground="#888888" FontWeight="Bold" Width="28"/>
+                            <TextBlock Text="{Binding Position6, StringFormat='{}{0:F3}'}"
+                                      Foreground="White" FontFamily="Consolas" FontSize="12"
+                                      HorizontalAlignment="Right"/>
+                        </Grid>
+                    </Border>
+                </StackPanel>
             </Grid>
 
-            <!-- Velocity -->
-            <Border Background="#353535" CornerRadius="4"
-                   Padding="8" Margin="0,12,0,0">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Text="Velocity:" Foreground="#888888"/>
-                    <TextBlock Grid.Column="1"
-                              Text="{Binding TcpPosition.VelocityDisplay}"
-                              Foreground="White" FontFamily="Consolas"/>
-                </Grid>
-            </Border>
+            <!-- Unit indicator -->
+            <TextBlock Text="{Binding Unit}" Foreground="#666666" FontSize="10"
+                      HorizontalAlignment="Right" Margin="0,4,0,0"/>
         </StackPanel>
     </Border>
 </UserControl>
