@@ -8,6 +8,11 @@
 #include "../state/StateMachine.hpp"
 #include "../config/ConfigManager.hpp"
 #include "../ipc/IpcServer.hpp"
+#include "../frame/BaseFrameManager.hpp"
+#include "../override/OverrideManager.hpp"
+#include "../interpreter/Executor.hpp"
+#include "../interpreter/Lexer.hpp"
+#include "../interpreter/Parser.hpp"
 #include <memory>
 #include <array>
 #include <atomic>
@@ -28,12 +33,19 @@ struct RobotStatus {
 
     std::array<double, 6> jointPositions = {0};    // degrees
     std::array<double, 6> jointVelocities = {0};   // deg/s
-    std::array<double, 6> tcpPose = {0};           // X,Y,Z,Rx,Ry,Rz
+    std::array<double, 6> tcpPose = {0};           // X,Y,Z,Rx,Ry,Rz (World frame)
+    std::array<double, 6> tcpInBase = {0};         // X,Y,Z,Rx,Ry,Rz (Active base frame)
+
+    std::string activeBaseId = "world";            // Active base frame ID
+    std::string activeToolId = "tool_default";     // Active tool ID
 
     state::ErrorCode errorCode = state::ErrorCode::NONE;
     std::string errorMessage;
 
-    double speedOverride = 100.0;  // 0-100%
+    // Triple override control (KUKA-inspired)
+    int programOverride = 100;    // Program execution speed (1-100%)
+    int jogOverride = 100;        // Manual jog speed (1-100%)
+    int manualOverride = 100;     // T1 mode cap (1-100%, max 250mm/s)
 };
 
 /**
@@ -93,6 +105,21 @@ public:
     bool jogCartesian(int axis, double speed);
     bool stopJog();
 
+    // Program execution (Phase 8)
+    bool loadProgram(const std::string& source);
+    void runProgram();
+    void stepProgram();
+    void pauseProgram();
+    void stopProgram();
+    void resetProgram();
+    interpreter::ExecutionState getProgramState() const;
+    int getProgramLine() const;
+    std::string getProgramName() const;
+
+    // Point management (Phase 8)
+    void setPoint(const std::string& name, const std::vector<double>& values);
+    std::vector<double> getPoint(const std::string& name) const;
+
 private:
     void controlLoop();
     void updateStatus();
@@ -102,6 +129,9 @@ private:
     // Components
     std::unique_ptr<state::StateMachine> m_stateMachine;
     std::unique_ptr<ipc::IpcServer> m_ipcServer;
+    std::unique_ptr<frame::BaseFrameManager> m_baseFrameManager;
+    std::unique_ptr<override::OverrideManager> m_overrideManager;
+    std::unique_ptr<interpreter::Executor> m_programExecutor;
 
     // Status
     RobotStatus m_status;
