@@ -45,10 +45,22 @@ set(CORE_SOURCES
     src/main.cpp
     src/ipc/IpcServer.cpp
     src/config/ConfigManager.cpp
+    src/config/RobotCatalog.cpp
+    src/config/RobotInstance.cpp
+    src/config/RobotPackageLoader.cpp
     src/robot/RobotModel.cpp
     src/logging/Logger.cpp
     src/state/StateMachine.cpp
     src/controller/RobotController.cpp
+    src/homing/HomingService.cpp
+    src/tool/ToolManager.cpp
+    src/tool/ToolCalibration.cpp
+    src/mode/ModeManager.cpp
+    src/frame/BaseFrameManager.cpp
+    src/frame/BaseCalibration.cpp
+    src/interpreter/Lexer.cpp
+    src/interpreter/Parser.cpp
+    src/interpreter/Executor.cpp
 )
 
 set(CORE_HEADERS
@@ -59,6 +71,10 @@ set(CORE_HEADERS
     src/config/ConfigManager.hpp
     src/config/RobotConfig.hpp
     src/config/SystemConfig.hpp
+    src/config/RobotCatalog.hpp
+    src/config/RobotInstance.hpp
+    src/config/RobotPackageSchema.hpp
+    src/config/RobotPackageLoader.hpp
     src/robot/RobotModel.hpp
     src/robot/DHParameters.hpp
     src/logging/Logger.hpp
@@ -100,6 +116,27 @@ set(CORE_HEADERS
     src/vision/JointDetector.hpp
     src/vision/SeamTracker.hpp
     src/ipc/SeamPayloads.hpp
+    src/homing/HomingTypes.hpp
+    src/homing/HomingService.hpp
+    src/ipc/HomingPayloads.hpp
+    src/tool/ToolTypes.hpp
+    src/tool/ToolManager.hpp
+    src/tool/ToolCalibration.hpp
+    src/ipc/ToolPayloads.hpp
+    src/mode/OperationMode.hpp
+    src/mode/ModeManager.hpp
+    src/ipc/ModePayloads.hpp
+    src/frame/FrameTypes.hpp
+    src/frame/BaseFrameManager.hpp
+    src/frame/BaseCalibration.hpp
+    src/ipc/BasePayloads.hpp
+    src/ipc/RobotPackagePayloads.hpp
+    src/ipc/OverridePayloads.hpp
+    src/interpreter/Token.hpp
+    src/interpreter/Lexer.hpp
+    src/interpreter/AST.hpp
+    src/interpreter/Parser.hpp
+    src/interpreter/Executor.hpp
 )
 
 # ============================================================================
@@ -141,6 +178,8 @@ add_executable(robot_core_tests
     tests/test_ipc.cpp
     tests/test_state_machine.cpp
     src/config/ConfigManager.cpp
+    src/config/RobotCatalog.cpp
+    src/config/RobotInstance.cpp
     src/logging/Logger.cpp
     src/ipc/IpcServer.cpp
     src/state/StateMachine.cpp
@@ -366,6 +405,129 @@ if(WIN32)
 endif()
 
 gtest_discover_tests(test_seam)
+
+# ============================================================================
+# Safety Tests
+# ============================================================================
+add_executable(test_safety
+    tests/test_safety.cpp
+    src/logging/Logger.cpp
+    src/state/StateMachine.cpp
+)
+
+target_include_directories(test_safety
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_safety
+    PRIVATE
+        GTest::gtest
+        GTest::gtest_main
+        spdlog::spdlog
+)
+
+if(WIN32)
+    target_compile_definitions(test_safety PRIVATE
+        NOMINMAX
+    )
+endif()
+
+gtest_discover_tests(test_safety)
+
+# ============================================================================
+# Motion Controller Tests
+# ============================================================================
+add_executable(test_motion_controller
+    tests/test_motion_controller.cpp
+    src/logging/Logger.cpp
+)
+
+target_include_directories(test_motion_controller
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_motion_controller
+    PRIVATE
+        GTest::gtest
+        GTest::gtest_main
+        spdlog::spdlog
+        Eigen3::Eigen
+)
+
+if(WIN32)
+    target_compile_definitions(test_motion_controller PRIVATE
+        NOMINMAX
+    )
+endif()
+
+gtest_discover_tests(test_motion_controller)
+
+# ============================================================================
+# Core Platform Tests
+# ============================================================================
+add_executable(test_core_platform
+    tests/test_core_platform.cpp
+    src/config/ConfigManager.cpp
+    src/config/RobotCatalog.cpp
+    src/config/RobotInstance.cpp
+    src/logging/Logger.cpp
+    src/ipc/IpcServer.cpp
+)
+
+target_include_directories(test_core_platform
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_core_platform
+    PRIVATE
+        GTest::gtest
+        GTest::gtest_main
+        spdlog::spdlog
+        nlohmann_json::nlohmann_json
+        cppzmq
+        yaml-cpp::yaml-cpp
+)
+
+if(WIN32)
+    target_compile_definitions(test_core_platform PRIVATE
+        NOMINMAX
+    )
+endif()
+
+gtest_discover_tests(test_core_platform)
+
+# ============================================================================
+# Feature Registry Tests (All-in-one verification)
+# ============================================================================
+add_executable(test_feature_registry
+    tests/test_feature_registry.cpp
+)
+
+target_include_directories(test_feature_registry
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_feature_registry
+    PRIVATE
+        GTest::gtest
+        GTest::gtest_main
+)
+
+if(WIN32)
+    target_compile_definitions(test_feature_registry PRIVATE
+        NOMINMAX
+    )
+endif()
+
+gtest_discover_tests(test_feature_registry)
 
 # ============================================================================
 # Installation

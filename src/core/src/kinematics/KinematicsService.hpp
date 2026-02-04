@@ -5,9 +5,18 @@
 
 #pragma once
 
+#define _USE_MATH_DEFINES
+#include <cmath>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 #include "InverseKinematics.hpp"
+#include <Eigen/Geometry>
 #include <memory>
 #include <mutex>
+#include <array>
 
 namespace robot_controller {
 namespace kinematics {
@@ -25,6 +34,7 @@ public:
     // ========================================================================
 
     virtual TCPPose computeFK(const JointAngles& jointAngles) = 0;
+    virtual Matrix4d calculateFK(const JointAngles& jointAngles) = 0;
     virtual std::vector<Vector3d> computeJointPositions(const JointAngles& jointAngles) = 0;
 
     // ========================================================================
@@ -51,6 +61,7 @@ public:
 
     virtual void setRobotConfig(const RobotKinematicConfig& config) = 0;
     virtual void setToolOffset(const Vector3d& offset, const Matrix3d& rotation) = 0;
+    virtual void setToolOffset(const std::array<double, 6>& tcpOffset) = 0;
     virtual void setIKConfig(const IKConfig& config) = 0;
 
     virtual const RobotKinematicConfig& getRobotConfig() const = 0;
@@ -73,6 +84,7 @@ public:
 
     // FK
     TCPPose computeFK(const JointAngles& jointAngles) override;
+    Matrix4d calculateFK(const JointAngles& jointAngles) override;
     std::vector<Vector3d> computeJointPositions(const JointAngles& jointAngles) override;
 
     // IK
@@ -89,6 +101,7 @@ public:
     // Configuration
     void setRobotConfig(const RobotKinematicConfig& config) override;
     void setToolOffset(const Vector3d& offset, const Matrix3d& rotation) override;
+    void setToolOffset(const std::array<double, 6>& tcpOffset) override;
     void setIKConfig(const IKConfig& config) override;
     const RobotKinematicConfig& getRobotConfig() const override;
 
@@ -114,6 +127,11 @@ inline KinematicsService::KinematicsService(const RobotKinematicConfig& config)
 inline TCPPose KinematicsService::computeFK(const JointAngles& jointAngles) {
     std::lock_guard<std::mutex> lock(mutex_);
     return fk_.compute(jointAngles);
+}
+
+inline Matrix4d KinematicsService::calculateFK(const JointAngles& jointAngles) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return fk_.compute(jointAngles).toTransform();
 }
 
 inline std::vector<Vector3d> KinematicsService::computeJointPositions(const JointAngles& jointAngles) {
@@ -161,6 +179,22 @@ inline void KinematicsService::setToolOffset(const Vector3d& offset, const Matri
     config_.toolRotation = rotation;
     fk_.setToolOffset(offset, rotation);
     ik_.setConfig(config_);
+}
+
+inline void KinematicsService::setToolOffset(const std::array<double, 6>& tcpOffset) {
+    Vector3d offset = {tcpOffset[0], tcpOffset[1], tcpOffset[2]};
+
+    // Convert Euler angles (degrees) to rotation matrix
+    double rx = tcpOffset[3] * M_PI / 180.0;
+    double ry = tcpOffset[4] * M_PI / 180.0;
+    double rz = tcpOffset[5] * M_PI / 180.0;
+
+    Matrix3d rotation;
+    rotation = Eigen::AngleAxisd(rz, Eigen::Vector3d::UnitZ())
+             * Eigen::AngleAxisd(ry, Eigen::Vector3d::UnitY())
+             * Eigen::AngleAxisd(rx, Eigen::Vector3d::UnitX());
+
+    setToolOffset(offset, rotation);
 }
 
 inline void KinematicsService::setIKConfig(const IKConfig& config) {

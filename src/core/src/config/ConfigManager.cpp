@@ -16,6 +16,10 @@ namespace config {
 using json = nlohmann::json;
 namespace fs = std::filesystem;
 
+ConfigManager::ConfigManager()
+    : m_instanceManager(std::make_unique<RobotInstanceManager>(m_robotCatalog)) {
+}
+
 ConfigManager& ConfigManager::instance() {
     static ConfigManager instance;
     return instance;
@@ -196,14 +200,144 @@ bool ConfigManager::loadSystemConfig(const std::string& filepath) {
 }
 
 bool ConfigManager::loadAll(const std::string& config_dir) {
+    m_configDir = config_dir;
+
     std::string robot_path = config_dir + "/robot_config.yaml";
     std::string system_path = config_dir + "/system_config.yaml";
 
-    bool robot_ok = loadRobotConfig(robot_path);
+    // First, try to load the catalog system
+    bool catalog_ok = initializeCatalogSystem(config_dir);
+
+    // Load system config
     bool system_ok = loadSystemConfig(system_path);
+
+    // Robot config: prefer catalog system, fallback to legacy file
+    bool robot_ok = false;
+    if (catalog_ok) {
+        // Get config from active instance
+        auto activeInstance = m_instanceManager->getActiveInstance();
+        if (activeInstance) {
+            m_robot_config = activeInstance->config;
+            robot_ok = m_robot_config.isValid();
+            LOG_INFO("Using robot from catalog: {} (model: {})",
+                    activeInstance->instanceId, activeInstance->baseModelId);
+        }
+    }
+
+    // Fallback to legacy robot_config.yaml
+    if (!robot_ok && fs::exists(robot_path)) {
+        robot_ok = loadRobotConfig(robot_path);
+        LOG_INFO("Using legacy robot config: {}", robot_path);
+    }
 
     m_loaded = robot_ok && system_ok;
     return m_loaded;
+}
+
+bool ConfigManager::initializeCatalogSystem(const std::string& config_dir) {
+    auto catalogDir = fs::path(config_dir) / "catalog";
+    auto instancesDir = fs::path(config_dir) / "instances";
+
+    // Check if catalog exists
+    if (!fs::exists(catalogDir)) {
+        LOG_DEBUG("Catalog directory not found: {}", catalogDir.string());
+        return false;
+    }
+
+    // Load catalog
+    if (!m_robotCatalog.loadCatalog(catalogDir)) {
+        LOG_WARN("Failed to load robot catalog");
+        return false;
+    }
+
+    // Load instances
+    if (!m_instanceManager->loadInstances(instancesDir)) {
+        LOG_WARN("Failed to load robot instances");
+        return false;
+    }
+
+    // If no instances exist, create default from catalog
+    if (m_instanceManager->instanceCount() == 0) {
+        std::string defaultModelId = m_robotCatalog.getDefaultModelId();
+        if (!defaultModelId.empty()) {
+            if (m_instanceManager->createInstance("robot_r1", defaultModelId)) {
+                m_instanceManager->saveInstance("robot_r1");
+                LOG_INFO("Created default instance from model: {}", defaultModelId);
+            }
+        }
+    }
+
+    // Set up callback for instance changes
+    m_instanceManager->setInstanceChangedCallback(
+        [this](const RobotInstance& instance) {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_robot_config = instance.config;
+            notifyConfigChanged();
+        });
+
+    LOG_INFO("Robot catalog system initialized: {} models, {} instances",
+            m_robotCatalog.modelCount(), m_instanceManager->instanceCount());
+
+    return true;
+}
+
+bool ConfigManager::selectRobotModel(const std::string& modelId) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    if (!m_robotCatalog.isLoaded()) {
+        LOG_ERROR("Cannot select model: catalog not loaded");
+        return false;
+    }
+
+    // Get active instance ID
+    std::string instanceId = m_instanceManager->getActiveInstanceId();
+    if (instanceId.empty()) {
+        // Create new instance if none exists
+        instanceId = "robot_r1";
+        if (!m_instanceManager->createInstance(instanceId, modelId)) {
+            LOG_ERROR("Failed to create instance for model: {}", modelId);
+            return false;
+        }
+    } else {
+        // Change model of existing instance
+        if (!m_instanceManager->changeInstanceModel(instanceId, modelId)) {
+            LOG_ERROR("Failed to change instance model to: {}", modelId);
+            return false;
+        }
+    }
+
+    // Update current config
+    auto activeInstance = m_instanceManager->getActiveInstance();
+    if (activeInstance) {
+        m_robot_config = activeInstance->config;
+        m_instanceManager->saveActiveInstance();
+        notifyConfigChanged();
+        LOG_INFO("Selected robot model: {}", modelId);
+        return true;
+    }
+
+    return false;
+}
+
+std::string ConfigManager::getActiveModelId() const {
+    if (!m_instanceManager) return "";
+
+    auto activeInstance = m_instanceManager->getActiveInstance();
+    if (activeInstance) {
+        return activeInstance->baseModelId;
+    }
+    return "";
+}
+
+std::string ConfigManager::getActiveInstanceId() const {
+    if (!m_instanceManager) return "";
+    return m_instanceManager->getActiveInstanceId();
+}
+
+void ConfigManager::notifyConfigChanged() {
+    if (m_configChangedCallback) {
+        m_configChangedCallback(m_robot_config);
+    }
 }
 
 bool ConfigManager::saveRobotConfig(const std::string& filepath) const {
