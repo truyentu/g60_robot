@@ -32,6 +32,24 @@ public class StatusPayload
     [JsonPropertyName("tcp_position")]
     public List<double> TcpPosition { get; set; } = new();
 
+    [JsonPropertyName("tcp_in_base")]
+    public List<double> TcpInBase { get; set; } = new();
+
+    [JsonPropertyName("active_base_id")]
+    public string ActiveBaseId { get; set; } = "world";
+
+    [JsonPropertyName("active_tool_id")]
+    public string ActiveToolId { get; set; } = "tool_default";
+
+    [JsonPropertyName("program_override")]
+    public int ProgramOverride { get; set; } = 100;
+
+    [JsonPropertyName("jog_override")]
+    public int JogOverride { get; set; } = 100;
+
+    [JsonPropertyName("manual_override")]
+    public int ManualOverride { get; set; } = 100;
+
     [JsonPropertyName("errors")]
     public List<string> Errors { get; set; } = new();
 

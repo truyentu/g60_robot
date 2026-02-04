@@ -23,6 +23,80 @@ public static class MessageTypes
     public const string SET_CONFIG = "SET_CONFIG";
     public const string CONFIG_ACK = "CONFIG_ACK";
 
+    // Robot Catalog
+    public const string GET_ROBOT_CATALOG = "GET_ROBOT_CATALOG";
+    public const string ROBOT_CATALOG = "ROBOT_CATALOG";
+    public const string SELECT_ROBOT_MODEL = "SELECT_ROBOT_MODEL";
+    public const string SELECT_ROBOT_MODEL_ACK = "SELECT_ROBOT_MODEL_ACK";
+    public const string GET_ACTIVE_ROBOT = "GET_ACTIVE_ROBOT";
+    public const string ACTIVE_ROBOT = "ACTIVE_ROBOT";
+    public const string ROBOT_CONFIG_CHANGED = "ROBOT_CONFIG_CHANGED";
+
+    // Homing
+    public const string START_HOMING = "START_HOMING";
+    public const string STOP_HOMING = "STOP_HOMING";
+    public const string GET_HOMING_STATE = "GET_HOMING_STATE";
+    public const string HOMING_STATE_CHANGED = "HOMING_STATE_CHANGED";
+
+    // Tool Management
+    public const string GET_TOOL_LIST = "GET_TOOL_LIST";
+    public const string GET_TOOL = "GET_TOOL";
+    public const string CREATE_TOOL = "CREATE_TOOL";
+    public const string UPDATE_TOOL = "UPDATE_TOOL";
+    public const string DELETE_TOOL = "DELETE_TOOL";
+    public const string SELECT_TOOL = "SELECT_TOOL";
+    public const string GET_ACTIVE_TOOL = "GET_ACTIVE_TOOL";
+    public const string START_TCP_CALIBRATION = "START_TCP_CALIBRATION";
+    public const string RECORD_CALIBRATION_POINT = "RECORD_CALIBRATION_POINT";
+    public const string FINISH_CALIBRATION = "FINISH_CALIBRATION";
+    public const string CANCEL_CALIBRATION = "CANCEL_CALIBRATION";
+    public const string GET_CALIBRATION_STATUS = "GET_CALIBRATION_STATUS";
+    public const string TOOL_CHANGED = "TOOL_CHANGED";
+
+    // Operation Mode
+    public const string GET_OPERATION_MODE = "GET_OPERATION_MODE";
+    public const string SET_OPERATION_MODE = "SET_OPERATION_MODE";
+    public const string GET_MODE_REQUIREMENTS = "GET_MODE_REQUIREMENTS";
+    public const string OPERATION_MODE_CHANGED = "OPERATION_MODE_CHANGED";
+
+    // Base Frame Management
+    public const string GET_BASE_LIST = "GET_BASE_LIST";
+    public const string GET_BASE = "GET_BASE";
+    public const string CREATE_BASE = "CREATE_BASE";
+    public const string UPDATE_BASE = "UPDATE_BASE";
+    public const string DELETE_BASE = "DELETE_BASE";
+    public const string SELECT_BASE = "SELECT_BASE";
+    public const string GET_ACTIVE_BASE = "GET_ACTIVE_BASE";
+    public const string START_BASE_CALIBRATION = "START_BASE_CALIBRATION";
+    public const string RECORD_BASE_POINT = "RECORD_BASE_POINT";
+    public const string FINISH_BASE_CALIBRATION = "FINISH_BASE_CALIBRATION";
+    public const string CANCEL_BASE_CALIBRATION = "CANCEL_BASE_CALIBRATION";
+    public const string GET_BASE_CALIBRATION_STATUS = "GET_BASE_CALIBRATION_STATUS";
+    public const string BASE_CHANGED = "BASE_CHANGED";
+
+    // Override Control
+    public const string SET_OVERRIDE = "SET_OVERRIDE";
+    public const string GET_OVERRIDE = "GET_OVERRIDE";
+    public const string OVERRIDE_CHANGED = "OVERRIDE_CHANGED";
+
+    // Robot Package (Virtual Simulation)
+    public const string GET_ROBOT_PACKAGES = "GET_ROBOT_PACKAGES";
+    public const string LOAD_ROBOT_PACKAGE = "LOAD_ROBOT_PACKAGE";
+    public const string GET_ACTIVE_PACKAGE = "GET_ACTIVE_PACKAGE";
+    public const string ROBOT_PACKAGE_CHANGED = "ROBOT_PACKAGE_CHANGED";
+
+    // Program Execution (Virtual Simulation)
+    public const string LOAD_PROGRAM = "LOAD_PROGRAM";
+    public const string RUN_PROGRAM = "RUN_PROGRAM";
+    public const string STEP_PROGRAM = "STEP_PROGRAM";
+    public const string PAUSE_PROGRAM = "PAUSE_PROGRAM";
+    public const string STOP_PROGRAM = "STOP_PROGRAM";
+    public const string RESET_PROGRAM = "RESET_PROGRAM";
+    public const string GET_PROGRAM_STATE = "GET_PROGRAM_STATE";
+    public const string PROGRAM_STATE_CHANGED = "PROGRAM_STATE_CHANGED";
+    public const string SET_POINT = "SET_POINT";
+    public const string GET_POINTS = "GET_POINTS";
+
     // Commands
     public const string COMMAND = "COMMAND";
     public const string COMMAND_ACK = "COMMAND_ACK";

@@ -22,6 +22,12 @@ public class IpcClientService : IIpcClientService
     public event EventHandler<StatusPayload>? StatusReceived;
     public event EventHandler<bool>? ConnectionStateChanged;
     public event EventHandler<string>? ErrorOccurred;
+    public event EventHandler<RobotConfigChangedEvent>? RobotConfigChanged;
+    public event EventHandler<HomingStateChangedEvent>? HomingStateChanged;
+    public event EventHandler<ToolChangedEvent>? ToolChanged;
+    public event EventHandler<OperationModeChangedEvent>? OperationModeChanged;
+    public event EventHandler<BaseChangedEvent>? BaseChanged;
+    public event EventHandler<OverrideChangedEvent>? OverrideChanged;
 
     public IpcClientService(ILogger<IpcClientService> logger)
     {
@@ -160,6 +166,667 @@ public class IpcClientService : IIpcClientService
         return response?.Type == MessageTypes.COMMAND_ACK;
     }
 
+    public async Task<GetRobotCatalogResponse?> GetRobotCatalogAsync(CancellationToken cancellationToken = default)
+    {
+        var request = IpcMessage.Create(MessageTypes.GET_ROBOT_CATALOG);
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<GetRobotCatalogResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<SelectRobotModelResponse?> SelectRobotModelAsync(string modelId, CancellationToken cancellationToken = default)
+    {
+        var payload = new SelectRobotModelRequest { ModelId = modelId };
+        var request = IpcMessage.Create(MessageTypes.SELECT_ROBOT_MODEL, JsonSerializer.SerializeToElement(payload));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<SelectRobotModelResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<GetActiveRobotResponse?> GetActiveRobotAsync(CancellationToken cancellationToken = default)
+    {
+        var request = IpcMessage.Create(MessageTypes.GET_ACTIVE_ROBOT);
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<GetActiveRobotResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<StartHomingResponse?> StartHomingAsync(int jointIndex = -1, string method = "LIMIT_SWITCH", CancellationToken cancellationToken = default)
+    {
+        var payload = new StartHomingRequest { JointIndex = jointIndex, Method = method };
+        var request = IpcMessage.Create(MessageTypes.START_HOMING, JsonSerializer.SerializeToElement(payload));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<StartHomingResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<StopHomingResponse?> StopHomingAsync(int jointIndex = -1, CancellationToken cancellationToken = default)
+    {
+        var payload = new StopHomingRequest { JointIndex = jointIndex };
+        var request = IpcMessage.Create(MessageTypes.STOP_HOMING, JsonSerializer.SerializeToElement(payload));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<StopHomingResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<HomingStateResponse?> GetHomingStateAsync(CancellationToken cancellationToken = default)
+    {
+        var request = IpcMessage.Create(MessageTypes.GET_HOMING_STATE);
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<HomingStateResponse>();
+        }
+
+        return null;
+    }
+
+    // ========================================================================
+    // Tool Management
+    // ========================================================================
+
+    public async Task<GetToolListResponse?> GetToolListAsync(CancellationToken cancellationToken = default)
+    {
+        var request = IpcMessage.Create(MessageTypes.GET_TOOL_LIST);
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<GetToolListResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<GetToolResponse?> GetToolAsync(string toolId, CancellationToken cancellationToken = default)
+    {
+        var payload = new GetToolRequest { ToolId = toolId };
+        var request = IpcMessage.Create(MessageTypes.GET_TOOL, JsonSerializer.SerializeToElement(payload));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<GetToolResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<CreateToolResponse?> CreateToolAsync(ToolData tool, CancellationToken cancellationToken = default)
+    {
+        var payload = new CreateToolRequest { Tool = tool };
+        var request = IpcMessage.Create(MessageTypes.CREATE_TOOL, JsonSerializer.SerializeToElement(payload));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<CreateToolResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<UpdateToolResponse?> UpdateToolAsync(string toolId, ToolData tool, CancellationToken cancellationToken = default)
+    {
+        var payload = new UpdateToolRequest { ToolId = toolId, Tool = tool };
+        var request = IpcMessage.Create(MessageTypes.UPDATE_TOOL, JsonSerializer.SerializeToElement(payload));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<UpdateToolResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<DeleteToolResponse?> DeleteToolAsync(string toolId, CancellationToken cancellationToken = default)
+    {
+        var payload = new DeleteToolRequest { ToolId = toolId };
+        var request = IpcMessage.Create(MessageTypes.DELETE_TOOL, JsonSerializer.SerializeToElement(payload));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<DeleteToolResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<SelectToolResponse?> SelectToolAsync(string toolId, CancellationToken cancellationToken = default)
+    {
+        var payload = new SelectToolRequest { ToolId = toolId };
+        var request = IpcMessage.Create(MessageTypes.SELECT_TOOL, JsonSerializer.SerializeToElement(payload));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<SelectToolResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<GetActiveToolResponse?> GetActiveToolAsync(CancellationToken cancellationToken = default)
+    {
+        var request = IpcMessage.Create(MessageTypes.GET_ACTIVE_TOOL);
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<GetActiveToolResponse>();
+        }
+
+        return null;
+    }
+
+    // ========================================================================
+    // Tool Calibration
+    // ========================================================================
+
+    public async Task<StartCalibrationResponse?> StartTcpCalibrationAsync(string method = "FOUR_POINT", CancellationToken cancellationToken = default)
+    {
+        var payload = new StartCalibrationRequest { Method = method };
+        var request = IpcMessage.Create(MessageTypes.START_TCP_CALIBRATION, JsonSerializer.SerializeToElement(payload));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<StartCalibrationResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<RecordCalibrationPointResponse?> RecordCalibrationPointAsync(List<double> jointAngles, CancellationToken cancellationToken = default)
+    {
+        var payload = new RecordCalibrationPointRequest { JointAngles = jointAngles };
+        var request = IpcMessage.Create(MessageTypes.RECORD_CALIBRATION_POINT, JsonSerializer.SerializeToElement(payload));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<RecordCalibrationPointResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<FinishCalibrationResponse?> FinishCalibrationAsync(CancellationToken cancellationToken = default)
+    {
+        var request = IpcMessage.Create(MessageTypes.FINISH_CALIBRATION);
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<FinishCalibrationResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<bool> CancelCalibrationAsync(CancellationToken cancellationToken = default)
+    {
+        var request = IpcMessage.Create(MessageTypes.CANCEL_CALIBRATION);
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            var result = response.Payload.Deserialize<JsonElement>();
+            return result.GetProperty("success").GetBoolean();
+        }
+
+        return false;
+    }
+
+    public async Task<CalibrationStatusResponse?> GetCalibrationStatusAsync(CancellationToken cancellationToken = default)
+    {
+        var request = IpcMessage.Create(MessageTypes.GET_CALIBRATION_STATUS);
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<CalibrationStatusResponse>();
+        }
+
+        return null;
+    }
+
+    // ========================================================================
+    // Operation Mode
+    // ========================================================================
+
+    public async Task<GetOperationModeResponse?> GetOperationModeAsync(CancellationToken cancellationToken = default)
+    {
+        var request = IpcMessage.Create(MessageTypes.GET_OPERATION_MODE);
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<GetOperationModeResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<SetOperationModeResponse?> SetOperationModeAsync(string mode, CancellationToken cancellationToken = default)
+    {
+        var payload = new SetOperationModeRequest { Mode = mode };
+        var request = IpcMessage.Create(MessageTypes.SET_OPERATION_MODE, JsonSerializer.SerializeToElement(payload));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<SetOperationModeResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<GetModeRequirementsResponse?> GetModeRequirementsAsync(string targetMode, CancellationToken cancellationToken = default)
+    {
+        var payload = new GetModeRequirementsRequest { TargetMode = targetMode };
+        var request = IpcMessage.Create(MessageTypes.GET_MODE_REQUIREMENTS, JsonSerializer.SerializeToElement(payload));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<GetModeRequirementsResponse>();
+        }
+
+        return null;
+    }
+
+    // ========================================================================
+    // Base Frame Management
+    // ========================================================================
+
+    public async Task<GetBaseListResponse?> GetBaseListAsync(CancellationToken cancellationToken = default)
+    {
+        var request = IpcMessage.Create(MessageTypes.GET_BASE_LIST);
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<GetBaseListResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<GetBaseResponse?> GetBaseAsync(string baseId, CancellationToken cancellationToken = default)
+    {
+        var payload = new GetBaseRequest { BaseId = baseId };
+        var request = IpcMessage.Create(MessageTypes.GET_BASE, JsonSerializer.SerializeToElement(payload));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<GetBaseResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<CreateBaseResponse?> CreateBaseAsync(BaseFrameData baseFrame, CancellationToken cancellationToken = default)
+    {
+        var payload = new CreateBaseRequest { Base = baseFrame };
+        var request = IpcMessage.Create(MessageTypes.CREATE_BASE, JsonSerializer.SerializeToElement(payload));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<CreateBaseResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<UpdateBaseResponse?> UpdateBaseAsync(string baseId, BaseFrameData baseFrame, CancellationToken cancellationToken = default)
+    {
+        var payload = new UpdateBaseRequest { BaseId = baseId, Base = baseFrame };
+        var request = IpcMessage.Create(MessageTypes.UPDATE_BASE, JsonSerializer.SerializeToElement(payload));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<UpdateBaseResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<DeleteBaseResponse?> DeleteBaseAsync(string baseId, CancellationToken cancellationToken = default)
+    {
+        var payload = new DeleteBaseRequest { BaseId = baseId };
+        var request = IpcMessage.Create(MessageTypes.DELETE_BASE, JsonSerializer.SerializeToElement(payload));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<DeleteBaseResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<SelectBaseResponse?> SelectBaseAsync(string baseId, CancellationToken cancellationToken = default)
+    {
+        var payload = new SelectBaseRequest { BaseId = baseId };
+        var request = IpcMessage.Create(MessageTypes.SELECT_BASE, JsonSerializer.SerializeToElement(payload));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<SelectBaseResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<GetActiveBaseResponse?> GetActiveBaseAsync(CancellationToken cancellationToken = default)
+    {
+        var request = IpcMessage.Create(MessageTypes.GET_ACTIVE_BASE);
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<GetActiveBaseResponse>();
+        }
+
+        return null;
+    }
+
+    // ========================================================================
+    // Base Frame Calibration
+    // ========================================================================
+
+    public async Task<StartBaseCalibrationResponse?> StartBaseCalibrationAsync(string method = "THREE_POINT", CancellationToken cancellationToken = default)
+    {
+        var payload = new StartBaseCalibrationRequest { Method = method };
+        var request = IpcMessage.Create(MessageTypes.START_BASE_CALIBRATION, JsonSerializer.SerializeToElement(payload));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<StartBaseCalibrationResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<RecordBasePointResponse?> RecordBasePointAsync(int pointIndex, List<double> jointAngles, List<double> tcpPosition, CancellationToken cancellationToken = default)
+    {
+        var payload = new RecordBasePointRequest { PointIndex = pointIndex, JointAngles = jointAngles, TcpPosition = tcpPosition };
+        var request = IpcMessage.Create(MessageTypes.RECORD_BASE_POINT, JsonSerializer.SerializeToElement(payload));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<RecordBasePointResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<FinishBaseCalibrationResponse?> FinishBaseCalibrationAsync(CancellationToken cancellationToken = default)
+    {
+        var request = IpcMessage.Create(MessageTypes.FINISH_BASE_CALIBRATION);
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<FinishBaseCalibrationResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<bool> CancelBaseCalibrationAsync(CancellationToken cancellationToken = default)
+    {
+        var request = IpcMessage.Create(MessageTypes.CANCEL_BASE_CALIBRATION);
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            var result = response.Payload.Deserialize<JsonElement>();
+            return result.GetProperty("success").GetBoolean();
+        }
+
+        return false;
+    }
+
+    public async Task<BaseCalibrationStatusResponse?> GetBaseCalibrationStatusAsync(CancellationToken cancellationToken = default)
+    {
+        var request = IpcMessage.Create(MessageTypes.GET_BASE_CALIBRATION_STATUS);
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<BaseCalibrationStatusResponse>();
+        }
+
+        return null;
+    }
+
+    // ========================================================================
+    // Override Control
+    // ========================================================================
+
+    public async Task<GetOverrideResponse?> GetOverrideAsync(CancellationToken cancellationToken = default)
+    {
+        var request = IpcMessage.Create(MessageTypes.GET_OVERRIDE);
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<GetOverrideResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<SetOverrideResponse?> SetOverrideAsync(int programOverride = -1, int jogOverride = -1, int manualOverride = -1, CancellationToken cancellationToken = default)
+    {
+        var payload = new SetOverrideRequest
+        {
+            ProgramOverride = programOverride,
+            JogOverride = jogOverride,
+            ManualOverride = manualOverride
+        };
+        var request = IpcMessage.Create(MessageTypes.SET_OVERRIDE, JsonSerializer.SerializeToElement(payload));
+
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<SetOverrideResponse>();
+        }
+
+        return null;
+    }
+
+    // ========================================================================
+    // Robot Package (Virtual Simulation)
+    // ========================================================================
+
+    public async Task<GetRobotPackagesResponse?> GetRobotPackagesAsync(CancellationToken cancellationToken = default)
+    {
+        var request = IpcMessage.Create(MessageTypes.GET_ROBOT_PACKAGES);
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<GetRobotPackagesResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<LoadRobotPackageResponse?> LoadRobotPackageAsync(string packageId, CancellationToken cancellationToken = default)
+    {
+        var payload = new LoadRobotPackageRequest { PackageId = packageId };
+        var request = IpcMessage.Create(MessageTypes.LOAD_ROBOT_PACKAGE, JsonSerializer.SerializeToElement(payload));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<LoadRobotPackageResponse>();
+        }
+
+        return null;
+    }
+
+    // ========================================================================
+    // Program Execution (Virtual Simulation)
+    // ========================================================================
+
+    public async Task<LoadProgramResponse?> LoadProgramAsync(string source, CancellationToken cancellationToken = default)
+    {
+        var payload = new { source };
+        var request = IpcMessage.Create(MessageTypes.LOAD_PROGRAM, JsonSerializer.SerializeToElement(payload));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<LoadProgramResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<bool> RunProgramAsync(CancellationToken cancellationToken = default)
+    {
+        var request = IpcMessage.Create(MessageTypes.RUN_PROGRAM, JsonSerializer.SerializeToElement(new { }));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.GetProperty("success").GetBoolean();
+        }
+
+        return false;
+    }
+
+    public async Task<StepProgramResponse?> StepProgramAsync(CancellationToken cancellationToken = default)
+    {
+        var request = IpcMessage.Create(MessageTypes.STEP_PROGRAM, JsonSerializer.SerializeToElement(new { }));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<StepProgramResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<bool> PauseProgramAsync(CancellationToken cancellationToken = default)
+    {
+        var request = IpcMessage.Create(MessageTypes.PAUSE_PROGRAM, JsonSerializer.SerializeToElement(new { }));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.GetProperty("success").GetBoolean();
+        }
+
+        return false;
+    }
+
+    public async Task<bool> StopProgramAsync(CancellationToken cancellationToken = default)
+    {
+        var request = IpcMessage.Create(MessageTypes.STOP_PROGRAM, JsonSerializer.SerializeToElement(new { }));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.GetProperty("success").GetBoolean();
+        }
+
+        return false;
+    }
+
+    public async Task<bool> ResetProgramAsync(CancellationToken cancellationToken = default)
+    {
+        var request = IpcMessage.Create(MessageTypes.RESET_PROGRAM, JsonSerializer.SerializeToElement(new { }));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.GetProperty("success").GetBoolean();
+        }
+
+        return false;
+    }
+
+    public async Task<GetProgramStateResponse?> GetProgramStateAsync(CancellationToken cancellationToken = default)
+    {
+        var request = IpcMessage.Create(MessageTypes.GET_PROGRAM_STATE, JsonSerializer.SerializeToElement(new { }));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<GetProgramStateResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<bool> SetPointAsync(string name, double[] values, CancellationToken cancellationToken = default)
+    {
+        var payload = new { name, values };
+        var request = IpcMessage.Create(MessageTypes.SET_POINT, JsonSerializer.SerializeToElement(payload));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.GetProperty("success").GetBoolean();
+        }
+
+        return false;
+    }
+
+    public async Task<GetPointsResponse?> GetPointsAsync(CancellationToken cancellationToken = default)
+    {
+        var request = IpcMessage.Create(MessageTypes.GET_POINTS, JsonSerializer.SerializeToElement(new { }));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<GetPointsResponse>();
+        }
+
+        return null;
+    }
+
     private Task<IpcMessage?> SendRequestAsync(IpcMessage request, CancellationToken cancellationToken)
     {
         if (!_isConnected || _requestSocket == null)
@@ -203,12 +870,63 @@ public class IpcClientService : IIpcClientService
             _logger.LogTrace("SUB received: {Message}", json);
 
             var message = IpcMessage.Deserialize(json);
-            if (message?.Type == MessageTypes.STATUS && message.Payload.ValueKind != JsonValueKind.Undefined)
+            if (message?.Payload.ValueKind != JsonValueKind.Undefined)
             {
-                var status = message.Payload.Deserialize<StatusPayload>();
-                if (status != null)
+                if (message.Type == MessageTypes.STATUS)
                 {
-                    StatusReceived?.Invoke(this, status);
+                    var status = message.Payload.Deserialize<StatusPayload>();
+                    if (status != null)
+                    {
+                        StatusReceived?.Invoke(this, status);
+                    }
+                }
+                else if (message.Type == MessageTypes.ROBOT_CONFIG_CHANGED)
+                {
+                    var configChanged = message.Payload.Deserialize<RobotConfigChangedEvent>();
+                    if (configChanged != null)
+                    {
+                        RobotConfigChanged?.Invoke(this, configChanged);
+                    }
+                }
+                else if (message.Type == MessageTypes.HOMING_STATE_CHANGED)
+                {
+                    var homingChanged = message.Payload.Deserialize<HomingStateChangedEvent>();
+                    if (homingChanged != null)
+                    {
+                        HomingStateChanged?.Invoke(this, homingChanged);
+                    }
+                }
+                else if (message.Type == MessageTypes.TOOL_CHANGED)
+                {
+                    var toolChanged = message.Payload.Deserialize<ToolChangedEvent>();
+                    if (toolChanged != null)
+                    {
+                        ToolChanged?.Invoke(this, toolChanged);
+                    }
+                }
+                else if (message.Type == MessageTypes.OPERATION_MODE_CHANGED)
+                {
+                    var modeChanged = message.Payload.Deserialize<OperationModeChangedEvent>();
+                    if (modeChanged != null)
+                    {
+                        OperationModeChanged?.Invoke(this, modeChanged);
+                    }
+                }
+                else if (message.Type == MessageTypes.BASE_CHANGED)
+                {
+                    var baseChanged = message.Payload.Deserialize<BaseChangedEvent>();
+                    if (baseChanged != null)
+                    {
+                        BaseChanged?.Invoke(this, baseChanged);
+                    }
+                }
+                else if (message.Type == MessageTypes.OVERRIDE_CHANGED)
+                {
+                    var overrideChanged = message.Payload.Deserialize<OverrideChangedEvent>();
+                    if (overrideChanged != null)
+                    {
+                        OverrideChanged?.Invoke(this, overrideChanged);
+                    }
                 }
             }
         }
