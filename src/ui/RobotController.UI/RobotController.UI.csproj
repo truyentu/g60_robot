@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <!-- MVVM -->
+    <PackageReference Include="AvalonEdit" Version="6.3.1.120" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
 
     <!-- 3D Visualization -->
@@ -32,6 +33,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\RobotController.Common\RobotController.Common.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\RPL.xshd" />
   </ItemGroup>
 
 </Project>

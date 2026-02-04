@@ -21,6 +21,9 @@ public interface IViewportService
     /// <summary>Initialize viewport with robot model</summary>
     Task<bool> InitializeAsync(RobotConfigData config);
 
+    /// <summary>Initialize viewport from robot package</summary>
+    Task<bool> InitializeFromPackageAsync(RobotPackageData package);
+
     /// <summary>Update joint angles from status</summary>
     void UpdateJointAngles(double[] anglesDegrees);
 
@@ -90,6 +93,33 @@ public class ViewportService : IViewportService
         catch (Exception ex)
         {
             Log.Error(ex, "Failed to initialize viewport");
+            return false;
+        }
+    }
+
+    public async Task<bool> InitializeFromPackageAsync(RobotPackageData package)
+    {
+        try
+        {
+            Log.Information("Initializing viewport from package: {Name}", package.Name);
+
+            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                _robot = new RobotModel3D();
+                _robot.InitializeFromPackage(package);
+            });
+
+            if (_robot != null)
+            {
+                ModelUpdated?.Invoke(this, EventArgs.Empty);
+                return true;
+            }
+
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to initialize viewport from package");
             return false;
         }
     }

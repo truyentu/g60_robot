@@ -5,8 +5,13 @@
     <Application.Resources>
         <!-- Converters -->
         <converters:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
+        <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
         <converters:BoolToColorConverter x:Key="BoolToColor"/>
         <converters:InverseBoolConverter x:Key="InverseBool"/>
+        <converters:StringToVisibilityConverter x:Key="StringToVisibilityConverter"/>
+        <converters:NullToBoolConverter x:Key="NullToBoolConverter"/>
+        <converters:NullToBoolConverter x:Key="NotNullToBool"/>
+        <converters:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility"/>
 
         <!-- Colors -->
         <SolidColorBrush x:Key="PrimaryBackground" Color="#1E1E1E"/>

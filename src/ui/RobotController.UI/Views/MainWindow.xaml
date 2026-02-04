@@ -6,6 +6,7 @@
         xmlns:helix="http://helix-toolkit.org/wpf"
         xmlns:vm="clr-namespace:RobotController.UI.ViewModels"
         xmlns:controls="clr-namespace:RobotController.UI.Views.Controls"
+        xmlns:pages="clr-namespace:RobotController.UI.Views.Pages"
         mc:Ignorable="d"
         Title="Robot Controller"
         Height="800" Width="1400"
@@ -142,63 +143,147 @@
             <GridSplitter Grid.Column="1" Width="3" Background="{StaticResource BorderBrush}"
                           HorizontalAlignment="Center" VerticalAlignment="Stretch"/>
 
-            <!-- 3D Viewport -->
-            <Border Grid.Column="2" Background="#1A1A1A">
-                <helix:HelixViewport3D x:Name="Viewport3D"
-                                       Background="#1E1E1E"
-                                       ShowCoordinateSystem="True"
-                                       CoordinateSystemLabelForeground="White"
-                                       ZoomExtentsWhenLoaded="True"
-                                       CameraRotationMode="Turntable"
-                                       IsRotationEnabled="True"
-                                       IsPanEnabled="True"
-                                       IsZoomEnabled="True"
-                                       ShowViewCube="True"
-                                       ViewCubeBackText="Back"
-                                       ViewCubeFrontText="Front"
-                                       ViewCubeLeftText="Left"
-                                       ViewCubeRightText="Right"
-                                       ViewCubeTopText="Top"
-                                       ViewCubeBottomText="Bottom">
+            <!-- 3D Viewport + Page Content -->
+            <Grid Grid.Column="2">
+                <!-- 3D Viewport (always visible in background) -->
+                <Border Background="#1A1A1A">
+                    <helix:HelixViewport3D x:Name="Viewport3D"
+                                           Background="#1E1E1E"
+                                           ShowCoordinateSystem="True"
+                                           CoordinateSystemLabelForeground="White"
+                                           ZoomExtentsWhenLoaded="True"
+                                           CameraRotationMode="Turntable"
+                                           IsRotationEnabled="True"
+                                           IsPanEnabled="True"
+                                           IsZoomEnabled="True"
+                                           ShowViewCube="True"
+                                           ViewCubeBackText="Back"
+                                           ViewCubeFrontText="Front"
+                                           ViewCubeLeftText="Left"
+                                           ViewCubeRightText="Right"
+                                           ViewCubeTopText="Top"
+                                           ViewCubeBottomText="Bottom">
 
-                    <!-- Camera -->
-                    <helix:HelixViewport3D.Camera>
-                        <PerspectiveCamera Position="1500,1500,1000"
-                                           LookDirection="-1,-1,-0.5"
-                                           UpDirection="0,0,1"
-                                           FieldOfView="45"/>
-                    </helix:HelixViewport3D.Camera>
+                        <!-- Camera -->
+                        <helix:HelixViewport3D.Camera>
+                            <PerspectiveCamera Position="1500,1500,1000"
+                                               LookDirection="-1,-1,-0.5"
+                                               UpDirection="0,0,1"
+                                               FieldOfView="45"/>
+                        </helix:HelixViewport3D.Camera>
 
-                    <!-- Lighting -->
-                    <ModelVisual3D x:Name="LightingModel">
-                        <ModelVisual3D.Content>
-                            <Model3DGroup>
-                                <AmbientLight Color="#404040"/>
-                                <DirectionalLight Color="#C8C8C8" Direction="-1,-1,-1"/>
-                                <DirectionalLight Color="#646464" Direction="1,0.5,0.5"/>
-                            </Model3DGroup>
-                        </ModelVisual3D.Content>
-                    </ModelVisual3D>
+                        <!-- Lighting -->
+                        <ModelVisual3D x:Name="LightingModel">
+                            <ModelVisual3D.Content>
+                                <Model3DGroup>
+                                    <AmbientLight Color="#404040"/>
+                                    <DirectionalLight Color="#C8C8C8" Direction="-1,-1,-1"/>
+                                    <DirectionalLight Color="#646464" Direction="1,0.5,0.5"/>
+                                </Model3DGroup>
+                            </ModelVisual3D.Content>
+                        </ModelVisual3D>
 
-                    <!-- Grid -->
-                    <helix:GridLinesVisual3D x:Name="GridLines"
-                                             Width="2000" Length="2000"
-                                             MajorDistance="500" MinorDistance="100"
-                                             Thickness="1"
-                                             Fill="#404040"/>
+                        <!-- Grid -->
+                        <helix:GridLinesVisual3D x:Name="GridLines"
+                                                 Width="2000" Length="2000"
+                                                 MajorDistance="500" MinorDistance="100"
+                                                 Thickness="1"
+                                                 Fill="#404040"/>
 
-                    <!-- Coordinate Axes -->
-                    <helix:CoordinateSystemVisual3D x:Name="CoordAxes"
-                                                    ArrowLengths="200"/>
+                        <!-- Coordinate Axes -->
+                        <helix:CoordinateSystemVisual3D x:Name="CoordAxes"
+                                                        ArrowLengths="200"/>
 
-                    <!-- Robot Model Container -->
-                    <ModelVisual3D x:Name="RobotModelVisual"/>
+                        <!-- Robot Model Container -->
+                        <ModelVisual3D x:Name="RobotModelVisual"/>
 
-                    <!-- TCP Marker Container -->
-                    <ModelVisual3D x:Name="TcpMarkerVisual"/>
+                        <!-- TCP Marker Container -->
+                        <ModelVisual3D x:Name="TcpMarkerVisual"/>
 
-                </helix:HelixViewport3D>
-            </Border>
+                    </helix:HelixViewport3D>
+                </Border>
+
+                <!-- Page Content Overlay -->
+                <Border x:Name="PageContentOverlay" Background="#1E1E1E">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SelectedNavIndex}" Value="1">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding SelectedNavIndex}" Value="2">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding SelectedNavIndex}" Value="3">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding SelectedNavIndex}" Value="4">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+
+                    <Grid>
+                        <!-- Program View (Index 1) -->
+                        <pages:ProgramView DataContext="{Binding ProgramViewModel}">
+                            <pages:ProgramView.Style>
+                                <Style TargetType="pages:ProgramView">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding DataContext.SelectedNavIndex, RelativeSource={RelativeSource AncestorType=Window}}" Value="1">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </pages:ProgramView.Style>
+                        </pages:ProgramView>
+
+                        <!-- I/O View (Index 2) -->
+                        <pages:IOView DataContext="{Binding IoViewModel}">
+                            <pages:IOView.Style>
+                                <Style TargetType="pages:IOView">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding DataContext.SelectedNavIndex, RelativeSource={RelativeSource AncestorType=Window}}" Value="2">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </pages:IOView.Style>
+                        </pages:IOView>
+
+                        <!-- Configuration View (Index 3) -->
+                        <pages:ConfigurationView DataContext="{Binding ConfigurationViewModel}">
+                            <pages:ConfigurationView.Style>
+                                <Style TargetType="pages:ConfigurationView">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding DataContext.SelectedNavIndex, RelativeSource={RelativeSource AncestorType=Window}}" Value="3">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </pages:ConfigurationView.Style>
+                        </pages:ConfigurationView>
+
+                        <!-- Diagnostics View (Index 4) -->
+                        <pages:DiagnosticsView DataContext="{Binding DiagnosticsViewModel}">
+                            <pages:DiagnosticsView.Style>
+                                <Style TargetType="pages:DiagnosticsView">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding DataContext.SelectedNavIndex, RelativeSource={RelativeSource AncestorType=Window}}" Value="4">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </pages:DiagnosticsView.Style>
+                        </pages:DiagnosticsView>
+                    </Grid>
+                </Border>
+            </Grid>
 
             <!-- Right Splitter -->
             <GridSplitter Grid.Column="3" Width="3" Background="{StaticResource BorderBrush}"
@@ -206,6 +291,25 @@
 
             <!-- Properties Panel -->
             <Border Grid.Column="4" Background="{StaticResource SecondaryBackground}">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Visibility" Value="Visible"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding SelectedNavIndex}" Value="1">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding SelectedNavIndex}" Value="2">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding SelectedNavIndex}" Value="3">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding SelectedNavIndex}" Value="4">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="10">
                         <!-- Connection Status -->
@@ -267,6 +371,10 @@
                                 </StackPanel>
                             </Grid>
                         </Border>
+
+                        <!-- Position Display (KUKA-style with mode switch) -->
+                        <controls:PositionDisplay DataContext="{Binding PositionDisplay}"
+                                                  Margin="0,0,0,15"/>
 
                         <!-- Joint Positions -->
                         <TextBlock Text="Joint Positions" FontWeight="Bold" Margin="0,0,0,5"
@@ -347,6 +455,10 @@
                             </Grid>
                         </Border>
 
+                        <!-- Override Control (KUKA-inspired) -->
+                        <controls:OverridePanel DataContext="{Binding Override}"
+                                               Margin="0,0,0,15"/>
+
                         <!-- Manual Jog -->
                         <TextBlock Text="Motion Control" FontWeight="Bold" Margin="0,0,0,5"
                                    Foreground="{StaticResource ForegroundBrush}"/>
@@ -367,6 +479,7 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
@@ -378,10 +491,108 @@
 
                 <TextBlock Grid.Column="1" Text="|" Foreground="Gray" Margin="10,0"/>
 
-                <TextBlock Grid.Column="2" Text="{Binding RobotState}" Foreground="{StaticResource ForegroundBrush}"/>
+                <!-- Operation Mode Indicator -->
+                <Border Grid.Column="2"
+                        Background="{Binding Mode.ModeColor}"
+                        CornerRadius="3"
+                        Padding="8,2"
+                        Margin="0,0,10,0">
+                    <TextBlock Text="{Binding Mode.CurrentMode}"
+                               FontWeight="SemiBold"
+                               Foreground="Black"/>
+                </Border>
 
-                <TextBlock Grid.Column="3" Text="Robot Controller v1.0.0" Foreground="Gray"/>
+                <TextBlock Grid.Column="3" Text="{Binding RobotState}" Foreground="{StaticResource ForegroundBrush}"/>
+
+                <TextBlock Grid.Column="4" Text="Robot Controller v1.0.0" Foreground="Gray" HorizontalAlignment="Right"/>
             </Grid>
+        </Border>
+
+        <!-- E-STOP Button Overlay (always visible) -->
+        <Button Grid.Row="2"
+                Width="100" Height="100"
+                HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                Margin="0,0,280,20"
+                Command="{Binding TriggerEStopCommand}"
+                Cursor="Hand">
+            <Button.Template>
+                <ControlTemplate TargetType="Button">
+                    <Grid>
+                        <!-- Shadow -->
+                        <Ellipse Fill="#40000000" Margin="4,4,-4,-4"/>
+
+                        <!-- Button Body -->
+                        <Ellipse x:Name="ButtonBody" Fill="{Binding EStopButtonColor}">
+                            <Ellipse.Effect>
+                                <DropShadowEffect Color="Black" BlurRadius="10" ShadowDepth="3"/>
+                            </Ellipse.Effect>
+                        </Ellipse>
+
+                        <!-- Inner Ring -->
+                        <Ellipse Stroke="#80000000" StrokeThickness="4" Margin="8"/>
+
+                        <!-- Highlight -->
+                        <Ellipse Margin="12">
+                            <Ellipse.Fill>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                    <GradientStop Color="#40FFFFFF" Offset="0"/>
+                                    <GradientStop Color="Transparent" Offset="0.5"/>
+                                </LinearGradientBrush>
+                            </Ellipse.Fill>
+                        </Ellipse>
+
+                        <!-- Text -->
+                        <TextBlock Text="{Binding EStopButtonText}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   FontWeight="Bold" FontSize="11" Foreground="White"
+                                   TextAlignment="Center" TextWrapping="Wrap" Width="70"/>
+                    </Grid>
+
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="ButtonBody" Property="Fill" Value="#FF6666"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="ButtonBody" Property="Fill" Value="#CC0000"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Button.Template>
+        </Button>
+
+        <!-- E-STOP Reset Confirmation Dialog -->
+        <Border Grid.Row="0" Grid.RowSpan="4"
+                Background="#80000000"
+                Visibility="{Binding ShowEStopConfirmDialog, Converter={StaticResource BoolToVisibility}}">
+            <Border Background="#2D2D2D" CornerRadius="8"
+                    Width="350" Height="180"
+                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Grid Margin="20">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="Reset E-STOP?"
+                               FontSize="18" FontWeight="Bold"
+                               Foreground="White" Margin="0,0,0,10"/>
+
+                    <TextBlock Grid.Row="1" TextWrapping="Wrap" Foreground="#AAAAAA">
+                        <Run Text="E-STOP is currently active. "/>
+                        <Run Text="Please verify all hazards are clear before resetting." Foreground="#FFAA00"/>
+                    </TextBlock>
+
+                    <StackPanel Grid.Row="2" Orientation="Horizontal"
+                                HorizontalAlignment="Right" Margin="0,15,0,0">
+                        <Button Content="Cancel" Width="80" Height="32" Margin="0,0,10,0"
+                                Command="{Binding CancelEStopResetCommand}"/>
+                        <Button Content="Reset E-STOP" Width="100" Height="32"
+                                Background="#008800" Foreground="White"
+                                Command="{Binding ResetEStopCommand}"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
         </Border>
     </Grid>
 </Window>

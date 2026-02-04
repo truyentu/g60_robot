@@ -94,6 +94,111 @@ public class RobotModel3D
     }
 
     /// <summary>
+    /// Initialize robot model from package data (with mesh paths)
+    /// </summary>
+    public bool InitializeFromPackage(RobotPackageData package)
+    {
+        try
+        {
+            Name = package.Name;
+            _links.Clear();
+            _modelGroup = new Model3DGroup();
+
+            Log.Information("Initializing robot model from package: {Name}", Name);
+
+            // Create base link
+            var baseLink = CreateLinkFromPackage(0, "Base", null, package.PackagePath, package.BaseMesh);
+            if (baseLink != null)
+            {
+                _links.Add(baseLink);
+                if (baseLink.Geometry != null)
+                    _modelGroup.Children.Add(baseLink.Geometry);
+            }
+
+            // Create joint links
+            for (int i = 0; i < package.Joints.Count && i < 6; i++)
+            {
+                var jointDef = package.Joints[i];
+                var link = CreateLinkFromPackage(i + 1, jointDef.Name, jointDef, package.PackagePath, jointDef.Mesh?.VisualMesh ?? "");
+                if (link != null)
+                {
+                    _links.Add(link);
+                    if (link.Geometry != null)
+                        _modelGroup.Children.Add(link.Geometry);
+                }
+            }
+
+            // Set home position
+            if (package.HomePosition.Length >= 6)
+            {
+                for (int i = 0; i < 6; i++)
+                {
+                    _jointAngles[i] = package.HomePosition[i] * Math.PI / 180.0;
+                }
+            }
+
+            UpdateForwardKinematics();
+
+            Log.Information("Robot model initialized from package with {Count} links", _links.Count);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to initialize robot model from package");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Create a robot link from package data
+    /// </summary>
+    private RobotLink? CreateLinkFromPackage(int jointIndex, string name, JointDefinitionData? jointDef, string packagePath, string meshPath)
+    {
+        var link = new RobotLink
+        {
+            Name = name,
+            JointIndex = jointIndex
+        };
+
+        // Set DH parameters from joint definition
+        if (jointDef != null)
+        {
+            link.DH = new DHParameter
+            {
+                Joint = jointIndex,
+                A = jointDef.DhA,
+                Alpha = jointDef.DhAlpha,
+                D = jointDef.DhD,
+                ThetaOffset = jointDef.DhThetaOffset
+            };
+        }
+
+        GeometryModel3D? geometry = null;
+
+        // Try to load mesh from package
+        if (!string.IsNullOrEmpty(meshPath) && !string.IsNullOrEmpty(packagePath))
+        {
+            string fullPath = Path.Combine(packagePath, meshPath);
+            if (File.Exists(fullPath))
+            {
+                geometry = LoadStlGeometry(fullPath, GetLinkColor(jointIndex));
+                link.StlPath = fullPath;
+                Log.Debug("Loaded STL from package for {Name}: {Path}", name, fullPath);
+            }
+        }
+
+        // Fallback to placeholder
+        if (geometry == null)
+        {
+            geometry = CreatePlaceholderGeometry(jointIndex);
+            Log.Debug("Created placeholder geometry for {Name}", name);
+        }
+
+        link.Geometry = geometry;
+        return link;
+    }
+
+    /// <summary>
     /// Create a robot link with geometry
     /// </summary>
     private RobotLink? CreateLink(int jointIndex, string name, DHParameterData? dhData, string modelsPath)
@@ -341,4 +446,46 @@ public class DHParameterData
     public double Alpha { get; set; }
     public double D { get; set; }
     public double ThetaOffset { get; set; }
+}
+
+/// <summary>
+/// Robot package data from Core (matches JSON structure from LOAD_ROBOT_PACKAGE)
+/// </summary>
+public class RobotPackageData
+{
+    public string Name { get; set; } = "";
+    public string Id { get; set; } = "";
+    public string Manufacturer { get; set; } = "";
+    public string ModelType { get; set; } = "";
+    public double PayloadKg { get; set; }
+    public double ReachMm { get; set; }
+    public string DhConvention { get; set; } = "modified_dh";
+    public List<JointDefinitionData> Joints { get; set; } = new();
+    public string BaseMesh { get; set; } = "";
+    public double[] BaseOrigin { get; set; } = new double[6];
+    public double[] FlangeOffset { get; set; } = new double[3];
+    public double[] HomePosition { get; set; } = Array.Empty<double>();
+    public string PackagePath { get; set; } = "";
+}
+
+public class JointDefinitionData
+{
+    public string Name { get; set; } = "";
+    public string Type { get; set; } = "revolute";
+    public double DhA { get; set; }
+    public double DhAlpha { get; set; }
+    public double DhD { get; set; }
+    public double DhThetaOffset { get; set; }
+    public double LimitMin { get; set; }
+    public double LimitMax { get; set; }
+    public double VelocityMax { get; set; }
+    public double AccelerationMax { get; set; }
+    public JointMeshData? Mesh { get; set; }
+}
+
+public class JointMeshData
+{
+    public string VisualMesh { get; set; } = "";
+    public string CollisionMesh { get; set; } = "";
+    public double[] Origin { get; set; } = new double[3];
 }

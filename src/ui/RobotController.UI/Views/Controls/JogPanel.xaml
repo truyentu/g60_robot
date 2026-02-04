@@ -98,28 +98,85 @@
                            Foreground="White"/>
             </StackPanel>
 
-            <!-- Joint Selection -->
-            <TextBlock Text="Select Axis:" Foreground="#888888" Margin="0,0,0,4"/>
-            <WrapPanel Margin="0,0,0,12">
-                <ToggleButton Content="J1" Style="{StaticResource JointSelectStyle}"
-                            IsChecked="{Binding Joints[0].IsSelected}"
-                            Command="{Binding SelectJointCommand}" CommandParameter="0"/>
-                <ToggleButton Content="J2" Style="{StaticResource JointSelectStyle}"
-                            IsChecked="{Binding Joints[1].IsSelected}"
-                            Command="{Binding SelectJointCommand}" CommandParameter="1"/>
-                <ToggleButton Content="J3" Style="{StaticResource JointSelectStyle}"
-                            IsChecked="{Binding Joints[2].IsSelected}"
-                            Command="{Binding SelectJointCommand}" CommandParameter="2"/>
-                <ToggleButton Content="J4" Style="{StaticResource JointSelectStyle}"
-                            IsChecked="{Binding Joints[3].IsSelected}"
-                            Command="{Binding SelectJointCommand}" CommandParameter="3"/>
-                <ToggleButton Content="J5" Style="{StaticResource JointSelectStyle}"
-                            IsChecked="{Binding Joints[4].IsSelected}"
-                            Command="{Binding SelectJointCommand}" CommandParameter="4"/>
-                <ToggleButton Content="J6" Style="{StaticResource JointSelectStyle}"
-                            IsChecked="{Binding Joints[5].IsSelected}"
-                            Command="{Binding SelectJointCommand}" CommandParameter="5"/>
-            </WrapPanel>
+            <!-- Joint Selection (visible in Joint mode) -->
+            <StackPanel Visibility="{Binding JogJointMode, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock Text="Select Joint:" Foreground="#888888" Margin="0,0,0,4"/>
+                <WrapPanel Margin="0,0,0,12">
+                    <ToggleButton Content="J1" Style="{StaticResource JointSelectStyle}"
+                                IsChecked="{Binding Joints[0].IsSelected}"
+                                Command="{Binding SelectJointCommand}" CommandParameter="0"/>
+                    <ToggleButton Content="J2" Style="{StaticResource JointSelectStyle}"
+                                IsChecked="{Binding Joints[1].IsSelected}"
+                                Command="{Binding SelectJointCommand}" CommandParameter="1"/>
+                    <ToggleButton Content="J3" Style="{StaticResource JointSelectStyle}"
+                                IsChecked="{Binding Joints[2].IsSelected}"
+                                Command="{Binding SelectJointCommand}" CommandParameter="2"/>
+                    <ToggleButton Content="J4" Style="{StaticResource JointSelectStyle}"
+                                IsChecked="{Binding Joints[3].IsSelected}"
+                                Command="{Binding SelectJointCommand}" CommandParameter="3"/>
+                    <ToggleButton Content="J5" Style="{StaticResource JointSelectStyle}"
+                                IsChecked="{Binding Joints[4].IsSelected}"
+                                Command="{Binding SelectJointCommand}" CommandParameter="4"/>
+                    <ToggleButton Content="J6" Style="{StaticResource JointSelectStyle}"
+                                IsChecked="{Binding Joints[5].IsSelected}"
+                                Command="{Binding SelectJointCommand}" CommandParameter="5"/>
+                </WrapPanel>
+            </StackPanel>
+
+            <!-- Cartesian Axis Selection (visible in Cartesian mode) -->
+            <StackPanel>
+                <StackPanel.Style>
+                    <Style TargetType="StackPanel">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding JogJointMode}" Value="False">
+                                <Setter Property="Visibility" Value="Visible"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </StackPanel.Style>
+
+                <TextBlock Text="Select Axis:" Foreground="#888888" Margin="0,0,0,4"/>
+
+                <!-- Coordinate System -->
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                    <TextBlock Text="Frame:" Foreground="#666666" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <ComboBox ItemsSource="{Binding CoordinateSystems}"
+                              SelectedItem="{Binding CoordinateSystem}"
+                              Width="100"/>
+                </StackPanel>
+
+                <!-- Linear Axes -->
+                <TextBlock Text="Linear (mm):" Foreground="#666666" Margin="0,0,0,4"/>
+                <WrapPanel Margin="0,0,0,8">
+                    <ToggleButton Content="X" Style="{StaticResource JointSelectStyle}"
+                                  Foreground="Red"
+                                  IsChecked="{Binding CartesianAxes[0].IsSelected}"
+                                  Command="{Binding SelectCartesianAxisCommand}" CommandParameter="0"/>
+                    <ToggleButton Content="Y" Style="{StaticResource JointSelectStyle}"
+                                  Foreground="LimeGreen"
+                                  IsChecked="{Binding CartesianAxes[1].IsSelected}"
+                                  Command="{Binding SelectCartesianAxisCommand}" CommandParameter="1"/>
+                    <ToggleButton Content="Z" Style="{StaticResource JointSelectStyle}"
+                                  Foreground="DodgerBlue"
+                                  IsChecked="{Binding CartesianAxes[2].IsSelected}"
+                                  Command="{Binding SelectCartesianAxisCommand}" CommandParameter="2"/>
+                </WrapPanel>
+
+                <!-- Rotational Axes -->
+                <TextBlock Text="Rotational (deg):" Foreground="#666666" Margin="0,0,0,4"/>
+                <WrapPanel Margin="0,0,0,12">
+                    <ToggleButton Content="Rx" Style="{StaticResource JointSelectStyle}"
+                                  IsChecked="{Binding CartesianAxes[3].IsSelected}"
+                                  Command="{Binding SelectCartesianAxisCommand}" CommandParameter="3"/>
+                    <ToggleButton Content="Ry" Style="{StaticResource JointSelectStyle}"
+                                  IsChecked="{Binding CartesianAxes[4].IsSelected}"
+                                  Command="{Binding SelectCartesianAxisCommand}" CommandParameter="4"/>
+                    <ToggleButton Content="Rz" Style="{StaticResource JointSelectStyle}"
+                                  IsChecked="{Binding CartesianAxes[5].IsSelected}"
+                                  Command="{Binding SelectCartesianAxisCommand}" CommandParameter="5"/>
+                </WrapPanel>
+            </StackPanel>
 
             <!-- Jog Buttons -->
             <Grid Margin="0,0,0,12">

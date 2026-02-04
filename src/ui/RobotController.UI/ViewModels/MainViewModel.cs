@@ -4,6 +4,7 @@ using RobotController.Common.Messages;
 using RobotController.Common.Services;
 using RobotController.UI.Models;
 using RobotController.UI.Services;
+using RobotController.UI.ViewModels.Pages;
 using Serilog;
 using System.Collections.ObjectModel;
 using System.Text.Json;
@@ -48,6 +49,19 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private bool _isEnabled;
+
+    // E-Stop State
+    [ObservableProperty]
+    private bool _isEStopActive;
+
+    [ObservableProperty]
+    private Brush _eStopButtonColor = Brushes.Red;
+
+    [ObservableProperty]
+    private string _eStopButtonText = "E-STOP";
+
+    [ObservableProperty]
+    private bool _showEStopConfirmDialog;
 
     // TCP Position
     [ObservableProperty]
@@ -97,6 +111,43 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _showTcp = true;
 
+    // Page ViewModels
+    [ObservableProperty]
+    private ProgramViewModel? _programViewModel;
+
+    [ObservableProperty]
+    private IOViewModel? _ioViewModel;
+
+    [ObservableProperty]
+    private ConfigurationViewModel? _configurationViewModel;
+
+    [ObservableProperty]
+    private DiagnosticsViewModel? _diagnosticsViewModel;
+
+    [ObservableProperty]
+    private RobotCatalogViewModel? _robotCatalog;
+
+    [ObservableProperty]
+    private HomingViewModel? _homing;
+
+    [ObservableProperty]
+    private ToolViewModel? _tool;
+
+    [ObservableProperty]
+    private ModeViewModel? _mode;
+
+    [ObservableProperty]
+    private BaseFrameViewModel? _baseFrame;
+
+    [ObservableProperty]
+    private OverrideViewModel? _override;
+
+    [ObservableProperty]
+    private PositionDisplayViewModel? _positionDisplay;
+
+    [ObservableProperty]
+    private ProgramEditorViewModel? _programEditor;
+
     // 3D Model
     public Model3DGroup? RobotModelGroup => _viewportService.GetModelGroup();
     public Model3DGroup? TcpMarkerGroup { get; private set; }
@@ -136,6 +187,20 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         // Initialize motion control
         MotionControl = new MotionControlViewModel(_ipcClient);
+
+        // Initialize page view models
+        ProgramViewModel = new ProgramViewModel();
+        IoViewModel = new IOViewModel(_ipcClient);
+        ConfigurationViewModel = new ConfigurationViewModel();
+        DiagnosticsViewModel = new DiagnosticsViewModel(_ipcClient);
+        RobotCatalog = new RobotCatalogViewModel(_ipcClient);
+        Homing = new HomingViewModel(_ipcClient);
+        Tool = new ToolViewModel(_ipcClient);
+        Mode = new ModeViewModel(_ipcClient);
+        BaseFrame = new BaseFrameViewModel(_ipcClient);
+        Override = new OverrideViewModel(_ipcClient);
+        PositionDisplay = new PositionDisplayViewModel(_ipcClient);
+        ProgramEditor = new ProgramEditorViewModel(_ipcClient);
 
         // Auto-connect if configured
         if (_configService.Config.Connection.AutoConnect)
@@ -322,6 +387,50 @@ public partial class MainViewModel : ObservableObject, IDisposable
             TcpRy = status.TcpPosition[4];
             TcpRz = status.TcpPosition[5];
         }
+    }
+
+    [RelayCommand]
+    private async Task TriggerEStopAsync()
+    {
+        if (IsEStopActive)
+        {
+            // Already in E-Stop, show reset confirmation
+            ShowEStopConfirmDialog = true;
+            return;
+        }
+
+        // Trigger E-Stop
+        Log.Warning("E-STOP triggered by operator");
+        IsEStopActive = true;
+        EStopButtonColor = Brushes.DarkRed;
+        EStopButtonText = "E-STOP ACTIVE";
+
+        if (_ipcClient.IsConnected)
+        {
+            await _ipcClient.SendCommandAsync("e_stop", new { action = "trigger" });
+        }
+    }
+
+    [RelayCommand]
+    private async Task ResetEStopAsync()
+    {
+        ShowEStopConfirmDialog = false;
+
+        Log.Information("E-STOP reset by operator");
+        IsEStopActive = false;
+        EStopButtonColor = Brushes.Red;
+        EStopButtonText = "E-STOP";
+
+        if (_ipcClient.IsConnected)
+        {
+            await _ipcClient.SendCommandAsync("e_stop", new { action = "reset" });
+        }
+    }
+
+    [RelayCommand]
+    private void CancelEStopReset()
+    {
+        ShowEStopConfirmDialog = false;
     }
 
     public void Dispose()

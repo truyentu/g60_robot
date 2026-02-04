@@ -69,6 +69,20 @@ public partial class MotionControlViewModel : ObservableObject
     [ObservableProperty]
     private int _selectedJointIndex = 0;
 
+    [ObservableProperty]
+    private int _selectedCartesianAxis = 0;  // 0=X, 1=Y, 2=Z, 3=Rx, 4=Ry, 5=Rz
+
+    // Cartesian axes for selection
+    public ObservableCollection<CartesianAxisViewModel> CartesianAxes { get; } = new()
+    {
+        new CartesianAxisViewModel { Index = 0, Name = "X", IsLinear = true, IsSelected = true },
+        new CartesianAxisViewModel { Index = 1, Name = "Y", IsLinear = true },
+        new CartesianAxisViewModel { Index = 2, Name = "Z", IsLinear = true },
+        new CartesianAxisViewModel { Index = 3, Name = "Rx", IsLinear = false },
+        new CartesianAxisViewModel { Index = 4, Name = "Ry", IsLinear = false },
+        new CartesianAxisViewModel { Index = 5, Name = "Rz", IsLinear = false },
+    };
+
     // Feed override
     [ObservableProperty]
     private int _feedOverride = 100;
@@ -128,19 +142,41 @@ public partial class MotionControlViewModel : ObservableObject
     {
         if (!IsConnected || !IsHomed) return;
 
-        int axis = SelectedJointIndex;
         int dir = direction == "+" ? 1 : -1;
-        double speed = JogSpeed / 100.0 * 180.0;  // Max 180 deg/s
+        double speed = JogSpeed / 100.0;
 
-        // Send jog command via IPC
-        var cmd = new JogCommand
+        if (JogJointMode)
         {
-            Axis = axis,
-            Direction = dir,
-            Speed = speed,
-            Continuous = JogContinuous
-        };
-        await _ipcClient.SendCommandAsync("jog_start", cmd);
+            // Joint jog
+            int axis = SelectedJointIndex;
+            double jointSpeed = speed * 180.0;  // Max 180 deg/s
+
+            var cmd = new JogCommand
+            {
+                Axis = axis,
+                Direction = dir,
+                Speed = jointSpeed,
+                Continuous = JogContinuous
+            };
+            await _ipcClient.SendCommandAsync("jog_start", cmd);
+        }
+        else
+        {
+            // Cartesian jog
+            int axis = SelectedCartesianAxis;
+            bool isLinear = axis < 3;  // X, Y, Z are linear
+            double cartesianSpeed = isLinear ? speed * 500.0 : speed * 90.0;  // Max 500 mm/s or 90 deg/s
+
+            var cmd = new CartesianJogCommand
+            {
+                Axis = axis,
+                Direction = dir,
+                Speed = cartesianSpeed,
+                Continuous = JogContinuous,
+                CoordinateSystem = CoordinateSystem
+            };
+            await _ipcClient.SendCommandAsync("cartesian_jog_start", cmd);
+        }
         IsMoving = true;
     }
 
@@ -158,24 +194,46 @@ public partial class MotionControlViewModel : ObservableObject
     {
         if (!IsConnected || !IsHomed) return;
 
-        int axis = SelectedJointIndex;
         int dir = direction == "+" ? 1 : -1;
         double distance = JogIncrement * dir;
 
-        // Get current position and add increment
-        double currentPos = Joints[axis].Position;
-        double targetPos = currentPos + distance;
-
-        // Clamp to limits
-        targetPos = Math.Clamp(targetPos, Joints[axis].MinLimit, Joints[axis].MaxLimit);
-
-        var cmd = new JogIncrementCommand
+        if (JogJointMode)
         {
-            Axis = axis,
-            TargetPosition = targetPos,
-            Speed = JogSpeed / 100.0
-        };
-        await _ipcClient.SendCommandAsync("jog_increment", cmd);
+            // Joint increment
+            int axis = SelectedJointIndex;
+            double currentPos = Joints[axis].Position;
+            double targetPos = currentPos + distance;
+
+            // Clamp to limits
+            targetPos = Math.Clamp(targetPos, Joints[axis].MinLimit, Joints[axis].MaxLimit);
+
+            var cmd = new JogIncrementCommand
+            {
+                Axis = axis,
+                TargetPosition = targetPos,
+                Speed = JogSpeed / 100.0
+            };
+            await _ipcClient.SendCommandAsync("jog_increment", cmd);
+        }
+        else
+        {
+            // Cartesian increment
+            int axis = SelectedCartesianAxis;
+            double[] currentTcp = new double[] {
+                TcpPosition.X, TcpPosition.Y, TcpPosition.Z,
+                TcpPosition.Roll, TcpPosition.Pitch, TcpPosition.Yaw
+            };
+            double targetValue = currentTcp[axis] + distance;
+
+            var cmd = new CartesianJogIncrementCommand
+            {
+                Axis = axis,
+                TargetValue = targetValue,
+                Speed = JogSpeed / 100.0,
+                CoordinateSystem = CoordinateSystem
+            };
+            await _ipcClient.SendCommandAsync("cartesian_jog_increment", cmd);
+        }
     }
 
     // ========================================================================
@@ -300,6 +358,23 @@ public partial class MotionControlViewModel : ObservableObject
                 }
                 Joints[index].IsSelected = true;
                 SelectedJointIndex = index;
+            }
+        }
+    }
+
+    [RelayCommand]
+    private void SelectCartesianAxis(object? parameter)
+    {
+        if (parameter is int index || (parameter is string s && int.TryParse(s, out index)))
+        {
+            if (index >= 0 && index < 6)
+            {
+                foreach (var axis in CartesianAxes)
+                {
+                    axis.IsSelected = false;
+                }
+                CartesianAxes[index].IsSelected = true;
+                SelectedCartesianAxis = index;
             }
         }
     }
@@ -496,4 +571,31 @@ public class JogIncrementCommand
     public int Axis { get; set; }
     public double TargetPosition { get; set; }
     public double Speed { get; set; }
+}
+
+public class CartesianJogCommand
+{
+    public int Axis { get; set; }  // 0=X, 1=Y, 2=Z, 3=Rx, 4=Ry, 5=Rz
+    public int Direction { get; set; }
+    public double Speed { get; set; }
+    public bool Continuous { get; set; }
+    public string CoordinateSystem { get; set; } = "World";
+}
+
+public class CartesianJogIncrementCommand
+{
+    public int Axis { get; set; }
+    public double TargetValue { get; set; }
+    public double Speed { get; set; }
+    public string CoordinateSystem { get; set; } = "World";
+}
+
+public partial class CartesianAxisViewModel : ObservableObject
+{
+    public int Index { get; set; }
+    public string Name { get; set; } = "";
+    public bool IsLinear { get; set; }  // true = mm, false = degrees
+
+    [ObservableProperty]
+    private bool _isSelected;
 }
