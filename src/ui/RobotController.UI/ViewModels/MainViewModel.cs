@@ -125,7 +125,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private DiagnosticsViewModel? _diagnosticsViewModel;
 
     [ObservableProperty]
-    private RobotCatalogViewModel? _robotCatalog;
+    private RobotPackageBrowserViewModel? _robotCatalogViewModel;
 
     [ObservableProperty]
     private HomingViewModel? _homing;
@@ -167,7 +167,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>
     /// Runtime constructor with DI
     /// </summary>
-    public MainViewModel(IIpcClientService ipcClient, IConfigService configService, IViewportService viewportService)
+    public MainViewModel(
+        IIpcClientService ipcClient,
+        IConfigService configService,
+        IViewportService viewportService,
+        RobotPackageBrowserViewModel robotCatalogViewModel)
     {
         _ipcClient = ipcClient;
         _configService = configService;
@@ -193,7 +197,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         IoViewModel = new IOViewModel(_ipcClient);
         ConfigurationViewModel = new ConfigurationViewModel();
         DiagnosticsViewModel = new DiagnosticsViewModel(_ipcClient);
-        RobotCatalog = new RobotCatalogViewModel(_ipcClient);
+        RobotCatalogViewModel = robotCatalogViewModel;
         Homing = new HomingViewModel(_ipcClient);
         Tool = new ToolViewModel(_ipcClient);
         Mode = new ModeViewModel(_ipcClient);

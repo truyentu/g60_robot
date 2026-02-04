@@ -3,6 +3,7 @@ using Microsoft.Extensions.Hosting;
 using RobotController.Common.Services;
 using RobotController.UI.Services;
 using RobotController.UI.ViewModels;
+using RobotController.UI.ViewModels.Pages;
 using RobotController.UI.Views;
 using Serilog;
 using System.Windows;
@@ -51,7 +52,7 @@ public partial class App : Application
 
                 // ViewModels
                 services.AddSingleton<MainViewModel>();
-                services.AddSingleton<RobotCatalogViewModel>();
+                services.AddSingleton<RobotPackageBrowserViewModel>();
 
                 // Views
                 services.AddSingleton<MainWindow>();

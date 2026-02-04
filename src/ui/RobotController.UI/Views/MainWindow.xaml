@@ -135,6 +135,7 @@
                         <ListBoxItem Content="I/O"/>
                         <ListBoxItem Content="Configuration"/>
                         <ListBoxItem Content="Diagnostics"/>
+                        <ListBoxItem Content="Robot Catalog"/>
                     </ListBox>
                 </Grid>
             </Border>
@@ -221,6 +222,9 @@
                                 <DataTrigger Binding="{Binding SelectedNavIndex}" Value="4">
                                     <Setter Property="Visibility" Value="Visible"/>
                                 </DataTrigger>
+                                <DataTrigger Binding="{Binding SelectedNavIndex}" Value="5">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
                             </Style.Triggers>
                         </Style>
                     </Border.Style>
@@ -281,6 +285,20 @@
                                 </Style>
                             </pages:DiagnosticsView.Style>
                         </pages:DiagnosticsView>
+
+                        <!-- Robot Catalog View (Index 5) -->
+                        <pages:RobotPackageBrowser DataContext="{Binding RobotCatalogViewModel}">
+                            <pages:RobotPackageBrowser.Style>
+                                <Style TargetType="pages:RobotPackageBrowser">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding DataContext.SelectedNavIndex, RelativeSource={RelativeSource AncestorType=Window}}" Value="5">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </pages:RobotPackageBrowser.Style>
+                        </pages:RobotPackageBrowser>
                     </Grid>
                 </Border>
             </Grid>
@@ -305,6 +323,9 @@
                                 <Setter Property="Visibility" Value="Collapsed"/>
                             </DataTrigger>
                             <DataTrigger Binding="{Binding SelectedNavIndex}" Value="4">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding SelectedNavIndex}" Value="5">
                                 <Setter Property="Visibility" Value="Collapsed"/>
                             </DataTrigger>
                         </Style.Triggers>
