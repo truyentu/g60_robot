@@ -1,0 +1,333 @@
+<UserControl x:Class="RobotController.UI.Views.Controls.BaseFramePanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             d:DesignHeight="600" d:DesignWidth="800"
+             Background="{StaticResource SecondaryBackground}">
+
+    <UserControl.Resources>
+        <!-- Base list item style -->
+        <Style x:Key="BaseListItem" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource PrimaryBackground}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="Padding" Value="10"/>
+            <Setter Property="Margin" Value="0,0,0,5"/>
+        </Style>
+
+        <SolidColorBrush x:Key="ActiveBaseColor" Color="#2196F3"/>
+        <SolidColorBrush x:Key="CalibrationColor" Color="#FF9800"/>
+        <SolidColorBrush x:Key="PointRecordedColor" Color="#4CAF50"/>
+        <SolidColorBrush x:Key="PointPendingColor" Color="#9E9E9E"/>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="300"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Left Panel: Base Frame List -->
+        <Border Grid.Column="0" Background="{StaticResource PrimaryBackground}"
+                Margin="0,0,10,0" Padding="10">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- Header -->
+                <StackPanel Grid.Row="0" Margin="0,0,0,10">
+                    <TextBlock Text="Base Frames" FontSize="16" FontWeight="Bold"
+                               Foreground="{StaticResource ForegroundBrush}"/>
+                    <TextBlock Foreground="Gray" FontSize="11" Margin="0,5,0,0">
+                        <Run Text="Active: "/>
+                        <Run Text="{Binding ActiveBase.Name, FallbackValue='World'}"/>
+                    </TextBlock>
+                </StackPanel>
+
+                <!-- Base List -->
+                <ListBox Grid.Row="1" ItemsSource="{Binding Bases}"
+                         SelectedItem="{Binding SelectedBase}"
+                         Background="Transparent" BorderThickness="0">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Border Style="{StaticResource BaseListItem}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource ForegroundBrush}"/>
+                                        <TextBlock Text="{Binding Description}" FontSize="11"
+                                                   Foreground="Gray" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock FontSize="10" Foreground="Gray" Margin="0,3,0,0">
+                                            <Run Text="Pos: ("/>
+                                            <Run Text="{Binding X, StringFormat=F1}"/>
+                                            <Run Text=", "/>
+                                            <Run Text="{Binding Y, StringFormat=F1}"/>
+                                            <Run Text=", "/>
+                                            <Run Text="{Binding Z, StringFormat=F1}"/>
+                                            <Run Text=")"/>
+                                        </TextBlock>
+                                    </StackPanel>
+
+                                    <!-- Active indicator -->
+                                    <Border Grid.Column="1" Background="{StaticResource ActiveBaseColor}"
+                                            CornerRadius="3" Padding="8,3" VerticalAlignment="Center"
+                                            Visibility="{Binding IsActive, Converter={StaticResource BoolToVisibility}}">
+                                        <TextBlock Text="ACTIVE" Foreground="White" FontSize="10" FontWeight="Bold"/>
+                                    </Border>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <!-- Buttons -->
+                <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,10,0,0">
+                    <Button Content="New" Command="{Binding StartCreateBaseCommand}"
+                            Padding="15,5" Margin="0,0,5,0"/>
+                    <Button Content="Edit" Command="{Binding StartEditBaseCommand}"
+                            IsEnabled="{Binding SelectedBase, Converter={StaticResource NotNullToBool}}"
+                            Padding="15,5" Margin="0,0,5,0"/>
+                    <Button Content="Delete" Command="{Binding DeleteBaseCommand}"
+                            IsEnabled="{Binding SelectedBase, Converter={StaticResource NotNullToBool}}"
+                            Padding="15,5" Margin="0,0,5,0"/>
+                    <Button Content="Set Active" Command="{Binding SelectBaseCommand}"
+                            CommandParameter="{Binding SelectedBase}"
+                            IsEnabled="{Binding SelectedBase, Converter={StaticResource NotNullToBool}}"
+                            Background="{StaticResource AccentBrush}" Foreground="White"
+                            Padding="15,5"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Right Panel: Base Details / Editor / Calibration -->
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Base Editor -->
+            <Border Grid.Row="0" Background="{StaticResource PrimaryBackground}" Padding="15">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="Base Frame Details" FontSize="16" FontWeight="Bold"
+                                   Foreground="{StaticResource ForegroundBrush}" Margin="0,0,0,15"/>
+
+                        <!-- ID (readonly when editing) -->
+                        <TextBlock Text="Base ID" Foreground="Gray" FontSize="11"/>
+                        <TextBox Text="{Binding EditId, UpdateSourceTrigger=PropertyChanged}"
+                                 IsEnabled="{Binding IsCreatingNew}"
+                                 Margin="0,3,0,10"/>
+
+                        <!-- Name -->
+                        <TextBlock Text="Name" Foreground="Gray" FontSize="11"/>
+                        <TextBox Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}"
+                                 IsEnabled="{Binding IsEditing}"
+                                 Margin="0,3,0,10"/>
+
+                        <!-- Description -->
+                        <TextBlock Text="Description" Foreground="Gray" FontSize="11"/>
+                        <TextBox Text="{Binding EditDescription, UpdateSourceTrigger=PropertyChanged}"
+                                 IsEnabled="{Binding IsEditing}"
+                                 Margin="0,3,0,15"/>
+
+                        <!-- Position -->
+                        <TextBlock Text="Position (mm)" FontWeight="SemiBold"
+                                   Foreground="{StaticResource ForegroundBrush}" Margin="0,0,0,10"/>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Margin="0,0,10,10">
+                                <TextBlock Text="X" Foreground="Gray" FontSize="11"/>
+                                <TextBox Text="{Binding EditX, UpdateSourceTrigger=PropertyChanged}"
+                                         IsEnabled="{Binding IsEditing}"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1" Margin="0,0,10,10">
+                                <TextBlock Text="Y" Foreground="Gray" FontSize="11"/>
+                                <TextBox Text="{Binding EditY, UpdateSourceTrigger=PropertyChanged}"
+                                         IsEnabled="{Binding IsEditing}"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="2" Margin="0,0,0,10">
+                                <TextBlock Text="Z" Foreground="Gray" FontSize="11"/>
+                                <TextBox Text="{Binding EditZ, UpdateSourceTrigger=PropertyChanged}"
+                                         IsEnabled="{Binding IsEditing}"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Orientation -->
+                        <TextBlock Text="Orientation (degrees)" FontWeight="SemiBold"
+                                   Foreground="{StaticResource ForegroundBrush}" Margin="0,5,0,10"/>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Margin="0,0,10,10">
+                                <TextBlock Text="Rx" Foreground="Gray" FontSize="11"/>
+                                <TextBox Text="{Binding EditRx, UpdateSourceTrigger=PropertyChanged}"
+                                         IsEnabled="{Binding IsEditing}"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1" Margin="0,0,10,10">
+                                <TextBlock Text="Ry" Foreground="Gray" FontSize="11"/>
+                                <TextBox Text="{Binding EditRy, UpdateSourceTrigger=PropertyChanged}"
+                                         IsEnabled="{Binding IsEditing}"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="2" Margin="0,0,0,10">
+                                <TextBlock Text="Rz" Foreground="Gray" FontSize="11"/>
+                                <TextBox Text="{Binding EditRz, UpdateSourceTrigger=PropertyChanged}"
+                                         IsEnabled="{Binding IsEditing}"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Save/Cancel buttons -->
+                        <StackPanel Orientation="Horizontal" Margin="0,20,0,0"
+                                    Visibility="{Binding IsEditing, Converter={StaticResource BoolToVisibility}}">
+                            <Button Content="Save" Command="{Binding SaveBaseCommand}"
+                                    Background="{StaticResource AccentBrush}" Foreground="White"
+                                    Padding="20,8" Margin="0,0,10,0"/>
+                            <Button Content="Cancel" Command="{Binding CancelEditCommand}"
+                                    Padding="20,8"/>
+                        </StackPanel>
+
+                        <!-- Error message -->
+                        <Border Background="#F44336" CornerRadius="4" Padding="10" Margin="0,15,0,0"
+                                Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="{Binding ErrorMessage}" Foreground="White" TextWrapping="Wrap"/>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+
+            <!-- Calibration Panel -->
+            <Border Grid.Row="1" Background="{StaticResource PrimaryBackground}"
+                    Padding="15" Margin="0,10,0,0">
+                <StackPanel>
+                    <TextBlock Text="3-Point Base Calibration" FontSize="14" FontWeight="Bold"
+                               Foreground="{StaticResource ForegroundBrush}" Margin="0,0,0,10"/>
+
+                    <!-- Calibration Points Status -->
+                    <ItemsControl ItemsSource="{Binding CalibrationPoints}" Margin="0,0,0,15"
+                                  Visibility="{Binding IsCalibrating, Converter={StaticResource BoolToVisibility}}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Vertical"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal" Margin="0,2">
+                                    <Ellipse Width="12" Height="12" Margin="0,0,8,0">
+                                        <Ellipse.Style>
+                                            <Style TargetType="Ellipse">
+                                                <Setter Property="Fill" Value="{StaticResource PointPendingColor}"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsRecorded}" Value="True">
+                                                        <Setter Property="Fill" Value="{StaticResource PointRecordedColor}"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                                                        <Setter Property="Fill" Value="{StaticResource CalibrationColor}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Ellipse.Style>
+                                    </Ellipse>
+                                    <TextBlock Text="{Binding PointName}" Foreground="{StaticResource ForegroundBrush}"
+                                               Width="100"/>
+                                    <TextBlock Foreground="Gray" FontSize="11"
+                                               Visibility="{Binding IsRecorded, Converter={StaticResource BoolToVisibility}}">
+                                        <Run Text="("/>
+                                        <Run Text="{Binding RecordedX, StringFormat=F1}"/>
+                                        <Run Text=", "/>
+                                        <Run Text="{Binding RecordedY, StringFormat=F1}"/>
+                                        <Run Text=", "/>
+                                        <Run Text="{Binding RecordedZ, StringFormat=F1}"/>
+                                        <Run Text=")"/>
+                                    </TextBlock>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Method selection -->
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="Method:" Foreground="{StaticResource ForegroundBrush}"
+                                       VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <ComboBox ItemsSource="{Binding AvailableCalibrationMethods}"
+                                      SelectedItem="{Binding CalibrationMethod}"
+                                      Width="120" IsEnabled="{Binding IsCalibrating, Converter={StaticResource InverseBool}}"/>
+                        </StackPanel>
+
+                        <!-- Progress -->
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
+                                    Margin="20,0" Visibility="{Binding IsCalibrating, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Foreground="{StaticResource ForegroundBrush}">
+                                <Run Text="Current: "/>
+                                <Run Text="{Binding CurrentPointName}"/>
+                            </TextBlock>
+                        </StackPanel>
+
+                        <!-- Buttons -->
+                        <StackPanel Grid.Column="2" Orientation="Horizontal">
+                            <!-- Start button -->
+                            <Button Content="Start Calibration" Command="{Binding StartCalibrationCommand}"
+                                    Visibility="{Binding IsCalibrating, Converter={StaticResource InverseBoolToVisibility}}"
+                                    Background="{StaticResource CalibrationColor}" Foreground="White"
+                                    Padding="15,8"/>
+
+                            <!-- Calibrating buttons -->
+                            <StackPanel Orientation="Horizontal"
+                                        Visibility="{Binding IsCalibrating, Converter={StaticResource BoolToVisibility}}">
+                                <Button Content="Record Point" Command="{Binding RecordCalibrationPointCommand}"
+                                        Background="{StaticResource AccentBrush}" Foreground="White"
+                                        Padding="15,8" Margin="0,0,5,0"/>
+                                <Button Content="Calculate" Command="{Binding FinishCalibrationCommand}"
+                                        Background="{StaticResource PointRecordedColor}" Foreground="White"
+                                        Padding="15,8" Margin="0,0,5,0"/>
+                                <Button Content="Cancel" Command="{Binding CancelCalibrationCommand}"
+                                        Padding="15,8"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- Loading overlay -->
+        <Border Grid.ColumnSpan="2" Background="#80000000"
+                Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibility}}">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                <TextBlock Text="Loading..." Foreground="White" FontSize="16"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>
