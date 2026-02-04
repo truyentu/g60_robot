@@ -17,11 +17,15 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
-        // Setup Serilog
+        // Setup Serilog with correct path
+        var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+        var logPath = System.IO.Path.Combine(baseDir, "logs", "ui.log");
+        System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(logPath)!);
+
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Debug()
             .WriteTo.Console()
-            .WriteTo.File("../../logs/ui.log",
+            .WriteTo.File(logPath,
                 rollingInterval: RollingInterval.Day,
                 retainedFileCountLimit: 7,
                 outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}")

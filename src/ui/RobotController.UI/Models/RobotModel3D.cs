@@ -14,6 +14,8 @@ public class RobotModel3D
     private readonly List<RobotLink> _links = new();
     private readonly double[] _jointAngles = new double[6];
     private Model3DGroup? _modelGroup;
+    private static readonly string _debugLogPath = Path.Combine(
+        AppDomain.CurrentDomain.BaseDirectory, "stl_debug.log");
 
     /// <summary>Robot name from config</summary>
     public string Name { get; private set; } = "Robot";
@@ -100,6 +102,15 @@ public class RobotModel3D
     {
         try
         {
+            DebugLog($"\n========================================");
+            DebugLog($"InitializeFromPackage START");
+            DebugLog($"========================================");
+            DebugLog($"Package Name: {package.Name}");
+            DebugLog($"Package ID: {package.Id}");
+            DebugLog($"Package Path: {package.PackagePath}");
+            DebugLog($"Base Mesh: {package.BaseMesh ?? "NULL"}");
+            DebugLog($"Joints Count: {package.Joints.Count}");
+
             Name = package.Name;
             _links.Clear();
             _modelGroup = new Model3DGroup();
@@ -107,24 +118,52 @@ public class RobotModel3D
             Log.Information("Initializing robot model from package: {Name}", Name);
 
             // Create base link
+            DebugLog($"\n--- Creating Base Link ---");
             var baseLink = CreateLinkFromPackage(0, "Base", null, package.PackagePath, package.BaseMesh);
             if (baseLink != null)
             {
                 _links.Add(baseLink);
                 if (baseLink.Geometry != null)
+                {
                     _modelGroup.Children.Add(baseLink.Geometry);
+                    DebugLog($"Base link geometry added to ModelGroup");
+                }
+                else
+                {
+                    DebugLog($"WARNING: Base link has NULL geometry");
+                }
+            }
+            else
+            {
+                DebugLog($"ERROR: Base link creation returned NULL");
             }
 
             // Create joint links
             for (int i = 0; i < package.Joints.Count && i < 6; i++)
             {
+                DebugLog($"\n--- Creating Joint Link {i + 1} ---");
                 var jointDef = package.Joints[i];
+                DebugLog($"Joint Name: {jointDef.Name}");
+                DebugLog($"Joint Type: {jointDef.Type}");
+                DebugLog($"Mesh VisualMesh: {jointDef.Mesh?.VisualMesh ?? "NULL"}");
+
                 var link = CreateLinkFromPackage(i + 1, jointDef.Name, jointDef, package.PackagePath, jointDef.Mesh?.VisualMesh ?? "");
                 if (link != null)
                 {
                     _links.Add(link);
                     if (link.Geometry != null)
+                    {
                         _modelGroup.Children.Add(link.Geometry);
+                        DebugLog($"Joint link {i + 1} geometry added to ModelGroup");
+                    }
+                    else
+                    {
+                        DebugLog($"WARNING: Joint link {i + 1} has NULL geometry");
+                    }
+                }
+                else
+                {
+                    DebugLog($"ERROR: Joint link {i + 1} creation returned NULL");
                 }
             }
 
@@ -135,15 +174,31 @@ public class RobotModel3D
                 {
                     _jointAngles[i] = package.HomePosition[i] * Math.PI / 180.0;
                 }
+                DebugLog($"Home position set: [{string.Join(", ", package.HomePosition)}]");
             }
 
             UpdateForwardKinematics();
+
+            DebugLog($"\nFinal Summary:");
+            DebugLog($"Total links created: {_links.Count}");
+            DebugLog($"ModelGroup children count: {_modelGroup.Children.Count}");
+            DebugLog($"========================================");
+            DebugLog($"InitializeFromPackage END (SUCCESS)");
+            DebugLog($"========================================\n");
 
             Log.Information("Robot model initialized from package with {Count} links", _links.Count);
             return true;
         }
         catch (Exception ex)
         {
+            DebugLog($"\nEXCEPTION in InitializeFromPackage:");
+            DebugLog($"Type: {ex.GetType().Name}");
+            DebugLog($"Message: {ex.Message}");
+            DebugLog($"StackTrace: {ex.StackTrace}");
+            DebugLog($"========================================");
+            DebugLog($"InitializeFromPackage END (EXCEPTION)");
+            DebugLog($"========================================\n");
+
             Log.Error(ex, "Failed to initialize robot model from package");
             return false;
         }
@@ -159,6 +214,12 @@ public class RobotModel3D
             Name = name,
             JointIndex = jointIndex
         };
+
+        // DEBUG: Write to text file
+        DebugLog($"=== CreateLinkFromPackage ===");
+        DebugLog($"JointIndex: {jointIndex}, Name: {name}");
+        DebugLog($"PackagePath: {packagePath ?? "NULL"}");
+        DebugLog($"MeshPath: {meshPath ?? "NULL"}");
 
         // Set DH parameters from joint definition
         if (jointDef != null)
@@ -182,29 +243,37 @@ public class RobotModel3D
             string normalizedMeshPath = meshPath.Replace('/', Path.DirectorySeparatorChar);
             string fullPath = Path.Combine(packagePath, normalizedMeshPath);
 
+            DebugLog($"NormalizedMeshPath: {normalizedMeshPath}");
+            DebugLog($"FullPath: {fullPath}");
+
             Log.Information("Attempting to load mesh - PackagePath: {PackagePath}, MeshPath: {MeshPath}, NormalizedMeshPath: {NormalizedMeshPath}, FullPath: {FullPath}",
                 packagePath, meshPath, normalizedMeshPath, fullPath);
 
             if (File.Exists(fullPath))
             {
+                DebugLog($"FILE EXISTS: Size = {new FileInfo(fullPath).Length} bytes");
                 geometry = LoadStlGeometry(fullPath, GetLinkColor(jointIndex));
                 link.StlPath = fullPath;
                 if (geometry != null)
                 {
+                    DebugLog($"SUCCESS: LoadStlGeometry returned geometry");
                     Log.Information("SUCCESS: Loaded STL from package for {Name}: {Path}", name, fullPath);
                 }
                 else
                 {
+                    DebugLog($"FAILED: LoadStlGeometry returned NULL");
                     Log.Warning("FAILED: LoadStlGeometry returned null for {Name}: {Path}", name, fullPath);
                 }
             }
             else
             {
+                DebugLog($"FILE NOT FOUND at: {fullPath}");
                 Log.Warning("FILE NOT FOUND: STL file does not exist at: {Path}", fullPath);
             }
         }
         else
         {
+            DebugLog($"Skipping mesh load - meshPath or packagePath is empty/null");
             Log.Debug("Skipping mesh load - meshPath: {MeshPath}, packagePath: {PackagePath}",
                 meshPath ?? "null", packagePath ?? "null");
         }
@@ -212,11 +281,13 @@ public class RobotModel3D
         // Fallback to placeholder
         if (geometry == null)
         {
+            DebugLog($"Creating placeholder geometry for {name}");
             geometry = CreatePlaceholderGeometry(jointIndex);
             Log.Debug("Created placeholder geometry for {Name}", name);
         }
 
         link.Geometry = geometry;
+        DebugLog($"=== End CreateLinkFromPackage ===\n");
         return link;
     }
 
@@ -277,44 +348,85 @@ public class RobotModel3D
     {
         try
         {
+            DebugLog($">>> LoadStlGeometry START <<<");
+            DebugLog($"Path: {path}");
+            DebugLog($"Color: {color}");
+
             Log.Information("Attempting to load STL: {Path}", path);
 
             // Verify file exists
             if (!System.IO.File.Exists(path))
             {
+                DebugLog($"ERROR: File does not exist!");
                 Log.Warning("STL file not found: {Path}", path);
                 return null;
             }
 
             var fileInfo = new System.IO.FileInfo(path);
+            DebugLog($"File exists, size: {fileInfo.Length} bytes");
             Log.Information("STL file exists, size: {Size} bytes", fileInfo.Length);
 
+            DebugLog($"Creating StLReader...");
             var reader = new StLReader();
+
+            DebugLog($"Calling StLReader.Read()...");
             var model = reader.Read(path);
 
             if (model == null)
             {
+                DebugLog($"ERROR: StLReader.Read() returned NULL!");
                 Log.Warning("StLReader.Read returned null for: {Path}", path);
                 return null;
             }
 
+            DebugLog($"Model loaded successfully");
+            DebugLog($"Model.Children.Count: {model.Children.Count}");
             Log.Information("Model loaded, children count: {Count}", model.Children.Count);
 
             if (model.Children.Count > 0 && model.Children[0] is GeometryModel3D geo)
             {
+                DebugLog($"Found GeometryModel3D in Children[0]");
+                DebugLog($"Setting material color...");
                 geo.Material = new DiffuseMaterial(new SolidColorBrush(color));
                 geo.BackMaterial = new DiffuseMaterial(new SolidColorBrush(color));
+
+                DebugLog($"SUCCESS: GeometryModel3D created from STL");
                 Log.Information("Successfully created GeometryModel3D from STL: {Path}", path);
+                DebugLog($"<<< LoadStlGeometry END (SUCCESS) <<<\n");
                 return geo;
             }
 
+            DebugLog($"ERROR: Model has no GeometryModel3D children");
             Log.Warning("Model has no geometry children: {Path}", path);
+            DebugLog($"<<< LoadStlGeometry END (FAILED) <<<\n");
             return null;
         }
         catch (Exception ex)
         {
+            DebugLog($"EXCEPTION in LoadStlGeometry:");
+            DebugLog($"Type: {ex.GetType().Name}");
+            DebugLog($"Message: {ex.Message}");
+            DebugLog($"StackTrace: {ex.StackTrace}");
             Log.Error(ex, "Failed to load STL: {Path}", path);
+            DebugLog($"<<< LoadStlGeometry END (EXCEPTION) <<<\n");
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Debug logging to text file
+    /// </summary>
+    private static void DebugLog(string message)
+    {
+        try
+        {
+            string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+            string logMessage = $"[{timestamp}] {message}\n";
+            System.IO.File.AppendAllText(_debugLogPath, logMessage);
+        }
+        catch
+        {
+            // Ignore logging errors
         }
     }
 
