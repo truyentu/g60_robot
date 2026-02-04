@@ -1,0 +1,39 @@
+# Joint Limits
+# Units: angles in degrees, velocity in deg/s, acceleration in deg/s²
+
+joint_limits:
+  - joint: 1
+    min_deg: -170
+    max_deg: 170
+    max_velocity_deg_s: 120
+    max_acceleration_deg_s2: 500
+
+  - joint: 2
+    min_deg: -120
+    max_deg: 60
+    max_velocity_deg_s: 120
+    max_acceleration_deg_s2: 500
+
+  - joint: 3
+    min_deg: -80
+    max_deg: 165
+    max_velocity_deg_s: 120
+    max_acceleration_deg_s2: 500
+
+  - joint: 4
+    min_deg: -185
+    max_deg: 185
+    max_velocity_deg_s: 190
+    max_acceleration_deg_s2: 800
+
+  - joint: 5
+    min_deg: -120
+    max_deg: 120
+    max_velocity_deg_s: 190
+    max_acceleration_deg_s2: 800
+
+  - joint: 6
+    min_deg: -360
+    max_deg: 360
+    max_velocity_deg_s: 250
+    max_acceleration_deg_s2: 1000

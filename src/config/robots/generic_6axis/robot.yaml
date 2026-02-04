@@ -1,0 +1,120 @@
+# Generic 6-Axis Industrial Robot Package
+# For testing when no specific robot meshes available
+# Part of Phase 8: Virtual Simulation (IMPL_P8_01)
+
+name: "Generic 6-Axis Robot"
+manufacturer: "Generic"
+type: "6-axis-industrial"
+payload_kg: 5
+reach_mm: 800
+
+kinematics:
+  convention: "modified_dh"
+  joints:
+    - name: "J1"
+      type: "revolute"
+      dh:
+        a: 50
+        alpha: -90
+        d: 330
+        theta_offset: 0
+      limits:
+        min: -180
+        max: 180
+        vel_max: 300
+        accel_max: 600
+      mesh:
+        visual: ""
+
+    - name: "J2"
+      type: "revolute"
+      dh:
+        a: 330
+        alpha: 0
+        d: 0
+        theta_offset: -90
+      limits:
+        min: -180
+        max: 60
+        vel_max: 250
+        accel_max: 500
+      mesh:
+        visual: ""
+
+    - name: "J3"
+      type: "revolute"
+      dh:
+        a: 40
+        alpha: 90
+        d: 0
+        theta_offset: 0
+      limits:
+        min: -120
+        max: 150
+        vel_max: 300
+        accel_max: 600
+      mesh:
+        visual: ""
+
+    - name: "J4"
+      type: "revolute"
+      dh:
+        a: 0
+        alpha: -90
+        d: 320
+        theta_offset: 0
+      limits:
+        min: -180
+        max: 180
+        vel_max: 400
+        accel_max: 800
+      mesh:
+        visual: ""
+
+    - name: "J5"
+      type: "revolute"
+      dh:
+        a: 0
+        alpha: 90
+        d: 0
+        theta_offset: 0
+      limits:
+        min: -120
+        max: 120
+        vel_max: 400
+        accel_max: 800
+      mesh:
+        visual: ""
+
+    - name: "J6"
+      type: "revolute"
+      dh:
+        a: 0
+        alpha: 0
+        d: 80
+        theta_offset: 0
+      limits:
+        min: -360
+        max: 360
+        vel_max: 500
+        accel_max: 1000
+      mesh:
+        visual: ""
+
+home_position: [0, -90, 90, 0, 0, 0]
+
+base:
+  mesh: ""
+  origin:
+    x: 0
+    y: 0
+    z: 0
+    rx: 0
+    ry: 0
+    rz: 0
+
+flange:
+  offset:
+    x: 0
+    y: 0
+    z: 80

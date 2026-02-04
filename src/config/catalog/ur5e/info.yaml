@@ -1,0 +1,16 @@
+# Robot Model Information
+# Universal Robots UR5e - Collaborative robot
+
+id: ur5e
+name: "Universal Robots UR5e"
+manufacturer: "Universal Robots"
+model: "UR5e"
+type: "6-axis-articulated"
+dof: 6
+max_payload_kg: 5.0
+reach_mm: 850
+mounting:
+  - floor
+  - ceiling
+  - wall
+dh_convention: "modified"

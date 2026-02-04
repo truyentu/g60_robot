@@ -1,0 +1,16 @@
+# Robot Model Information
+# Custom 6DOF 1200mm reach robot
+
+id: custom_6dof_1200
+name: "Custom 6DOF 1200mm"
+manufacturer: "Custom"
+model: "RC-6DOF-01"
+type: "6-axis-articulated"
+dof: 6
+max_payload_kg: 6.0
+reach_mm: 1200
+mounting:
+  - floor
+  - ceiling
+  - wall
+dh_convention: "modified"

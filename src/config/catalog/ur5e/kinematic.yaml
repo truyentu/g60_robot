@@ -1,0 +1,59 @@
+# DH Parameters (Modified DH Convention)
+# Universal Robots UR5e
+# Note: UR robots have different kinematic structure than KUKA
+# Units: a, d in mm; alpha, theta_offset in degrees
+
+dh_parameters:
+  # Joint 1: Base rotation
+  - joint: 1
+    a: 0
+    alpha: 90
+    d: 162.5
+    theta_offset: 0
+
+  # Joint 2: Shoulder
+  - joint: 2
+    a: -425
+    alpha: 0
+    d: 0
+    theta_offset: 0
+
+  # Joint 3: Elbow
+  - joint: 3
+    a: -392.2
+    alpha: 0
+    d: 0
+    theta_offset: 0
+
+  # Joint 4: Wrist 1
+  - joint: 4
+    a: 0
+    alpha: 90
+    d: 133.3
+    theta_offset: 0
+
+  # Joint 5: Wrist 2
+  - joint: 5
+    a: 0
+    alpha: -90
+    d: 99.7
+    theta_offset: 0
+
+  # Joint 6: Wrist 3 (Tool flange)
+  - joint: 6
+    a: 0
+    alpha: 0
+    d: 99.6
+    theta_offset: 0
+
+# Default TCP offset from flange
+default_tcp:
+  x: 0
+  y: 0
+  z: 0
+  rx: 0
+  ry: 0
+  rz: 0
+
+# Home position (joint angles in degrees)
+home_position: [0, -90, 0, -90, 0, 0]

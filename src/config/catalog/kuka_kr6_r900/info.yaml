@@ -1,0 +1,16 @@
+# Robot Model Information
+# KUKA KR 6 R900 - Small industrial robot
+
+id: kuka_kr6_r900
+name: "KUKA KR 6 R900"
+manufacturer: "KUKA"
+model: "KR 6 R900"
+type: "6-axis-articulated"
+dof: 6
+max_payload_kg: 6.0
+reach_mm: 901
+mounting:
+  - floor
+  - ceiling
+  - wall
+dh_convention: "modified"

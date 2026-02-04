@@ -1,0 +1,28 @@
+# Calibration Data
+# Measured calibration offsets for this specific robot instance
+
+calibration_date: "2024-02-03"
+calibrated_by: "Factory"
+
+# Joint angle offsets (from factory calibration)
+# These are added to the commanded joint angles
+joint_offsets:
+  - joint: 1
+    offset_deg: 0.0
+  - joint: 2
+    offset_deg: 0.0
+  - joint: 3
+    offset_deg: 0.0
+  - joint: 4
+    offset_deg: 0.0
+  - joint: 5
+    offset_deg: 0.0
+  - joint: 6
+    offset_deg: 0.0
+
+# DH corrections (optional - for precision applications)
+# These are added to the nominal DH parameters
+dh_corrections: []
+
+# Notes
+notes: "Initial factory calibration - no offsets"

@@ -1,0 +1,57 @@
+# DH Parameters (Modified DH Convention)
+# Units: a, d in mm; alpha, theta_offset in degrees
+
+dh_parameters:
+  # Joint 1: Base rotation
+  - joint: 1
+    a: 0
+    alpha: 0
+    d: 400
+    theta_offset: 0
+
+  # Joint 2: Shoulder
+  - joint: 2
+    a: 25
+    alpha: -90
+    d: 0
+    theta_offset: -90
+
+  # Joint 3: Elbow
+  - joint: 3
+    a: 560
+    alpha: 0
+    d: 0
+    theta_offset: 0
+
+  # Joint 4: Wrist 1
+  - joint: 4
+    a: 35
+    alpha: -90
+    d: 515
+    theta_offset: 0
+
+  # Joint 5: Wrist 2
+  - joint: 5
+    a: 0
+    alpha: 90
+    d: 0
+    theta_offset: 0
+
+  # Joint 6: Wrist 3 (Tool flange)
+  - joint: 6
+    a: 0
+    alpha: -90
+    d: 80
+    theta_offset: 0
+
+# Default TCP offset from flange
+default_tcp:
+  x: 0
+  y: 0
+  z: 150
+  rx: 0
+  ry: 0
+  rz: 0
+
+# Home position (joint angles in degrees)
+home_position: [0, -45, 90, 0, 45, 0]

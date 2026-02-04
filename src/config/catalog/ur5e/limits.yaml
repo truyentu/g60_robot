@@ -1,0 +1,41 @@
+# Joint Limits
+# Universal Robots UR5e
+# Note: UR5e has +/- 360 degree rotation on all joints
+# Units: angles in degrees, velocity in deg/s, acceleration in deg/s²
+
+joint_limits:
+  - joint: 1
+    min_deg: -360
+    max_deg: 360
+    max_velocity_deg_s: 180
+    max_acceleration_deg_s2: 400
+
+  - joint: 2
+    min_deg: -360
+    max_deg: 360
+    max_velocity_deg_s: 180
+    max_acceleration_deg_s2: 400
+
+  - joint: 3
+    min_deg: -360
+    max_deg: 360
+    max_velocity_deg_s: 180
+    max_acceleration_deg_s2: 400
+
+  - joint: 4
+    min_deg: -360
+    max_deg: 360
+    max_velocity_deg_s: 180
+    max_acceleration_deg_s2: 400
+
+  - joint: 5
+    min_deg: -360
+    max_deg: 360
+    max_velocity_deg_s: 180
+    max_acceleration_deg_s2: 400
+
+  - joint: 6
+    min_deg: -360
+    max_deg: 360
+    max_velocity_deg_s: 180
+    max_acceleration_deg_s2: 400

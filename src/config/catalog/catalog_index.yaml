@@ -1,0 +1,20 @@
+# Robot Catalog Index
+# Lists all available robot models in the catalog
+
+version: "1.0"
+
+models:
+  - id: custom_6dof_1200
+    name: "Custom 6DOF 1200mm"
+    path: custom_6dof_1200/
+
+  - id: kuka_kr6_r900
+    name: "KUKA KR 6 R900"
+    path: kuka_kr6_r900/
+
+  - id: ur5e
+    name: "Universal Robots UR5e"
+    path: ur5e/
+
+# Default model to use when no instance exists
+default_model: custom_6dof_1200

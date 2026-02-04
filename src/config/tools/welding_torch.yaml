@@ -1,0 +1,14 @@
+tool:
+  id: "welding_torch"
+  name: "MIG Welding Torch"
+  description: "Standard MIG/MAG welding torch with 15° angle"
+  tcp:
+    x: 0.0
+    y: 0.0
+    z: 180.0      # 180mm tool length
+    rx: 0.0
+    ry: 15.0      # 15° torch angle
+    rz: 0.0
+  inertia:
+    mass: 2.5     # kg
+    cog: [0.0, 0.0, 90.0]  # Center of gravity at half length

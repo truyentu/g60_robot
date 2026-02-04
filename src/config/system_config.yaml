@@ -1,0 +1,42 @@
+# System Configuration
+# Robot Controller v1.0
+# Last Modified: 2026-02-01
+
+system:
+  # Version info
+  version: "1.0.0"
+
+  # IPC Settings
+  ipc:
+    rep_port: 5555          # REQ/REP port
+    pub_port: 5556          # PUB/SUB port
+    bind_address: "*"       # Bind to all interfaces
+    heartbeat_ms: 1000      # Heartbeat interval
+
+  # Logging Settings
+  logging:
+    level: "debug"          # trace, debug, info, warn, error
+    file: "logs/core.log"
+    max_size_mb: 10         # Max file size before rotation
+    max_files: 5            # Number of rotated files to keep
+    console_enabled: true
+    file_enabled: true
+
+  # Control Loop Settings
+  control:
+    cycle_time_ms: 4        # Main control loop cycle (250 Hz)
+    interpolation_hz: 1000  # Trajectory interpolation rate
+    status_publish_hz: 10   # Status publish rate
+
+  # Serial Communication (to Teensy)
+  serial:
+    port: "AUTO"            # COM port or AUTO for auto-detect
+    baudrate: 115200
+    timeout_ms: 100
+
+  # Safety Settings
+  safety:
+    e_stop_enabled: true
+    soft_limits_enabled: true
+    collision_check_enabled: false  # Future feature
+    max_speed_percent: 100

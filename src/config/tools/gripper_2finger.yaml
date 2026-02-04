@@ -1,0 +1,14 @@
+tool:
+  id: "gripper_2finger"
+  name: "2-Finger Gripper"
+  description: "Pneumatic 2-finger parallel gripper"
+  tcp:
+    x: 0.0
+    y: 0.0
+    z: 120.0      # 120mm gripper length
+    rx: 0.0
+    ry: 0.0
+    rz: 0.0
+  inertia:
+    mass: 1.8     # kg
+    cog: [0.0, 0.0, 60.0]

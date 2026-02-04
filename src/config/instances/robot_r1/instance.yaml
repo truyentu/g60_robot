@@ -1,0 +1,21 @@
+# Robot Instance Configuration
+# This is a deployed robot instance based on a catalog model
+
+instance_id: robot_r1
+base_model: custom_6dof_1200
+created: "2024-02-03"
+last_modified: "2024-02-03"
+
+# Active instance flag
+active: true
+
+# Overrides (optional - override values from base model)
+overrides:
+  # Custom TCP for welding torch
+  tcp_offset:
+    x: 0
+    y: 0
+    z: 200
+    rx: 0
+    ry: 0
+    rz: 0

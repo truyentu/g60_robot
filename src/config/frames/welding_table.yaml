@@ -1,0 +1,11 @@
+base:
+  id: "welding_table"
+  name: "Welding Table"
+  description: "Workpiece coordinate system on welding table"
+  frame:
+    x: 800.0      # 800mm in front of robot
+    y: 0.0        # Centered
+    z: -50.0      # 50mm below robot base (table height)
+    rx: 0.0
+    ry: 0.0
+    rz: 0.0       # Aligned with world frame

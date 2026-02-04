@@ -1,0 +1,14 @@
+tool:
+  id: "tool_default"
+  name: "No Tool"
+  description: "Default tool with no offset"
+  tcp:
+    x: 0.0
+    y: 0.0
+    z: 0.0
+    rx: 0.0
+    ry: 0.0
+    rz: 0.0
+  inertia:
+    mass: 0.0
+    cog: [0.0, 0.0, 0.0]

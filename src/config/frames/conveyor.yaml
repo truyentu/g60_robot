@@ -1,0 +1,11 @@
+base:
+  id: "conveyor"
+  name: "Conveyor Belt"
+  description: "Coordinate system on conveyor belt pickup station"
+  frame:
+    x: 600.0      # 600mm in front of robot
+    y: 400.0      # 400mm to the right
+    z: 100.0      # 100mm above robot base
+    rx: 0.0
+    ry: 0.0
+    rz: -45.0     # Rotated 45 degrees

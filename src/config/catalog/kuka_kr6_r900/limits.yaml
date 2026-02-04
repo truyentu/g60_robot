@@ -1,0 +1,40 @@
+# Joint Limits
+# KUKA KR 6 R900
+# Units: angles in degrees, velocity in deg/s, acceleration in deg/s²
+
+joint_limits:
+  - joint: 1
+    min_deg: -185
+    max_deg: 185
+    max_velocity_deg_s: 156
+    max_acceleration_deg_s2: 600
+
+  - joint: 2
+    min_deg: -140
+    max_deg: 35
+    max_velocity_deg_s: 156
+    max_acceleration_deg_s2: 600
+
+  - joint: 3
+    min_deg: -120
+    max_deg: 168
+    max_velocity_deg_s: 156
+    max_acceleration_deg_s2: 600
+
+  - joint: 4
+    min_deg: -185
+    max_deg: 185
+    max_velocity_deg_s: 343
+    max_acceleration_deg_s2: 1000
+
+  - joint: 5
+    min_deg: -120
+    max_deg: 120
+    max_velocity_deg_s: 362
+    max_acceleration_deg_s2: 1000
+
+  - joint: 6
+    min_deg: -350
+    max_deg: 350
+    max_velocity_deg_s: 659
+    max_acceleration_deg_s2: 1500

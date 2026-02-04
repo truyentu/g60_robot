@@ -1,0 +1,190 @@
+<UserControl x:Class="RobotController.UI.Views.Controls.RobotCatalogPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DesignHeight="400" d:DesignWidth="350">
+
+    <UserControl.Resources>
+        <!-- Model Item Style -->
+        <Style x:Key="ModelItemStyle" TargetType="Border">
+            <Setter Property="Background" Value="#353535"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="12,10"/>
+            <Setter Property="Margin" Value="0,4"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#404040"/>
+                </Trigger>
+                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                    <Setter Property="Background" Value="#1a5fb4"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Button Style -->
+        <Style x:Key="CatalogButton" TargetType="Button">
+            <Setter Property="Background" Value="#0078D7"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#1a86e0"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Background" Value="#555555"/>
+                    <Setter Property="Foreground" Value="#888888"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
+    <Border Background="#2D2D2D" CornerRadius="8" Padding="12">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <Grid Grid.Row="0" Margin="0,0,0,12">
+                <TextBlock Text="ROBOT CATALOG"
+                          FontSize="14" FontWeight="Bold"
+                          Foreground="#AAAAAA"/>
+                <Button Content="⟳"
+                        Command="{Binding LoadCatalogCommand}"
+                        HorizontalAlignment="Right"
+                        Style="{StaticResource CatalogButton}"
+                        Padding="8,4"
+                        ToolTip="Refresh Catalog"/>
+            </Grid>
+
+            <!-- Active Robot Info -->
+            <Border Grid.Row="1"
+                    Background="#1a5fb4"
+                    CornerRadius="6"
+                    Padding="12"
+                    Margin="0,0,0,12"
+                    Visibility="{Binding ActiveModelId, Converter={StaticResource StringToVisibilityConverter}, FallbackValue=Collapsed}">
+                <StackPanel>
+                    <TextBlock Text="Active Robot"
+                              Foreground="#AAAAAA"
+                              FontSize="11"/>
+                    <TextBlock Text="{Binding ActiveModelName}"
+                              Foreground="White"
+                              FontSize="16"
+                              FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding ActiveInstanceId, StringFormat='Instance: {0}'}"
+                              Foreground="#CCCCCC"
+                              FontSize="11"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Model List -->
+            <Border Grid.Row="2" Background="#252525" CornerRadius="6">
+                <Grid>
+                    <!-- Loading Indicator -->
+                    <TextBlock Text="Loading..."
+                              Foreground="#888888"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}"/>
+
+                    <!-- Error Message -->
+                    <StackPanel VerticalAlignment="Center"
+                               HorizontalAlignment="Center"
+                               Visibility="{Binding HasError, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <TextBlock Text="⚠"
+                                  Foreground="#FF6B6B"
+                                  FontSize="32"
+                                  HorizontalAlignment="Center"/>
+                        <TextBlock Text="{Binding ErrorMessage}"
+                                  Foreground="#FF6B6B"
+                                  TextWrapping="Wrap"
+                                  TextAlignment="Center"
+                                  Margin="8"/>
+                    </StackPanel>
+
+                    <!-- Models List -->
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8">
+                        <ItemsControl ItemsSource="{Binding AvailableModels}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Style="{StaticResource ModelItemStyle}">
+                                        <Border.InputBindings>
+                                            <MouseBinding MouseAction="LeftClick"
+                                                        Command="{Binding DataContext.SelectModelCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}"/>
+                                        </Border.InputBindings>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+
+                                            <!-- Model Name -->
+                                            <TextBlock Grid.Column="0" Grid.Row="0"
+                                                      Text="{Binding Name}"
+                                                      Foreground="White"
+                                                      FontWeight="SemiBold"
+                                                      FontSize="14"/>
+
+                                            <!-- Selected Indicator -->
+                                            <TextBlock Grid.Column="1" Grid.Row="0" Grid.RowSpan="2"
+                                                      Text="✓"
+                                                      Foreground="#4CAF50"
+                                                      FontSize="20"
+                                                      FontWeight="Bold"
+                                                      VerticalAlignment="Center"
+                                                      Visibility="{Binding IsSelected, Converter={StaticResource BoolToVisibilityConverter}}"/>
+
+                                            <!-- Model Info -->
+                                            <TextBlock Grid.Column="0" Grid.Row="1"
+                                                      Text="{Binding DisplayInfo}"
+                                                      Foreground="#888888"
+                                                      FontSize="11"
+                                                      Margin="0,2,0,0"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+
+            <!-- Footer -->
+            <StackPanel Grid.Row="3" Margin="0,12,0,0">
+                <Button Content="Apply Selection"
+                        Command="{Binding SelectModelCommand}"
+                        CommandParameter="{Binding SelectedModel}"
+                        Style="{StaticResource CatalogButton}"
+                        HorizontalAlignment="Stretch"
+                        IsEnabled="{Binding SelectedModel, Converter={StaticResource NullToBoolConverter}}"/>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

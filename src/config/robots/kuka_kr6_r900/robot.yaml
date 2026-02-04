@@ -1,0 +1,119 @@
+# KUKA KR 6 R900 Robot Package
+# Part of Phase 8: Virtual Simulation (IMPL_P8_01)
+
+name: "KUKA KR 6 R900"
+manufacturer: "KUKA"
+type: "6-axis-industrial"
+payload_kg: 6
+reach_mm: 901
+
+kinematics:
+  convention: "modified_dh"
+  joints:
+    - name: "A1"
+      type: "revolute"
+      dh:
+        a: 25
+        alpha: -90
+        d: 400
+        theta_offset: 0
+      limits:
+        min: -170
+        max: 170
+        vel_max: 360
+        accel_max: 720
+      mesh:
+        visual: "meshes/visual/link1.stl"
+
+    - name: "A2"
+      type: "revolute"
+      dh:
+        a: 455
+        alpha: 0
+        d: 0
+        theta_offset: -90
+      limits:
+        min: -190
+        max: 45
+        vel_max: 300
+        accel_max: 600
+      mesh:
+        visual: "meshes/visual/link2.stl"
+
+    - name: "A3"
+      type: "revolute"
+      dh:
+        a: 35
+        alpha: 90
+        d: 0
+        theta_offset: 0
+      limits:
+        min: -120
+        max: 156
+        vel_max: 360
+        accel_max: 720
+      mesh:
+        visual: "meshes/visual/link3.stl"
+
+    - name: "A4"
+      type: "revolute"
+      dh:
+        a: 0
+        alpha: -90
+        d: 420
+        theta_offset: 0
+      limits:
+        min: -185
+        max: 185
+        vel_max: 450
+        accel_max: 900
+      mesh:
+        visual: "meshes/visual/link4.stl"
+
+    - name: "A5"
+      type: "revolute"
+      dh:
+        a: 0
+        alpha: 90
+        d: 0
+        theta_offset: 0
+      limits:
+        min: -120
+        max: 120
+        vel_max: 450
+        accel_max: 900
+      mesh:
+        visual: "meshes/visual/link5.stl"
+
+    - name: "A6"
+      type: "revolute"
+      dh:
+        a: 0
+        alpha: 0
+        d: 80
+        theta_offset: 0
+      limits:
+        min: -350
+        max: 350
+        vel_max: 615
+        accel_max: 1230
+      mesh:
+        visual: "meshes/visual/link6.stl"
+
+home_position: [0, -90, 90, 0, 0, 0]
+
+base:
+  mesh: "meshes/visual/base.stl"
+  origin:
+    x: 0
+    y: 0
+    z: 0
+    rx: 0
+    ry: 0
+    rz: 0
+
+flange:
+  offset:
+    x: 0
+    y: 0
+    z: 80
