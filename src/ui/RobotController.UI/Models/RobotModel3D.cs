@@ -178,13 +178,35 @@ public class RobotModel3D
         // Try to load mesh from package
         if (!string.IsNullOrEmpty(meshPath) && !string.IsNullOrEmpty(packagePath))
         {
-            string fullPath = Path.Combine(packagePath, meshPath);
+            // Normalize mesh path (convert forward slashes to backslashes on Windows)
+            string normalizedMeshPath = meshPath.Replace('/', Path.DirectorySeparatorChar);
+            string fullPath = Path.Combine(packagePath, normalizedMeshPath);
+
+            Log.Information("Attempting to load mesh - PackagePath: {PackagePath}, MeshPath: {MeshPath}, NormalizedMeshPath: {NormalizedMeshPath}, FullPath: {FullPath}",
+                packagePath, meshPath, normalizedMeshPath, fullPath);
+
             if (File.Exists(fullPath))
             {
                 geometry = LoadStlGeometry(fullPath, GetLinkColor(jointIndex));
                 link.StlPath = fullPath;
-                Log.Debug("Loaded STL from package for {Name}: {Path}", name, fullPath);
+                if (geometry != null)
+                {
+                    Log.Information("SUCCESS: Loaded STL from package for {Name}: {Path}", name, fullPath);
+                }
+                else
+                {
+                    Log.Warning("FAILED: LoadStlGeometry returned null for {Name}: {Path}", name, fullPath);
+                }
             }
+            else
+            {
+                Log.Warning("FILE NOT FOUND: STL file does not exist at: {Path}", fullPath);
+            }
+        }
+        else
+        {
+            Log.Debug("Skipping mesh load - meshPath: {MeshPath}, packagePath: {PackagePath}",
+                meshPath ?? "null", packagePath ?? "null");
         }
 
         // Fallback to placeholder
@@ -255,21 +277,43 @@ public class RobotModel3D
     {
         try
         {
+            Log.Information("Attempting to load STL: {Path}", path);
+
+            // Verify file exists
+            if (!System.IO.File.Exists(path))
+            {
+                Log.Warning("STL file not found: {Path}", path);
+                return null;
+            }
+
+            var fileInfo = new System.IO.FileInfo(path);
+            Log.Information("STL file exists, size: {Size} bytes", fileInfo.Length);
+
             var reader = new StLReader();
             var model = reader.Read(path);
+
+            if (model == null)
+            {
+                Log.Warning("StLReader.Read returned null for: {Path}", path);
+                return null;
+            }
+
+            Log.Information("Model loaded, children count: {Count}", model.Children.Count);
 
             if (model.Children.Count > 0 && model.Children[0] is GeometryModel3D geo)
             {
                 geo.Material = new DiffuseMaterial(new SolidColorBrush(color));
                 geo.BackMaterial = new DiffuseMaterial(new SolidColorBrush(color));
+                Log.Information("Successfully created GeometryModel3D from STL: {Path}", path);
                 return geo;
             }
 
+            Log.Warning("Model has no geometry children: {Path}", path);
             return null;
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "Failed to load STL: {Path}", path);
+            Log.Error(ex, "Failed to load STL: {Path}", path);
             return null;
         }
     }

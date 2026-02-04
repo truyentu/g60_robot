@@ -146,7 +146,11 @@ public partial class RobotPackageBrowserViewModel : ObservableObject
                     PayloadKg = pkg.PayloadKg,
                     ReachMm = pkg.ReachMm,
                     DhConvention = pkg.DhConvention,
-                    PackagePath = pkg.PackagePath
+                    // Convert to absolute path relative to UI executable
+                    PackagePath = System.IO.Path.GetFullPath(
+                        System.IO.Path.Combine(
+                            AppDomain.CurrentDomain.BaseDirectory,
+                            pkg.PackagePath))
                 };
 
                 // Parse joints
@@ -178,7 +182,8 @@ public partial class RobotPackageBrowserViewModel : ObservableObject
                     LoadedPackage.Joints.Add(joint);
                 }
 
-                // Parse home position
+                // Parse base mesh and home position
+                LoadedPackage.BaseMesh = pkg.BaseMesh ?? "";
                 LoadedPackage.HomePosition = pkg.HomePosition;
 
                 // Update viewport
