@@ -226,6 +226,9 @@
                                 <DataTrigger Binding="{Binding SelectedNavIndex}" Value="5">
                                     <Setter Property="Visibility" Value="Visible"/>
                                 </DataTrigger>
+                                <DataTrigger Binding="{Binding SelectedNavIndex}" Value="6">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
                             </Style.Triggers>
                         </Style>
                     </Border.Style>
