@@ -129,7 +129,7 @@
             <Button Grid.Column="1" Content="Parse URDF"
                        Command="{Binding ParseUrdfCommand}"
                        Margin="0,0,10,0"
-                       IsEnabled="{Binding IsLoading, Converter={StaticResource InverseBoolConverter}}"/>
+                       IsEnabled="{Binding IsLoading, Converter={StaticResource InverseBool}}"/>
 
             <Button Grid.Column="2" Content="Generate robot.yaml"
                        Command="{Binding GenerateYamlCommand}"
