@@ -11,9 +11,14 @@
 #include <fstream>
 #include <sstream>
 #include <regex>
+#define _USE_MATH_DEFINES
 #include <cmath>
 #include <algorithm>
 #include <set>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 namespace robot_controller {
 namespace config {
@@ -23,7 +28,8 @@ namespace {
     // Note: For production, use proper XML parser like tinyxml2
 
     std::string getAttributeValue(const std::string& element, const std::string& attr) {
-        std::regex pattern(attr + R"(\s*=\s*"([^"]*)")");
+        // Pattern: attr\s*=\s*"([^"]*)"
+        std::regex pattern(attr + "\\s*=\\s*\"([^\"]*)\"");
         std::smatch match;
         if (std::regex_search(element, match, pattern)) {
             return match[1].str();
@@ -33,7 +39,8 @@ namespace {
 
     std::vector<std::string> findElements(const std::string& xml, const std::string& tag) {
         std::vector<std::string> elements;
-        std::string pattern_str = "<" + tag + R"(\s[^>]*(?:/>|>[\s\S]*?<\/)" + tag + ">)";
+        // Pattern: <tag\s[^>]*(?:/>|>[\s\S]*?<\/)tag>
+        std::string pattern_str = "<" + tag + "\\s[^>]*(?:/>|>[\\s\\S]*?<\\/)" + tag + ">";
         std::regex pattern(pattern_str);
 
         auto begin = std::sregex_iterator(xml.begin(), xml.end(), pattern);
@@ -47,7 +54,8 @@ namespace {
     }
 
     std::string findChildElement(const std::string& parent, const std::string& tag) {
-        std::string pattern_str = "<" + tag + R"(\s[^>]*(?:/>|>[\s\S]*?<\/)" + tag + ">)";
+        // Pattern: <tag\s[^>]*(?:/>|>[\s\S]*?<\/)tag>
+        std::string pattern_str = "<" + tag + "\\s[^>]*(?:/>|>[\\s\\S]*?<\\/)" + tag + ">";
         std::regex pattern(pattern_str);
         std::smatch match;
 
@@ -55,8 +63,8 @@ namespace {
             return match[0].str();
         }
 
-        // Try self-closing tag
-        pattern_str = "<" + tag + R"(\s[^/>]*/?>)";
+        // Try self-closing tag: <tag\s[^/>]*/?>
+        pattern_str = "<" + tag + "\\s[^/>]*/?>";
         pattern = std::regex(pattern_str);
         if (std::regex_search(parent, match, pattern)) {
             return match[0].str();
@@ -113,7 +121,8 @@ UrdfParseResult UrdfParser::parseString(const std::string& xml_content) {
             if (link.name.empty()) continue;
 
             // Remove prefix if present (${prefix})
-            std::regex prefix_pattern(R"(\$\{prefix\})");
+            // Pattern: \$\{prefix\}
+            std::regex prefix_pattern("\\$\\{prefix\\}");
             link.name = std::regex_replace(link.name, prefix_pattern, "");
 
             // Find visual mesh
@@ -156,7 +165,7 @@ UrdfParseResult UrdfParser::parseString(const std::string& xml_content) {
             if (joint.name.empty()) continue;
 
             // Remove prefix
-            std::regex prefix_pattern(R"(\$\{prefix\})");
+            std::regex prefix_pattern("\\$\\{prefix\\}");
             joint.name = std::regex_replace(joint.name, prefix_pattern, "");
 
             // Parse parent/child
@@ -261,7 +270,8 @@ void UrdfParser::parseLimit(const std::string& lower, const std::string& upper,
 
 double UrdfParser::expandXacroExpression(const std::string& expr) {
     // Handle ${radians(X)} pattern
-    std::regex radians_pattern(R"(\$\{radians\(([-\d.]+)\)\})");
+    // Pattern: \$\{radians\(([-\d.]+)\)\}
+    std::regex radians_pattern("\\$\\{radians\\(([-\\d.]+)\\)\\}");
     std::smatch match;
 
     if (std::regex_search(expr, match, radians_pattern)) {
@@ -279,15 +289,16 @@ double UrdfParser::expandXacroExpression(const std::string& expr) {
 
 std::string UrdfParser::extractMeshFilename(const std::string& mesh_path) {
     // Extract filename from package://pkg/meshes/file.stl
-    std::regex package_pattern(R"(package://[^/]+/meshes/[^/]+/(?:visual|collision)/(.+\.stl))");
+    // Pattern: package://[^/]+/meshes/[^/]+/(?:visual|collision)/(.+\.stl)
+    std::regex package_pattern("package://[^/]+/meshes/[^/]+/(?:visual|collision)/(.+\\.stl)");
     std::smatch match;
 
     if (std::regex_search(mesh_path, match, package_pattern)) {
         return match[1].str();
     }
 
-    // Try simpler pattern
-    std::regex simple_pattern(R"(([^/]+\.stl))");
+    // Try simpler pattern: ([^/]+\.stl)
+    std::regex simple_pattern("([^/]+\\.stl)");
     if (std::regex_search(mesh_path, match, simple_pattern)) {
         return match[1].str();
     }
