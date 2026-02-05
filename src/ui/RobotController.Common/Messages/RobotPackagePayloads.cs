@@ -73,6 +73,16 @@ public class JointDefinitionPayload
     [JsonPropertyName("dh_theta_offset")]
     public double DhThetaOffset { get; set; }
 
+    // URDF Origin (optional - for visualization)
+    [JsonPropertyName("origin_xyz")]
+    public double[]? OriginXyz { get; set; }
+
+    [JsonPropertyName("origin_rpy")]
+    public double[]? OriginRpy { get; set; }
+
+    [JsonPropertyName("axis")]
+    public double[]? Axis { get; set; }
+
     [JsonPropertyName("limit_min")]
     public double LimitMin { get; set; }
 

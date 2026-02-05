@@ -1,5 +1,6 @@
 # KUKA KR 10 R1420 Robot Package
-# Part of Phase 8: Virtual Simulation (IMPL_P8_01)
+# Hybrid approach: DH for kinematics + URDF origins for visualization
+# Sources: ROS-Industrial kuka_experimental + KUKA specs
 
 name: "KUKA KR 10 R1420"
 manufacturer: "KUKA"
@@ -10,21 +11,29 @@ reach_mm: 1420
 kinematics:
   convention: "modified_dh"
   joints:
+    # Joint A1
     - name: "A1"
       type: "revolute"
+      # DH parameters (for FK/IK calculations)
       dh:
         a: 25
         alpha: -90
         d: 400
         theta_offset: 0
+      # URDF origin (for visualization) - from ROS-Industrial
+      origin:
+        xyz: [0, 0, 450]        # 0.450m → 450mm
+        rpy: [0, 0, 0]
+      axis: [0, 0, -1]          # Negative Z-axis
       limits:
         min: -170
         max: 170
-        vel_max: 360
+        vel_max: 220
         accel_max: 720
       mesh:
         visual: "meshes/visual/link1.stl"
 
+    # Joint A2
     - name: "A2"
       type: "revolute"
       dh:
@@ -32,14 +41,19 @@ kinematics:
         alpha: 0
         d: 0
         theta_offset: -90
+      origin:
+        xyz: [150, 0, 0]        # 0.150m → 150mm
+        rpy: [0, 0, 0]
+      axis: [0, 1, 0]           # Y-axis
       limits:
-        min: -190
-        max: 45
-        vel_max: 300
+        min: -185
+        max: 65
+        vel_max: 210
         accel_max: 600
       mesh:
         visual: "meshes/visual/link2.stl"
 
+    # Joint A3
     - name: "A3"
       type: "revolute"
       dh:
@@ -47,14 +61,19 @@ kinematics:
         alpha: -90
         d: 0
         theta_offset: 0
+      origin:
+        xyz: [610, 0, 0]        # 0.610m → 610mm
+        rpy: [0, 0, 0]
+      axis: [0, 1, 0]           # Y-axis
       limits:
-        min: -120
-        max: 156
-        vel_max: 360
+        min: -137
+        max: 163
+        vel_max: 270
         accel_max: 720
       mesh:
         visual: "meshes/visual/link3.stl"
 
+    # Joint A4
     - name: "A4"
       type: "revolute"
       dh:
@@ -62,14 +81,19 @@ kinematics:
         alpha: 90
         d: 515
         theta_offset: 0
+      origin:
+        xyz: [0, 0, 20]         # 0.020m → 20mm
+        rpy: [0, 0, 0]
+      axis: [-1, 0, 0]          # Negative X-axis
       limits:
         min: -185
         max: 185
-        vel_max: 450
+        vel_max: 381
         accel_max: 900
       mesh:
         visual: "meshes/visual/link4.stl"
 
+    # Joint A5
     - name: "A5"
       type: "revolute"
       dh:
@@ -77,14 +101,19 @@ kinematics:
         alpha: -90
         d: 0
         theta_offset: 0
+      origin:
+        xyz: [660, 0, 0]        # 0.660m → 660mm
+        rpy: [0, 0, 0]
+      axis: [0, 1, 0]           # Y-axis
       limits:
         min: -120
         max: 120
-        vel_max: 450
+        vel_max: 311
         accel_max: 900
       mesh:
         visual: "meshes/visual/link5.stl"
 
+    # Joint A6
     - name: "A6"
       type: "revolute"
       dh:
@@ -92,10 +121,14 @@ kinematics:
         alpha: 0
         d: 90
         theta_offset: 0
+      origin:
+        xyz: [80, 0, 0]         # 0.080m → 80mm
+        rpy: [0, 0, 0]
+      axis: [-1, 0, 0]          # Negative X-axis
       limits:
         min: -350
         max: 350
-        vel_max: 615
+        vel_max: 492
         accel_max: 1230
       mesh:
         visual: "meshes/visual/link6.stl"
@@ -116,4 +149,4 @@ flange:
   offset:
     x: 0
     y: 0
-    z: 90
+    z: 0

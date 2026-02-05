@@ -26,17 +26,22 @@ struct JointMeshInfo {
 };
 
 /**
- * Joint definition including DH parameters, limits, and mesh
+ * Joint definition including DH parameters, URDF origins, limits, and mesh
  */
 struct JointDefinition {
     std::string name;             // A1, A2, etc.
     std::string type = "revolute"; // "revolute" or "prismatic"
 
-    // DH Parameters (Modified DH convention)
+    // DH Parameters (Modified DH convention) - for kinematics
     double dh_a = 0;              // Link length (mm)
     double dh_alpha = 0;          // Link twist (degrees)
     double dh_d = 0;              // Link offset (mm)
     double dh_theta_offset = 0;   // Joint angle offset (degrees)
+
+    // URDF Joint Origin (for visualization) - optional, overrides DH for display
+    std::optional<std::array<double, 3>> origin_xyz;  // Translation [x, y, z] in mm
+    std::optional<std::array<double, 3>> origin_rpy;  // Rotation [roll, pitch, yaw] in radians
+    std::optional<std::array<double, 3>> axis;        // Rotation axis [x, y, z]
 
     // Limits
     double limit_min = -180;      // degrees or mm

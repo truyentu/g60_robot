@@ -232,6 +232,23 @@ public class RobotModel3D
                 D = jointDef.DhD,
                 ThetaOffset = jointDef.DhThetaOffset
             };
+
+            // Set URDF origin data (for visualization)
+            link.OriginXyz = jointDef.OriginXyz;
+            link.OriginRpy = jointDef.OriginRpy;
+            link.Axis = jointDef.Axis;
+
+            // Debug: Log URDF data
+            if (jointDef.OriginXyz != null)
+            {
+                DebugLog($"URDF OriginXyz: [{string.Join(", ", jointDef.OriginXyz)}]");
+                DebugLog($"URDF OriginRpy: [{string.Join(", ", jointDef.OriginRpy ?? new double[3])}]");
+                DebugLog($"URDF Axis: [{string.Join(", ", jointDef.Axis ?? new double[3])}]");
+            }
+            else
+            {
+                DebugLog($"WARNING: No URDF data - will use DH parameters for visualization");
+            }
         }
 
         GeometryModel3D? geometry = null;
@@ -386,11 +403,22 @@ public class RobotModel3D
             if (model.Children.Count > 0 && model.Children[0] is GeometryModel3D geo)
             {
                 DebugLog($"Found GeometryModel3D in Children[0]");
+
+                // CRITICAL FIX: ROS-Industrial STL files use METERS, but our DH params use MILLIMETERS
+                // Apply 1000x scale to convert meters → millimeters
+                const double SCALE_M_TO_MM = 1000.0;
+                geo.Transform = new ScaleTransform3D(SCALE_M_TO_MM, SCALE_M_TO_MM, SCALE_M_TO_MM);
+                DebugLog($"Applied scale transform: {SCALE_M_TO_MM}x (meters → millimeters)");
+
+                // Log bounds for debugging
+                var bounds = geo.Bounds;
+                DebugLog($"Geometry bounds: X=[{bounds.X:F1}, {bounds.X + bounds.SizeX:F1}], Y=[{bounds.Y:F1}, {bounds.Y + bounds.SizeY:F1}], Z=[{bounds.Z:F1}, {bounds.Z + bounds.SizeZ:F1}]");
+
                 DebugLog($"Setting material color...");
                 geo.Material = new DiffuseMaterial(new SolidColorBrush(color));
                 geo.BackMaterial = new DiffuseMaterial(new SolidColorBrush(color));
 
-                DebugLog($"SUCCESS: GeometryModel3D created from STL");
+                DebugLog($"SUCCESS: GeometryModel3D created from STL with scaling");
                 Log.Information("Successfully created GeometryModel3D from STL: {Path}", path);
                 DebugLog($"<<< LoadStlGeometry END (SUCCESS) <<<\n");
                 return geo;
@@ -521,7 +549,8 @@ public class RobotModel3D
     /// </summary>
     public void UpdateForwardKinematics()
     {
-        Matrix3D worldTransform = Matrix3D.Identity;
+        const double SCALE_M_TO_MM = 1000.0;
+        Matrix3D parentTransform = Matrix3D.Identity;
 
         for (int i = 0; i < _links.Count; i++)
         {
@@ -529,34 +558,125 @@ public class RobotModel3D
 
             if (link.JointIndex == 0)
             {
-                // Base is fixed
+                // Base link - just apply scale
+                if (link.Geometry != null)
+                {
+                    var scaleTransform = new ScaleTransform3D(SCALE_M_TO_MM, SCALE_M_TO_MM, SCALE_M_TO_MM);
+                    link.Geometry.Transform = scaleTransform;
+                }
+                parentTransform = Matrix3D.Identity;
                 link.WorldTransform = Matrix3D.Identity;
             }
             else
             {
-                // Calculate DH transform for this joint
-                int jointIdx = link.JointIndex - 1;
-                double theta = jointIdx < _jointAngles.Length ? _jointAngles[jointIdx] : 0;
+                // Joint links - use URDF origin if available, otherwise fall back to DH
+                Matrix3D jointTransform;
 
-                Matrix3D dhTransform = link.CalculateDHTransform(theta);
-                worldTransform = Matrix3D.Multiply(dhTransform, worldTransform);
+                if (link.OriginXyz != null)
+                {
+                    // URDF approach: Use joint origin directly
+                    jointTransform = CreateTransformFromURDF(
+                        link.OriginXyz,
+                        link.OriginRpy ?? new double[] { 0, 0, 0 },
+                        link.Axis ?? new double[] { 0, 0, 1 },
+                        _jointAngles[link.JointIndex - 1]
+                    );
+                }
+                else
+                {
+                    // DH approach: Calculate from DH parameters
+                    jointTransform = link.CalculateDHTransform(_jointAngles[link.JointIndex - 1]);
+                }
+
+                // Combine: Parent → Joint Transform
+                var worldTransform = Matrix3D.Multiply(jointTransform, parentTransform);
                 link.WorldTransform = worldTransform;
-            }
 
-            // Apply transform to geometry
-            if (link.Geometry != null)
-            {
-                link.Geometry.Transform = new MatrixTransform3D(link.WorldTransform);
+                // Apply: Scale → World Transform to geometry
+                if (link.Geometry != null)
+                {
+                    var scaleTransform = new ScaleTransform3D(SCALE_M_TO_MM, SCALE_M_TO_MM, SCALE_M_TO_MM);
+                    var transformGroup = new Transform3DGroup();
+                    transformGroup.Children.Add(scaleTransform);
+                    transformGroup.Children.Add(new MatrixTransform3D(worldTransform));
+                    link.Geometry.Transform = transformGroup;
+                }
+
+                parentTransform = worldTransform;
             }
         }
 
-        // Update TCP position (end of last link)
+        // Update TCP position (from last link)
         if (_links.Count > 0)
         {
             var lastLink = _links[^1];
             TcpPosition = lastLink.WorldTransform.Transform(new Point3D(0, 0, 0));
             TcpOrientation = lastLink.WorldTransform;
         }
+    }
+
+    /// <summary>
+    /// Create transform from URDF joint origin
+    /// </summary>
+    private Matrix3D CreateTransformFromURDF(double[] xyz, double[] rpy, double[] axis, double jointAngle)
+    {
+        // 1. Translation from xyz
+        var translation = Matrix3D.Identity;
+        translation.Translate(new Vector3D(xyz[0], xyz[1], xyz[2]));
+
+        // 2. Fixed rotation from rpy (roll-pitch-yaw)
+        var rotation = CreateRotationFromRPY(rpy[0], rpy[1], rpy[2]);
+
+        // 3. Joint rotation around axis
+        var jointRotation = CreateRotationAroundAxis(axis, jointAngle);
+
+        // Combine: Translation → Fixed Rotation → Joint Rotation
+        return Matrix3D.Multiply(jointRotation, Matrix3D.Multiply(rotation, translation));
+    }
+
+    /// <summary>
+    /// Create rotation matrix from Roll-Pitch-Yaw angles
+    /// </summary>
+    private Matrix3D CreateRotationFromRPY(double roll, double pitch, double yaw)
+    {
+        // Rz(yaw) * Ry(pitch) * Rx(roll)
+        double cr = Math.Cos(roll);
+        double sr = Math.Sin(roll);
+        double cp = Math.Cos(pitch);
+        double sp = Math.Sin(pitch);
+        double cy = Math.Cos(yaw);
+        double sy = Math.Sin(yaw);
+
+        return new Matrix3D(
+            cy * cp,  cy * sp * sr - sy * cr,  cy * sp * cr + sy * sr,  0,
+            sy * cp,  sy * sp * sr + cy * cr,  sy * sp * cr - cy * sr,  0,
+            -sp,      cp * sr,                 cp * cr,                 0,
+            0,        0,                       0,                       1
+        );
+    }
+
+    /// <summary>
+    /// Create rotation matrix around arbitrary axis
+    /// </summary>
+    private Matrix3D CreateRotationAroundAxis(double[] axis, double angle)
+    {
+        // Rodrigues' rotation formula
+        double x = axis[0], y = axis[1], z = axis[2];
+        double len = Math.Sqrt(x * x + y * y + z * z);
+        if (len < 1e-6) return Matrix3D.Identity;
+
+        x /= len; y /= len; z /= len;
+
+        double c = Math.Cos(angle);
+        double s = Math.Sin(angle);
+        double t = 1 - c;
+
+        return new Matrix3D(
+            t * x * x + c,      t * x * y - s * z,  t * x * z + s * y,  0,
+            t * x * y + s * z,  t * y * y + c,      t * y * z - s * x,  0,
+            t * x * z - s * y,  t * y * z + s * x,  t * z * z + c,      0,
+            0,                  0,                  0,                  1
+        );
     }
 
     /// <summary>
@@ -632,6 +752,12 @@ public class JointDefinitionData
     public double DhAlpha { get; set; }
     public double DhD { get; set; }
     public double DhThetaOffset { get; set; }
+
+    // URDF origin data (optional - for visualization)
+    public double[]? OriginXyz { get; set; }
+    public double[]? OriginRpy { get; set; }
+    public double[]? Axis { get; set; }
+
     public double LimitMin { get; set; }
     public double LimitMax { get; set; }
     public double VelocityMax { get; set; }

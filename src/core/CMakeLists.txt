@@ -44,6 +44,7 @@ find_package(Boost REQUIRED COMPONENTS system)
 set(CORE_SOURCES
     src/main.cpp
     src/ipc/IpcServer.cpp
+    src/ipc/RobotPackagePayloads.cpp
     src/config/ConfigManager.cpp
     src/config/RobotCatalog.cpp
     src/config/RobotInstance.cpp

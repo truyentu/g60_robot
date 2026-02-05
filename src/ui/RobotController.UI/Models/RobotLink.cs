@@ -61,6 +61,16 @@ public class RobotLink
     /// <summary>Path to STL file</summary>
     public string? StlPath { get; set; }
 
+    // URDF visualization data (optional - overrides DH for display)
+    /// <summary>URDF joint origin translation [x, y, z] in mm</summary>
+    public double[]? OriginXyz { get; set; }
+
+    /// <summary>URDF joint origin rotation [roll, pitch, yaw] in radians</summary>
+    public double[]? OriginRpy { get; set; }
+
+    /// <summary>URDF joint rotation axis [x, y, z]</summary>
+    public double[]? Axis { get; set; }
+
     /// <summary>
     /// Calculate DH transform matrix for given joint angle
     /// </summary>

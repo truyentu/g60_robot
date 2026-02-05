@@ -164,11 +164,26 @@ public partial class RobotPackageBrowserViewModel : ObservableObject
                         DhAlpha = j.DhAlpha,
                         DhD = j.DhD,
                         DhThetaOffset = j.DhThetaOffset,
+                        // URDF origin data for visualization
+                        OriginXyz = j.OriginXyz,
+                        OriginRpy = j.OriginRpy,
+                        Axis = j.Axis,
                         LimitMin = j.LimitMin,
                         LimitMax = j.LimitMax,
                         VelocityMax = j.VelocityMax,
                         AccelerationMax = j.AccelerationMax
                     };
+
+                    // Debug: Log URDF data mapping
+                    if (j.OriginXyz != null)
+                    {
+                        Log.Debug("Joint {Name} has URDF origin_xyz: [{X}, {Y}, {Z}]",
+                            j.Name, j.OriginXyz[0], j.OriginXyz[1], j.OriginXyz[2]);
+                    }
+                    else
+                    {
+                        Log.Warning("Joint {Name} missing URDF origin_xyz in payload", j.Name);
+                    }
 
                     if (j.Mesh != null)
                     {

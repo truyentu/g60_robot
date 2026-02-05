@@ -216,6 +216,51 @@ bool RobotPackageLoader::parseRobotYaml(const std::filesystem::path& yamlPath,
                         joint.dh_theta_offset = dh["theta_offset"].as<double>(0);
                     }
 
+                    // URDF Joint Origin (optional - for visualization)
+                    if (jointNode["origin"]) {
+                        auto origin = jointNode["origin"];
+
+                        if (origin["xyz"]) {
+                            auto xyz = origin["xyz"];
+                            if (xyz.IsSequence() && xyz.size() >= 3) {
+                                joint.origin_xyz = std::array<double, 3>{
+                                    xyz[0].as<double>(0),
+                                    xyz[1].as<double>(0),
+                                    xyz[2].as<double>(0)
+                                };
+                                LOG_DEBUG("Joint {} URDF origin_xyz: [{}, {}, {}]",
+                                    joint.name, xyz[0].as<double>(0), xyz[1].as<double>(0), xyz[2].as<double>(0));
+                            }
+                        }
+
+                        if (origin["rpy"]) {
+                            auto rpy = origin["rpy"];
+                            if (rpy.IsSequence() && rpy.size() >= 3) {
+                                joint.origin_rpy = std::array<double, 3>{
+                                    rpy[0].as<double>(0),
+                                    rpy[1].as<double>(0),
+                                    rpy[2].as<double>(0)
+                                };
+                                LOG_DEBUG("Joint {} URDF origin_rpy: [{}, {}, {}]",
+                                    joint.name, rpy[0].as<double>(0), rpy[1].as<double>(0), rpy[2].as<double>(0));
+                            }
+                        }
+                    } else {
+                        LOG_WARN("Joint {} has NO origin field in YAML", joint.name);
+                    }
+
+                    // URDF Axis (optional - for visualization)
+                    if (jointNode["axis"]) {
+                        auto axis = jointNode["axis"];
+                        if (axis.IsSequence() && axis.size() >= 3) {
+                            joint.axis = std::array<double, 3>{
+                                axis[0].as<double>(0),
+                                axis[1].as<double>(0),
+                                axis[2].as<double>(1)  // Default Z-axis
+                            };
+                        }
+                    }
+
                     // Limits
                     if (jointNode["limits"]) {
                         auto limits = jointNode["limits"];
