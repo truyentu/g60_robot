@@ -97,6 +97,10 @@ public static class MessageTypes
     public const string SET_POINT = "SET_POINT";
     public const string GET_POINTS = "GET_POINTS";
 
+    // URDF Import (Auto robot package creation)
+    public const string PARSE_URDF = "PARSE_URDF";
+    public const string GENERATE_ROBOT_YAML = "GENERATE_ROBOT_YAML";
+
     // Commands
     public const string COMMAND = "COMMAND";
     public const string COMMAND_ACK = "COMMAND_ACK";

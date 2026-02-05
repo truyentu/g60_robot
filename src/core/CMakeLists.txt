@@ -49,6 +49,7 @@ set(CORE_SOURCES
     src/config/RobotCatalog.cpp
     src/config/RobotInstance.cpp
     src/config/RobotPackageLoader.cpp
+    src/config/UrdfParser.cpp
     src/robot/RobotModel.cpp
     src/logging/Logger.cpp
     src/state/StateMachine.cpp

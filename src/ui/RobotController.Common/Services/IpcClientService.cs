@@ -827,6 +827,57 @@ public class IpcClientService : IIpcClientService
         return null;
     }
 
+    // ========================================================================
+    // URDF Import Operations (Auto robot package creation)
+    // ========================================================================
+
+    public async Task<ParseUrdfResponse?> ParseUrdfAsync(string urdfContent, bool isFilePath = false, CancellationToken cancellationToken = default)
+    {
+        var payload = new ParseUrdfRequest
+        {
+            UrdfContent = urdfContent,
+            IsFilePath = isFilePath
+        };
+
+        var request = IpcMessage.Create(MessageTypes.PARSE_URDF, JsonSerializer.SerializeToElement(payload));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<ParseUrdfResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<GenerateRobotYamlResponse?> GenerateRobotYamlAsync(
+        string urdfContent,
+        bool isFilePath,
+        string robotName,
+        string manufacturer = "Unknown",
+        string outputPath = "",
+        CancellationToken cancellationToken = default)
+    {
+        var payload = new GenerateRobotYamlRequest
+        {
+            UrdfContent = urdfContent,
+            IsFilePath = isFilePath,
+            RobotName = robotName,
+            Manufacturer = manufacturer,
+            OutputPath = outputPath
+        };
+
+        var request = IpcMessage.Create(MessageTypes.GENERATE_ROBOT_YAML, JsonSerializer.SerializeToElement(payload));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<GenerateRobotYamlResponse>();
+        }
+
+        return null;
+    }
+
     private Task<IpcMessage?> SendRequestAsync(IpcMessage request, CancellationToken cancellationToken)
     {
         if (!_isConnected || _requestSocket == null)

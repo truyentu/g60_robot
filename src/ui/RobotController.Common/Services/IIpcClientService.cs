@@ -129,4 +129,9 @@ public interface IIpcClientService : IDisposable
     Task<bool> SetPointAsync(string name, double[] values, CancellationToken cancellationToken = default);
 
     Task<GetPointsResponse?> GetPointsAsync(CancellationToken cancellationToken = default);
+
+    // URDF Import operations (Auto robot package creation)
+    Task<ParseUrdfResponse?> ParseUrdfAsync(string urdfContent, bool isFilePath = false, CancellationToken cancellationToken = default);
+
+    Task<GenerateRobotYamlResponse?> GenerateRobotYamlAsync(string urdfContent, bool isFilePath, string robotName, string manufacturer = "Unknown", string outputPath = "", CancellationToken cancellationToken = default);
 }

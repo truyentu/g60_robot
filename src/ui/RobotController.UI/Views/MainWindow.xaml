@@ -136,6 +136,7 @@
                         <ListBoxItem Content="Configuration"/>
                         <ListBoxItem Content="Diagnostics"/>
                         <ListBoxItem Content="Robot Catalog"/>
+                        <ListBoxItem Content="URDF Import"/>
                     </ListBox>
                 </Grid>
             </Border>
@@ -299,6 +300,20 @@
                                 </Style>
                             </pages:RobotPackageBrowser.Style>
                         </pages:RobotPackageBrowser>
+
+                        <!-- URDF Import View (Index 6) -->
+                        <pages:UrdfImportPage DataContext="{Binding UrdfImportViewModel}">
+                            <pages:UrdfImportPage.Style>
+                                <Style TargetType="pages:UrdfImportPage">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding DataContext.SelectedNavIndex, RelativeSource={RelativeSource AncestorType=Window}}" Value="6">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </pages:UrdfImportPage.Style>
+                        </pages:UrdfImportPage>
                     </Grid>
                 </Border>
             </Grid>
@@ -326,6 +341,9 @@
                                 <Setter Property="Visibility" Value="Collapsed"/>
                             </DataTrigger>
                             <DataTrigger Binding="{Binding SelectedNavIndex}" Value="5">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding SelectedNavIndex}" Value="6">
                                 <Setter Property="Visibility" Value="Collapsed"/>
                             </DataTrigger>
                         </Style.Triggers>

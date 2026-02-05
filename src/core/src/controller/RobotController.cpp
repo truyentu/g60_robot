@@ -13,9 +13,11 @@
 #include "../ipc/OverridePayloads.hpp"
 #include "../ipc/RobotPackagePayloads.hpp"
 #include "../config/RobotPackageLoader.hpp"
+#include "../config/UrdfParser.hpp"
 #include <chrono>
 #include <algorithm>
 #include <filesystem>
+#include <fstream>
 
 namespace robot_controller {
 
@@ -1339,7 +1341,16 @@ void RobotController::registerIpcHandlers() {
             // TODO: Store in member variable for later use
 
             response["success"] = true;
-            response["package"] = packageToJson(*package);
+            auto packageJson = packageToJson(*package);
+
+            // DEBUG: Check if URDF data is in JSON
+            LOG_DEBUG("Handler: packageJson has {} joints", packageJson["joints"].size());
+            if (!packageJson["joints"].empty()) {
+                bool hasUrdf = packageJson["joints"][0].contains("origin_xyz");
+                LOG_DEBUG("Handler: First joint has origin_xyz: {}", hasUrdf);
+            }
+
+            response["package"] = packageJson;
 
             // Publish package changed event
             nlohmann::json eventPayload = {
@@ -1510,6 +1521,148 @@ void RobotController::registerIpcHandlers() {
                 response["points"] = pointsJson;
             } else {
                 response["points"] = nlohmann::json::object();
+            }
+
+            return response;
+        });
+
+    // ========================================================================
+    // URDF Import Handlers (Auto robot package creation)
+    // ========================================================================
+
+    // PARSE_URDF handler
+    m_ipcServer->registerHandler(MessageType::PARSE_URDF,
+        [this](const Message& request) -> nlohmann::json {
+            nlohmann::json response;
+
+            std::string urdfContent = request.payload.value("urdf_content", "");
+            bool isFilePath = request.payload.value("is_file_path", false);
+
+            LOG_INFO("PARSE_URDF request: is_file_path={}", isFilePath);
+
+            config::UrdfParser parser;
+            config::UrdfParseResult result;
+
+            if (isFilePath) {
+                result = parser.parseFile(urdfContent);
+            } else {
+                result = parser.parseString(urdfContent);
+            }
+
+            if (result.success) {
+                response["success"] = true;
+                response["error"] = "";
+
+                // Convert model to JSON
+                nlohmann::json modelJson;
+                modelJson["name"] = result.model.name;
+                modelJson["base_link"] = result.model.base_link_name;
+                modelJson["joint_order"] = result.model.joint_order;
+
+                nlohmann::json linksJson = nlohmann::json::array();
+                for (const auto& link : result.model.links) {
+                    linksJson.push_back({
+                        {"name", link.name},
+                        {"visual_mesh", link.visual_mesh},
+                        {"collision_mesh", link.collision_mesh}
+                    });
+                }
+                modelJson["links"] = linksJson;
+
+                nlohmann::json jointsJson = nlohmann::json::array();
+                for (const auto& joint : result.model.joints) {
+                    jointsJson.push_back({
+                        {"name", joint.name},
+                        {"type", joint.type},
+                        {"parent_link", joint.parent_link},
+                        {"child_link", joint.child_link},
+                        {"origin_xyz", {
+                            config::UrdfParser::metersToMm(joint.origin_xyz[0]),
+                            config::UrdfParser::metersToMm(joint.origin_xyz[1]),
+                            config::UrdfParser::metersToMm(joint.origin_xyz[2])
+                        }},
+                        {"origin_rpy", {joint.origin_rpy[0], joint.origin_rpy[1], joint.origin_rpy[2]}},
+                        {"axis", {joint.axis[0], joint.axis[1], joint.axis[2]}},
+                        {"limit_lower_deg", config::UrdfParser::radiansToDegrees(joint.limit_lower)},
+                        {"limit_upper_deg", config::UrdfParser::radiansToDegrees(joint.limit_upper)},
+                        {"limit_velocity_deg", config::UrdfParser::radiansToDegrees(joint.limit_velocity)}
+                    });
+                }
+                modelJson["joints"] = jointsJson;
+
+                response["model"] = modelJson;
+                LOG_INFO("URDF parsed successfully: {} links, {} joints",
+                    result.model.links.size(), result.model.joints.size());
+            } else {
+                response["success"] = false;
+                response["error"] = result.error;
+                LOG_ERROR("URDF parse failed: {}", result.error);
+            }
+
+            return response;
+        });
+
+    // GENERATE_ROBOT_YAML handler
+    m_ipcServer->registerHandler(MessageType::GENERATE_ROBOT_YAML,
+        [this](const Message& request) -> nlohmann::json {
+            nlohmann::json response;
+
+            std::string urdfContent = request.payload.value("urdf_content", "");
+            bool isFilePath = request.payload.value("is_file_path", false);
+            std::string robotName = request.payload.value("robot_name", "");
+            std::string manufacturer = request.payload.value("manufacturer", "Unknown");
+            std::string outputPath = request.payload.value("output_path", "");
+
+            LOG_INFO("GENERATE_ROBOT_YAML request: robot_name={}, output_path={}",
+                robotName, outputPath);
+
+            // Parse URDF first
+            config::UrdfParser parser;
+            config::UrdfParseResult result;
+
+            if (isFilePath) {
+                result = parser.parseFile(urdfContent);
+            } else {
+                result = parser.parseString(urdfContent);
+            }
+
+            if (!result.success) {
+                response["success"] = false;
+                response["error"] = "Failed to parse URDF: " + result.error;
+                return response;
+            }
+
+            // Generate YAML
+            std::string yamlContent = parser.generateYaml(result.model, robotName, manufacturer);
+
+            response["success"] = true;
+            response["yaml_content"] = yamlContent;
+
+            // Save to file if path provided
+            if (!outputPath.empty()) {
+                try {
+                    std::filesystem::path outPath(outputPath);
+
+                    // Create directory if needed
+                    auto parentDir = outPath.parent_path();
+                    if (!parentDir.empty() && !std::filesystem::exists(parentDir)) {
+                        std::filesystem::create_directories(parentDir);
+                    }
+
+                    std::ofstream outFile(outPath);
+                    if (outFile.is_open()) {
+                        outFile << yamlContent;
+                        outFile.close();
+                        response["saved_path"] = outputPath;
+                        LOG_INFO("robot.yaml saved to: {}", outputPath);
+                    } else {
+                        response["saved_path"] = "";
+                        LOG_WARN("Could not open file for writing: {}", outputPath);
+                    }
+                } catch (const std::exception& e) {
+                    response["saved_path"] = "";
+                    LOG_ERROR("Failed to save robot.yaml: {}", e.what());
+                }
             }
 
             return response;

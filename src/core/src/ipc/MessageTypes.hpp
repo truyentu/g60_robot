@@ -106,6 +106,10 @@ enum class MessageType {
     SET_POINT,
     GET_POINTS,
 
+    // URDF Import (Auto robot package creation)
+    PARSE_URDF,
+    GENERATE_ROBOT_YAML,
+
     // Commands
     COMMAND,
     COMMAND_ACK,
@@ -190,6 +194,8 @@ inline std::string messageTypeToString(MessageType type) {
         case MessageType::PROGRAM_STATE_CHANGED: return "PROGRAM_STATE_CHANGED";
         case MessageType::SET_POINT:           return "SET_POINT";
         case MessageType::GET_POINTS:          return "GET_POINTS";
+        case MessageType::PARSE_URDF:          return "PARSE_URDF";
+        case MessageType::GENERATE_ROBOT_YAML: return "GENERATE_ROBOT_YAML";
         case MessageType::COMMAND:             return "COMMAND";
         case MessageType::COMMAND_ACK:         return "COMMAND_ACK";
         case MessageType::ERROR:               return "ERROR";
@@ -269,6 +275,8 @@ inline MessageType stringToMessageType(const std::string& str) {
     if (str == "PROGRAM_STATE_CHANGED") return MessageType::PROGRAM_STATE_CHANGED;
     if (str == "SET_POINT")           return MessageType::SET_POINT;
     if (str == "GET_POINTS")          return MessageType::GET_POINTS;
+    if (str == "PARSE_URDF")          return MessageType::PARSE_URDF;
+    if (str == "GENERATE_ROBOT_YAML") return MessageType::GENERATE_ROBOT_YAML;
     if (str == "COMMAND")             return MessageType::COMMAND;
     if (str == "COMMAND_ACK")         return MessageType::COMMAND_ACK;
     if (str == "ERROR")               return MessageType::ERROR;

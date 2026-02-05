@@ -128,6 +128,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private RobotPackageBrowserViewModel? _robotCatalogViewModel;
 
     [ObservableProperty]
+    private UrdfImportViewModel? _urdfImportViewModel;
+
+    [ObservableProperty]
     private HomingViewModel? _homing;
 
     [ObservableProperty]
@@ -171,7 +174,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
         IIpcClientService ipcClient,
         IConfigService configService,
         IViewportService viewportService,
-        RobotPackageBrowserViewModel robotCatalogViewModel)
+        RobotPackageBrowserViewModel robotCatalogViewModel,
+        UrdfImportViewModel urdfImportViewModel)
     {
         _ipcClient = ipcClient;
         _configService = configService;
@@ -198,6 +202,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         ConfigurationViewModel = new ConfigurationViewModel();
         DiagnosticsViewModel = new DiagnosticsViewModel(_ipcClient);
         RobotCatalogViewModel = robotCatalogViewModel;
+        UrdfImportViewModel = urdfImportViewModel;
         Homing = new HomingViewModel(_ipcClient);
         Tool = new ToolViewModel(_ipcClient);
         Mode = new ModeViewModel(_ipcClient);
