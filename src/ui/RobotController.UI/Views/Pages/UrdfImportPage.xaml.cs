@@ -1,16 +1,15 @@
 using System.Windows.Controls;
-using RobotController.UI.ViewModels.Pages;
 
 namespace RobotController.UI.Views.Pages;
 
 /// <summary>
 /// URDF Import Page - allows importing robot packages from URDF/xacro files
+/// DataContext is set via XAML binding to MainViewModel.UrdfImportViewModel
 /// </summary>
 public partial class UrdfImportPage : UserControl
 {
-    public UrdfImportPage(UrdfImportViewModel viewModel)
+    public UrdfImportPage()
     {
         InitializeComponent();
-        DataContext = viewModel;
     }
 }
