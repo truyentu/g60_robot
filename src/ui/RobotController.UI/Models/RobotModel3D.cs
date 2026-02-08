@@ -13,6 +13,7 @@ public class RobotModel3D
 {
     private readonly List<RobotLink> _links = new();
     private readonly double[] _jointAngles = new double[6];
+    private double[] _flangeOffset = new double[3]; // [x, y, z] in mm
     private Model3DGroup? _modelGroup;
     private static readonly string _debugLogPath = Path.Combine(
         AppDomain.CurrentDomain.BaseDirectory, "stl_debug.log");
@@ -114,6 +115,15 @@ public class RobotModel3D
             Name = package.Name;
             _links.Clear();
             _modelGroup = new Model3DGroup();
+
+            // Store flange offset for TCP calculation (values in mm)
+            if (package.FlangeOffset != null && package.FlangeOffset.Length >= 3)
+                _flangeOffset = package.FlangeOffset;
+            else
+                _flangeOffset = new double[3];
+
+            Log.Information("FlangeOffset stored: [{X}, {Y}, {Z}] mm",
+                _flangeOffset[0], _flangeOffset[1], _flangeOffset[2]);
 
             Log.Information("Initializing robot model from package: {Name}", Name);
 
@@ -606,12 +616,22 @@ public class RobotModel3D
             }
         }
 
-        // Update TCP position (from last link)
+        // Update TCP position (from last link + flange offset)
         if (_links.Count > 0)
         {
             var lastLink = _links[^1];
-            TcpPosition = lastLink.WorldTransform.Transform(new Point3D(0, 0, 0));
+            // Apply flange offset in the local frame of the last link
+            // FlangeOffset is in mm (same unit as URDF origin_xyz in YAML)
+            var flangeLocal = new Point3D(
+                _flangeOffset[0],
+                _flangeOffset[1],
+                _flangeOffset[2]);
+            TcpPosition = lastLink.WorldTransform.Transform(flangeLocal);
             TcpOrientation = lastLink.WorldTransform;
+
+            Log.Debug("TCP position: ({X:F1}, {Y:F1}, {Z:F1}), FlangeOffset: [{FX:F1}, {FY:F1}, {FZ:F1}]",
+                TcpPosition.X, TcpPosition.Y, TcpPosition.Z,
+                _flangeOffset[0], _flangeOffset[1], _flangeOffset[2]);
         }
     }
 

@@ -111,6 +111,8 @@ public interface IIpcClientService : IDisposable
 
     Task<LoadRobotPackageResponse?> LoadRobotPackageAsync(string packageId, CancellationToken cancellationToken = default);
 
+    Task<ReloadPackagesResponse?> ReloadPackagesAsync(CancellationToken cancellationToken = default);
+
     // Program Execution operations (Virtual Simulation)
     Task<LoadProgramResponse?> LoadProgramAsync(string source, CancellationToken cancellationToken = default);
 
@@ -134,4 +136,22 @@ public interface IIpcClientService : IDisposable
     Task<ParseUrdfResponse?> ParseUrdfAsync(string urdfContent, bool isFilePath = false, CancellationToken cancellationToken = default);
 
     Task<GenerateRobotYamlResponse?> GenerateRobotYamlAsync(string urdfContent, bool isFilePath, string robotName, string manufacturer = "Unknown", string outputPath = "", CancellationToken cancellationToken = default);
+
+    // Jog Control operations
+    Task<JogStartResponse?> StartJogModeAsync(bool enableDeadman = true, CancellationToken cancellationToken = default);
+
+    Task<JogStartResponse?> StopJogModeAsync(CancellationToken cancellationToken = default);
+
+    Task<JogMoveResponse?> JogMoveAsync(JogMode mode, int axis, int direction, double speedPercent, JogFrame frame = JogFrame.World, CancellationToken cancellationToken = default);
+
+    Task<JogMoveResponse?> JogStepAsync(JogMode mode, int axis, int direction, double increment, double speedPercent, JogFrame frame = JogFrame.World, CancellationToken cancellationToken = default);
+
+    // Firmware Control operations
+    Task<FirmwareConnectResponse?> ConnectFirmwareAsync(string port = "", int baudRate = 115200, CancellationToken cancellationToken = default);
+
+    Task<FirmwareConnectResponse?> DisconnectFirmwareAsync(CancellationToken cancellationToken = default);
+
+    Task<FirmwareModeResponse?> GetFirmwareModeAsync(CancellationToken cancellationToken = default);
+
+    Task<ScanPortsResponse?> ScanPortsAsync(CancellationToken cancellationToken = default);
 }

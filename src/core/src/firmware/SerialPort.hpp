@@ -19,6 +19,10 @@
 
 #ifdef _WIN32
 #include <windows.h>
+// Prevent Windows API macros from conflicting with C++ enum values
+#ifdef IDLE
+#undef IDLE
+#endif
 #endif
 
 namespace robot_controller {

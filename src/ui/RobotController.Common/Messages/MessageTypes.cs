@@ -84,6 +84,7 @@ public static class MessageTypes
     public const string LOAD_ROBOT_PACKAGE = "LOAD_ROBOT_PACKAGE";
     public const string GET_ACTIVE_PACKAGE = "GET_ACTIVE_PACKAGE";
     public const string ROBOT_PACKAGE_CHANGED = "ROBOT_PACKAGE_CHANGED";
+    public const string RELOAD_PACKAGES = "RELOAD_PACKAGES";
 
     // Program Execution (Virtual Simulation)
     public const string LOAD_PROGRAM = "LOAD_PROGRAM";
@@ -100,6 +101,19 @@ public static class MessageTypes
     // URDF Import (Auto robot package creation)
     public const string PARSE_URDF = "PARSE_URDF";
     public const string GENERATE_ROBOT_YAML = "GENERATE_ROBOT_YAML";
+
+    // Jog Control
+    public const string JOG_START = "JOG_START";
+    public const string JOG_STOP = "JOG_STOP";
+    public const string JOG_MOVE = "JOG_MOVE";
+    public const string JOG_STEP = "JOG_STEP";
+
+    // Firmware Control
+    public const string FIRMWARE_CONNECT = "FIRMWARE_CONNECT";
+    public const string FIRMWARE_DISCONNECT = "FIRMWARE_DISCONNECT";
+    public const string FIRMWARE_GET_MODE = "FIRMWARE_GET_MODE";
+    public const string FIRMWARE_SET_MODE = "FIRMWARE_SET_MODE";
+    public const string FIRMWARE_SCAN_PORTS = "FIRMWARE_SCAN_PORTS";
 
     // Commands
     public const string COMMAND = "COMMAND";

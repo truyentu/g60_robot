@@ -37,6 +37,8 @@ find_package(yaml-cpp CONFIG REQUIRED)
 find_package(GTest CONFIG REQUIRED)
 find_package(Eigen3 CONFIG REQUIRED)
 find_package(Boost REQUIRED COMPONENTS system)
+find_package(ruckig CONFIG REQUIRED)
+find_package(orocos_kdl CONFIG REQUIRED)
 
 # ============================================================================
 # Source Files
@@ -45,6 +47,11 @@ set(CORE_SOURCES
     src/main.cpp
     src/ipc/IpcServer.cpp
     src/ipc/RobotPackagePayloads.cpp
+    src/ipc/JogPayloads.cpp
+    src/firmware/FirmwareSimulator.cpp
+    src/firmware/RealFirmwareDriver.cpp
+    src/jog/JogController.cpp
+    src/jog/RuckigSmoother.cpp
     src/config/ConfigManager.cpp
     src/config/RobotCatalog.cpp
     src/config/RobotInstance.cpp
@@ -63,6 +70,9 @@ set(CORE_SOURCES
     src/interpreter/Lexer.cpp
     src/interpreter/Parser.cpp
     src/interpreter/Executor.cpp
+    src/kinematics/UrdfForwardKinematics.cpp
+    src/kinematics/KDLKinematics.cpp
+    src/kinematics/AnalyticalKinematics.cpp
 )
 
 set(CORE_HEADERS
@@ -89,6 +99,9 @@ set(CORE_HEADERS
     src/kinematics/ForwardKinematics.hpp
     src/kinematics/InverseKinematics.hpp
     src/kinematics/KinematicsService.hpp
+    src/kinematics/UrdfForwardKinematics.hpp
+    src/kinematics/KDLKinematics.hpp
+    src/kinematics/AnalyticalKinematics.hpp
     src/trajectory/TrajectoryTypes.hpp
     src/trajectory/VelocityProfile.hpp
     src/trajectory/Interpolators.hpp
@@ -133,6 +146,12 @@ set(CORE_HEADERS
     src/frame/BaseCalibration.hpp
     src/ipc/BasePayloads.hpp
     src/ipc/RobotPackagePayloads.hpp
+    src/ipc/JogPayloads.hpp
+    src/firmware/FirmwareSimulator.hpp
+    src/firmware/IFirmwareDriver.hpp
+    src/firmware/RealFirmwareDriver.hpp
+    src/jog/JogController.hpp
+    src/jog/RuckigSmoother.hpp
     src/ipc/OverridePayloads.hpp
     src/interpreter/Token.hpp
     src/interpreter/Lexer.hpp
@@ -159,6 +178,9 @@ target_link_libraries(robot_core
         cppzmq
         yaml-cpp::yaml-cpp
         Eigen3::Eigen
+        Boost::system
+        ruckig::ruckig
+        orocos-kdl
 )
 
 # Windows-specific settings
@@ -211,6 +233,9 @@ gtest_discover_tests(robot_core_tests)
 # ============================================================================
 add_executable(test_kinematics
     tests/test_kinematics.cpp
+    src/kinematics/UrdfForwardKinematics.cpp
+    src/kinematics/KDLKinematics.cpp
+    src/logging/Logger.cpp
 )
 
 target_include_directories(test_kinematics
@@ -224,21 +249,151 @@ target_link_libraries(test_kinematics
         GTest::gtest
         GTest::gtest_main
         Eigen3::Eigen
+        orocos-kdl
+        spdlog::spdlog
 )
 
 if(WIN32)
     target_compile_definitions(test_kinematics PRIVATE
         NOMINMAX
     )
+    target_compile_options(test_kinematics PRIVATE /utf-8)
 endif()
 
 gtest_discover_tests(test_kinematics)
+
+# ============================================================================
+# URDF FK Tests
+# ============================================================================
+add_executable(test_urdf_fk
+    tests/test_urdf_fk.cpp
+    src/kinematics/UrdfForwardKinematics.cpp
+    src/logging/Logger.cpp
+)
+
+target_include_directories(test_urdf_fk
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_urdf_fk
+    PRIVATE
+        GTest::gtest
+        GTest::gtest_main
+        Eigen3::Eigen
+        spdlog::spdlog
+)
+
+if(WIN32)
+    target_compile_definitions(test_urdf_fk PRIVATE
+        NOMINMAX
+    )
+endif()
+
+gtest_discover_tests(test_urdf_fk)
+
+# ============================================================================
+# KDL Kinematics Tests (FK cross-validation + IK round-trip)
+# ============================================================================
+add_executable(test_kdl_kinematics
+    tests/test_kdl_kinematics.cpp
+    src/kinematics/UrdfForwardKinematics.cpp
+    src/kinematics/KDLKinematics.cpp
+    src/logging/Logger.cpp
+)
+
+target_include_directories(test_kdl_kinematics
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_kdl_kinematics
+    PRIVATE
+        GTest::gtest
+        GTest::gtest_main
+        Eigen3::Eigen
+        spdlog::spdlog
+        orocos-kdl
+)
+
+if(WIN32)
+    target_compile_definitions(test_kdl_kinematics PRIVATE
+        NOMINMAX
+    )
+endif()
+
+gtest_discover_tests(test_kdl_kinematics)
+
+# ============================================================================
+# Analytical Kinematics Tests (DH FK/IK round-trip)
+# ============================================================================
+add_executable(test_analytical_kinematics
+    tests/test_analytical_kinematics.cpp
+    src/kinematics/AnalyticalKinematics.cpp
+)
+
+target_include_directories(test_analytical_kinematics
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_analytical_kinematics
+    PRIVATE
+        GTest::gtest
+        GTest::gtest_main
+        Eigen3::Eigen
+)
+
+if(WIN32)
+    target_compile_definitions(test_analytical_kinematics PRIVATE
+        NOMINMAX
+    )
+    target_compile_options(test_analytical_kinematics PRIVATE /utf-8)
+endif()
+
+gtest_discover_tests(test_analytical_kinematics)
+
+# ============================================================================
+# MA2010 Critical Geometry Tests (h3/h4 sign & theta5 negation verification)
+# ============================================================================
+add_executable(test_ma2010_critical_geometry
+    tests/test_ma2010_critical_geometry.cpp
+    src/kinematics/AnalyticalKinematics.cpp
+)
+
+target_include_directories(test_ma2010_critical_geometry
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_ma2010_critical_geometry
+    PRIVATE
+        GTest::gtest
+        GTest::gtest_main
+        Eigen3::Eigen
+)
+
+if(WIN32)
+    target_compile_definitions(test_ma2010_critical_geometry PRIVATE
+        NOMINMAX
+    )
+    target_compile_options(test_ma2010_critical_geometry PRIVATE /utf-8)
+endif()
+
+gtest_discover_tests(test_ma2010_critical_geometry)
 
 # ============================================================================
 # Trajectory Tests
 # ============================================================================
 add_executable(test_trajectory
     tests/test_trajectory.cpp
+    src/kinematics/UrdfForwardKinematics.cpp
+    src/kinematics/KDLKinematics.cpp
+    src/logging/Logger.cpp
 )
 
 target_include_directories(test_trajectory
@@ -252,12 +407,15 @@ target_link_libraries(test_trajectory
         GTest::gtest
         GTest::gtest_main
         Eigen3::Eigen
+        orocos-kdl
+        spdlog::spdlog
 )
 
 if(WIN32)
     target_compile_definitions(test_trajectory PRIVATE
         NOMINMAX
     )
+    target_compile_options(test_trajectory PRIVATE /utf-8)
 endif()
 
 gtest_discover_tests(test_trajectory)
@@ -530,6 +688,200 @@ if(WIN32)
 endif()
 
 gtest_discover_tests(test_feature_registry)
+
+# ============================================================================
+# IK Debug Test (standalone, no GTest)
+# ============================================================================
+add_executable(test_ik_debug
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../test_ik_debug.cpp
+)
+
+target_include_directories(test_ik_debug
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../..
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_ik_debug
+    PRIVATE
+        Eigen3::Eigen
+)
+
+if(WIN32)
+    target_compile_definitions(test_ik_debug PRIVATE
+        NOMINMAX
+    )
+endif()
+
+# IK Wrist debug
+add_executable(test_ik_wrist
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../test_ik_wrist.cpp
+)
+
+target_include_directories(test_ik_wrist
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../..
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_ik_wrist
+    PRIVATE
+        Eigen3::Eigen
+)
+
+if(WIN32)
+    target_compile_definitions(test_ik_wrist PRIVATE
+        NOMINMAX
+    )
+endif()
+
+# IK Debug 3
+add_executable(test_ik_debug3
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../test_ik_debug3.cpp
+)
+
+target_include_directories(test_ik_debug3
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../..
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_ik_debug3
+    PRIVATE
+        Eigen3::Eigen
+)
+
+if(WIN32)
+    target_compile_definitions(test_ik_debug3 PRIVATE
+        NOMINMAX
+    )
+endif()
+
+# IK Debug 2
+add_executable(test_ik_debug2
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../test_ik_debug2.cpp
+)
+
+target_include_directories(test_ik_debug2
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../..
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_ik_debug2
+    PRIVATE
+        Eigen3::Eigen
+)
+
+if(WIN32)
+    target_compile_definitions(test_ik_debug2 PRIVATE
+        NOMINMAX
+    )
+endif()
+
+# Quick IK test
+add_executable(test_ik_quick
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../test_ik_quick.cpp
+)
+
+target_include_directories(test_ik_quick
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../..
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_ik_quick
+    PRIVATE
+        Eigen3::Eigen
+)
+
+if(WIN32)
+    target_compile_definitions(test_ik_quick PRIVATE
+        NOMINMAX
+    )
+endif()
+
+add_executable(test_ik_yjog
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../test_ik_yjog.cpp
+)
+
+target_include_directories(test_ik_yjog
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../..
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_ik_yjog
+    PRIVATE
+        Eigen3::Eigen
+)
+
+if(WIN32)
+    target_compile_definitions(test_ik_yjog PRIVATE
+        NOMINMAX
+    )
+endif()
+
+add_executable(test_r36_verify
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../test_r36_verify.cpp
+)
+
+target_include_directories(test_r36_verify
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../..
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_r36_verify
+    PRIVATE
+        Eigen3::Eigen
+)
+
+if(WIN32)
+    target_compile_definitions(test_r36_verify PRIVATE
+        NOMINMAX
+    )
+endif()
+
+add_executable(test_ik_reject
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../test_ik_reject.cpp
+)
+
+target_include_directories(test_ik_reject
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../..
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_ik_reject
+    PRIVATE
+        Eigen3::Eigen
+)
+
+if(WIN32)
+    target_compile_definitions(test_ik_reject PRIVATE
+        NOMINMAX
+    )
+endif()
+
+# ============================================================================
+# Post-Build: Copy Config Files
+# ============================================================================
+# Copy config folder to build output directory after each build
+add_custom_command(TARGET robot_core POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/../config"
+        "$<TARGET_FILE_DIR:robot_core>/../config"
+    COMMENT "Copying config files to build output..."
+)
 
 # ============================================================================
 # Installation

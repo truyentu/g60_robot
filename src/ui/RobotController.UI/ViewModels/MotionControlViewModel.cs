@@ -4,6 +4,7 @@ using RobotController.Common.Messages;
 using RobotController.Common.Services;
 using System;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
@@ -65,6 +66,9 @@ public partial class MotionControlViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _jogJointMode = true;  // true=Joint, false=Cartesian
+
+    [ObservableProperty]
+    private bool _isJogEnabled;  // Jog mode enabled via IPC
 
     [ObservableProperty]
     private int _selectedJointIndex = 0;
@@ -137,47 +141,78 @@ public partial class MotionControlViewModel : ObservableObject
     // Commands - Jogging
     // ========================================================================
 
+    private static readonly string _jogDebugLogPath = Path.Combine(
+        AppDomain.CurrentDomain.BaseDirectory, "jog_debug.log");
+
+    private static void JogLog(string message)
+    {
+        try
+        {
+            var line = $"[{DateTime.Now:HH:mm:ss.fff}] [UI] {message}";
+            File.AppendAllText(_jogDebugLogPath, line + Environment.NewLine);
+            System.Diagnostics.Debug.WriteLine(line);
+        }
+        catch { }
+    }
+
     [RelayCommand]
     private async Task JogStartAsync(string direction)
     {
-        if (!IsConnected || !IsHomed) return;
+        JogLog($"JogStartAsync called: direction={direction}, IsConnected={IsConnected}, IsJogEnabled={IsJogEnabled}, JogContinuous={JogContinuous}, JogJointMode={JogJointMode}, SelectedJointIndex={SelectedJointIndex}, SelectedCartesianAxis={SelectedCartesianAxis}, JogIncrement={JogIncrement}, JogSpeed={JogSpeed}, IsHomed={IsHomed}, CoordinateSystem={CoordinateSystem}");
+
+        if (!IsConnected)
+        {
+            JogLog("ABORT: Not connected");
+            return;
+        }
+
+        // Auto-enable jog mode if not already enabled
+        if (!IsJogEnabled)
+        {
+            JogLog("Calling StartJogModeAsync...");
+            var enableResult = await _ipcClient.StartJogModeAsync();
+            JogLog($"StartJogModeAsync result: Success={enableResult?.Success}, Error={enableResult?.Error}");
+            if (enableResult?.Success != true)
+            {
+                JogLog($"ABORT: Failed to enable jog: {enableResult?.Error}");
+                return;
+            }
+            IsJogEnabled = true;
+        }
 
         int dir = direction == "+" ? 1 : -1;
-        double speed = JogSpeed / 100.0;
+        var jogFrame = CoordinateSystemToJogFrame(CoordinateSystem);
 
-        if (JogJointMode)
+        if (JogContinuous)
         {
-            // Joint jog
-            int axis = SelectedJointIndex;
-            double jointSpeed = speed * 180.0;  // Max 180 deg/s
+            // Continuous jog via dedicated IPC
+            var mode = JogJointMode ? JogMode.Joint : JogMode.Cartesian;
+            int axis = JogJointMode ? SelectedJointIndex : SelectedCartesianAxis;
 
-            var cmd = new JogCommand
+            JogLog($"Calling JogMoveAsync: mode={mode}, axis={axis}, dir={dir}, speed={JogSpeed}, frame={jogFrame}");
+            var response = await _ipcClient.JogMoveAsync(mode, axis, dir, JogSpeed, jogFrame);
+            JogLog($"JogMoveAsync result: Success={response?.Success}, Error={response?.Error}");
+            if (response?.Success != true)
             {
-                Axis = axis,
-                Direction = dir,
-                Speed = jointSpeed,
-                Continuous = JogContinuous
-            };
-            await _ipcClient.SendCommandAsync("jog_start", cmd);
+                JogLog($"JogMove FAILED: {response?.Error}");
+            }
         }
         else
         {
-            // Cartesian jog
-            int axis = SelectedCartesianAxis;
-            bool isLinear = axis < 3;  // X, Y, Z are linear
-            double cartesianSpeed = isLinear ? speed * 500.0 : speed * 90.0;  // Max 500 mm/s or 90 deg/s
+            // Incremental jog
+            var mode = JogJointMode ? JogMode.Joint : JogMode.Cartesian;
+            int axis = JogJointMode ? SelectedJointIndex : SelectedCartesianAxis;
 
-            var cmd = new CartesianJogCommand
+            JogLog($"Calling JogStepAsync: mode={mode}, axis={axis}, dir={dir}, increment={JogIncrement}, speed={JogSpeed}, frame={jogFrame}");
+            var response = await _ipcClient.JogStepAsync(mode, axis, dir, JogIncrement, JogSpeed, jogFrame);
+            JogLog($"JogStepAsync result: Success={response?.Success}, Error={response?.Error}");
+            if (response?.Success != true)
             {
-                Axis = axis,
-                Direction = dir,
-                Speed = cartesianSpeed,
-                Continuous = JogContinuous,
-                CoordinateSystem = CoordinateSystem
-            };
-            await _ipcClient.SendCommandAsync("cartesian_jog_start", cmd);
+                JogLog($"JogStep FAILED: {response?.Error}");
+            }
         }
         IsMoving = true;
+        JogLog("JogStartAsync completed, IsMoving=true");
     }
 
     [RelayCommand]
@@ -185,54 +220,33 @@ public partial class MotionControlViewModel : ObservableObject
     {
         if (!IsConnected) return;
 
-        await _ipcClient.SendCommandAsync("jog_stop", new { });
+        // Stop current jog motion (jog mode stays enabled on Core side)
+        await _ipcClient.StopJogModeAsync();
         IsMoving = false;
     }
 
     [RelayCommand]
     private async Task JogIncrementAsync(string direction)
     {
-        if (!IsConnected || !IsHomed) return;
+        if (!IsConnected) return;
+
+        // Auto-enable jog mode if not already enabled
+        if (!IsJogEnabled)
+        {
+            var enableResult = await _ipcClient.StartJogModeAsync();
+            if (enableResult?.Success != true) return;
+            IsJogEnabled = true;
+        }
 
         int dir = direction == "+" ? 1 : -1;
-        double distance = JogIncrement * dir;
+        var mode = JogJointMode ? JogMode.Joint : JogMode.Cartesian;
+        int axis = JogJointMode ? SelectedJointIndex : SelectedCartesianAxis;
+        var jogFrame = CoordinateSystemToJogFrame(CoordinateSystem);
 
-        if (JogJointMode)
+        var response = await _ipcClient.JogStepAsync(mode, axis, dir, JogIncrement, JogSpeed, jogFrame);
+        if (response?.Success != true)
         {
-            // Joint increment
-            int axis = SelectedJointIndex;
-            double currentPos = Joints[axis].Position;
-            double targetPos = currentPos + distance;
-
-            // Clamp to limits
-            targetPos = Math.Clamp(targetPos, Joints[axis].MinLimit, Joints[axis].MaxLimit);
-
-            var cmd = new JogIncrementCommand
-            {
-                Axis = axis,
-                TargetPosition = targetPos,
-                Speed = JogSpeed / 100.0
-            };
-            await _ipcClient.SendCommandAsync("jog_increment", cmd);
-        }
-        else
-        {
-            // Cartesian increment
-            int axis = SelectedCartesianAxis;
-            double[] currentTcp = new double[] {
-                TcpPosition.X, TcpPosition.Y, TcpPosition.Z,
-                TcpPosition.Roll, TcpPosition.Pitch, TcpPosition.Yaw
-            };
-            double targetValue = currentTcp[axis] + distance;
-
-            var cmd = new CartesianJogIncrementCommand
-            {
-                Axis = axis,
-                TargetValue = targetValue,
-                Speed = JogSpeed / 100.0,
-                CoordinateSystem = CoordinateSystem
-            };
-            await _ipcClient.SendCommandAsync("cartesian_jog_increment", cmd);
+            System.Diagnostics.Debug.WriteLine($"Jog increment failed: {response?.Error}");
         }
     }
 
@@ -338,6 +352,18 @@ public partial class MotionControlViewModel : ObservableObject
     // ========================================================================
     // Commands - Coordinate System
     // ========================================================================
+
+    private static JogFrame CoordinateSystemToJogFrame(string coordinateSystem)
+    {
+        return coordinateSystem switch
+        {
+            "Base" => JogFrame.Base,
+            "Tool" => JogFrame.Tool,
+            "User1" => JogFrame.User1,
+            "User2" => JogFrame.User2,
+            _ => JogFrame.World,
+        };
+    }
 
     [RelayCommand]
     private void ToggleJogMode()

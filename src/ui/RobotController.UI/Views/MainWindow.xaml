@@ -550,13 +550,23 @@
             </Grid>
         </Border>
 
-        <!-- E-STOP Button Overlay (always visible) -->
+        <!-- E-STOP Button Overlay (only visible on Manual Jog page) -->
         <Button Grid.Row="2"
                 Width="100" Height="100"
                 HorizontalAlignment="Right" VerticalAlignment="Bottom"
                 Margin="0,0,280,20"
                 Command="{Binding TriggerEStopCommand}"
                 Cursor="Hand">
+            <Button.Style>
+                <Style TargetType="Button">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding SelectedNavIndex}" Value="0">
+                            <Setter Property="Visibility" Value="Visible"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Button.Style>
             <Button.Template>
                 <ControlTemplate TargetType="Button">
                     <Grid>

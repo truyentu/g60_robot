@@ -12,12 +12,18 @@
 #include "../ipc/BasePayloads.hpp"
 #include "../ipc/OverridePayloads.hpp"
 #include "../ipc/RobotPackagePayloads.hpp"
+#include "../ipc/JogPayloads.hpp"
+#include "../kinematics/UrdfForwardKinematics.hpp"
 #include "../config/RobotPackageLoader.hpp"
 #include "../config/UrdfParser.hpp"
+#include "../kinematics/DHParameters.hpp"
+// Include RealFirmwareDriver AFTER all other headers to avoid Windows IDLE macro conflict
+#include "../firmware/RealFirmwareDriver.hpp"
 #include <chrono>
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 
 namespace robot_controller {
 
@@ -29,8 +35,15 @@ RobotController::RobotController()
     : m_stateMachine(std::make_unique<StateMachine>())
     , m_baseFrameManager(std::make_unique<frame::BaseFrameManager>())
     , m_overrideManager(std::make_unique<override::OverrideManager>())
+    , m_simDriver(std::make_shared<firmware::FirmwareSimulator>())
+    , m_realDriver(std::make_shared<firmware::RealFirmwareDriver>())
+    , m_jogController(std::make_unique<jog::JogController>())
 {
-    LOG_DEBUG("RobotController created");
+    // Default to simulation mode
+    m_activeDriver = m_simDriver;
+    m_isSimMode = true;
+    m_jogController->setFirmwareDriver(m_activeDriver);
+    LOG_DEBUG("RobotController created (SIM mode)");
 }
 
 RobotController::~RobotController() {
@@ -172,12 +185,39 @@ bool RobotController::home() {
     if (m_stateMachine->processEvent(StateEvent::HOME_REQUEST)) {
         LOG_INFO("Homing started");
 
-        // TODO: Actual homing implementation in Phase 2
-        // For now, simulate homing complete
+        // Virtual homing: set joints to home_position from active package
         std::thread([this]() {
-            std::this_thread::sleep_for(std::chrono::seconds(2));
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+            // Set firmware simulator to home position
+            if (m_activeDriver) {
+                std::array<double, 6> homePos = {0, 0, 0, 0, 0, 0};
+
+                // Use home_position from active package if available
+                if (m_activePackage && !m_activePackage->home_position.empty()) {
+                    for (size_t i = 0; i < 6 && i < m_activePackage->home_position.size(); i++) {
+                        homePos[i] = m_activePackage->home_position[i];
+                    }
+                    LOG_INFO("Virtual homing to package home_position: [{}, {}, {}, {}, {}, {}]",
+                             homePos[0], homePos[1], homePos[2],
+                             homePos[3], homePos[4], homePos[5]);
+                }
+
+                // Send G-code to move all joints to home position
+                std::ostringstream gcode;
+                gcode << "$J=G90";
+                for (int i = 0; i < 6; i++) {
+                    gcode << " J" << i << ":" << homePos[i];
+                }
+                gcode << " F1000";  // Slow homing speed
+                m_activeDriver->sendCommand(gcode.str());
+
+                // Wait for motion to complete
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+            }
+
             m_stateMachine->processEvent(StateEvent::HOME_COMPLETE);
-            LOG_INFO("Homing complete (simulated)");
+            LOG_INFO("Homing complete (virtual)");
         }).detach();
 
         return true;
@@ -362,6 +402,81 @@ std::vector<double> RobotController::getPoint(const std::string& name) const {
     return {};
 }
 
+bool RobotController::switchToSimMode() {
+    LOG_INFO("Switching to SIM mode...");
+
+    // Stop any active jog
+    if (m_jogController) {
+        m_jogController->stopJog();
+        m_jogController->disable();
+    }
+
+    // Disconnect real driver if connected
+    if (m_realDriver && m_realDriver->isConnected()) {
+        auto realDriver = std::dynamic_pointer_cast<firmware::RealFirmwareDriver>(m_realDriver);
+        if (realDriver) {
+            realDriver->disconnect();
+        }
+    }
+
+    // Switch to simulator
+    m_activeDriver = m_simDriver;
+    m_isSimMode = true;
+
+    // Update jog controller
+    if (m_jogController) {
+        m_jogController->setFirmwareDriver(m_activeDriver);
+    }
+
+    LOG_INFO("Switched to SIM mode");
+    return true;
+}
+
+bool RobotController::switchToRealMode(const std::string& portName) {
+    LOG_INFO("Switching to REAL mode, port={}...", portName.empty() ? "auto" : portName);
+
+    // Stop any active jog
+    if (m_jogController) {
+        m_jogController->stopJog();
+        m_jogController->disable();
+    }
+
+    auto realDriver = std::dynamic_pointer_cast<firmware::RealFirmwareDriver>(m_realDriver);
+    if (!realDriver) {
+        LOG_ERROR("Real firmware driver not available");
+        return false;
+    }
+
+    // Connect to real hardware
+    bool connected = false;
+    if (portName.empty()) {
+        connected = realDriver->autoConnect();
+    } else {
+        connected = realDriver->connect(portName);
+    }
+
+    if (!connected) {
+        LOG_ERROR("Failed to connect to real hardware");
+        return false;
+    }
+
+    // Switch to real driver
+    m_activeDriver = m_realDriver;
+    m_isSimMode = false;
+
+    // Update jog controller
+    if (m_jogController) {
+        m_jogController->setFirmwareDriver(m_activeDriver);
+    }
+
+    LOG_INFO("Switched to REAL mode on {}", realDriver->getPortName());
+    return true;
+}
+
+std::string RobotController::getFirmwareMode() const {
+    return m_isSimMode ? "SIM" : "REAL";
+}
+
 void RobotController::controlLoop() {
     LOG_DEBUG("Control loop started, cycle time: {}ms", m_cycleTimeMs);
 
@@ -387,6 +502,11 @@ void RobotController::controlLoop() {
 
         // TODO: Motion control updates (Phase 2)
 
+        // Update jog controller and firmware simulator
+        if (m_jogController) {
+            m_jogController->update(m_cycleTimeMs / 1000.0);
+        }
+
         // Calculate sleep time to maintain cycle rate
         auto cycleEnd = std::chrono::steady_clock::now();
         auto cycleDuration = std::chrono::duration_cast<std::chrono::milliseconds>(cycleEnd - cycleStart);
@@ -410,11 +530,26 @@ void RobotController::updateStatus() {
     m_status.errorCode = m_stateMachine->lastError();
     m_status.errorMessage = m_stateMachine->lastErrorMessage();
 
-    // TODO: Get actual joint positions from motion controller (Phase 2)
-    // For now, use home position from config
-    const auto& robotConfig = ConfigManager::instance().robotConfig();
-    for (size_t i = 0; i < 6 && i < robotConfig.home_position.size(); i++) {
-        m_status.jointPositions[i] = robotConfig.home_position[i];
+    // Get joint positions from firmware simulator if available
+    if (m_jogController) {
+        auto positions = m_jogController->getJointPositions();
+        for (size_t i = 0; i < 6; i++) {
+            m_status.jointPositions[i] = positions[i];
+        }
+
+        // Compute TCP pose via FK if kinematics available
+        if (m_jogController->hasKinematics()) {
+            auto tcpPose = m_jogController->getTcpPose();
+            for (size_t i = 0; i < 6; i++) {
+                m_status.tcpPose[i] = tcpPose[i];
+            }
+        }
+    } else {
+        // Fallback: use home position from config
+        const auto& robotConfig = ConfigManager::instance().robotConfig();
+        for (size_t i = 0; i < 6 && i < robotConfig.home_position.size(); i++) {
+            m_status.jointPositions[i] = robotConfig.home_position[i];
+        }
     }
 
     // TODO: Calculate tcpInBase using KinematicsService + BaseFrameManager
@@ -469,6 +604,29 @@ void RobotController::publishStatus() {
         {"manual_override", status.manualOverride},
         {"errors", nlohmann::json::array()}
     };
+
+    // Add jog state
+    if (m_jogController) {
+        auto jogState = m_jogController->getState();
+        payload["jog_state"] = {
+            {"enabled", jogState.enabled},
+            {"is_moving", jogState.isMoving},
+            {"current_mode", jogState.currentMode},
+            {"current_axis", jogState.currentAxis},
+            {"current_direction", jogState.currentDirection},
+            {"current_speed", jogState.currentSpeed}
+        };
+    }
+
+    // Add firmware mode info
+    if (m_activeDriver) {
+        payload["firmware"] = {
+            {"mode", m_isSimMode ? "SIM" : "REAL"},
+            {"connected", m_activeDriver->isConnected()},
+            {"driver", m_activeDriver->getDriverName()},
+            {"is_simulation", m_activeDriver->isSimulation()}
+        };
+    }
 
     if (status.errorCode != ErrorCode::NONE) {
         payload["errors"].push_back({
@@ -539,7 +697,12 @@ void RobotController::registerIpcHandlers() {
                 success = reset();
                 message = success ? "Reset complete" : "Failed to reset";
             }
-            else if (cmd == "home") {
+            else if (cmd == "home" || cmd == "home_all") {
+                // In SIM mode, auto-enable if not already enabled
+                if (m_isSimMode && !m_stateMachine->isEnabled()) {
+                    enable();
+                    LOG_INFO("Auto-enabled robot for virtual homing (SIM mode)");
+                }
                 success = home();
                 message = success ? "Homing started" : "Failed to start homing";
             }
@@ -1321,6 +1484,32 @@ void RobotController::registerIpcHandlers() {
             return response;
         });
 
+    // RELOAD_PACKAGES handler - Re-scan packages folder without restart
+    m_ipcServer->registerHandler(MessageType::RELOAD_PACKAGES,
+        [this](const Message& request) -> nlohmann::json {
+            nlohmann::json response;
+
+            LOG_INFO("RELOAD_PACKAGES request: Re-scanning packages folder...");
+
+            // Re-initialize the package loader to scan for new packages
+            config::RobotPackageLoader::reload();
+
+            auto packages = config::RobotPackageLoader::getBuiltInPackages();
+
+            nlohmann::json packagesJson = nlohmann::json::array();
+            for (const auto& pkg : packages) {
+                packagesJson.push_back(packageInfoToJson(pkg));
+            }
+
+            response["success"] = true;
+            response["packages"] = packagesJson;
+            response["count"] = packages.size();
+
+            LOG_INFO("RELOAD_PACKAGES complete: {} packages found", packages.size());
+
+            return response;
+        });
+
     // LOAD_ROBOT_PACKAGE handler
     m_ipcServer->registerHandler(MessageType::LOAD_ROBOT_PACKAGE,
         [this](const Message& request) -> nlohmann::json {
@@ -1337,8 +1526,64 @@ void RobotController::registerIpcHandlers() {
                 return response;
             }
 
-            // Store active package
-            // TODO: Store in member variable for later use
+            // Initialize kinematics from package DH parameters
+            if (m_jogController && !package->joints.empty()) {
+                kinematics::RobotKinematicConfig kinConfig;
+
+                for (size_t i = 0; i < package->joints.size() && i < 6; i++) {
+                    const auto& joint = package->joints[i];
+                    double alphaRad = joint.dh_alpha * kinematics::DEG_TO_RAD;
+                    double thetaOffsetRad = joint.dh_theta_offset * kinematics::DEG_TO_RAD;
+                    double minRad = joint.limit_min * kinematics::DEG_TO_RAD;
+                    double maxRad = joint.limit_max * kinematics::DEG_TO_RAD;
+
+                    kinConfig.dhParams.emplace_back(
+                        joint.dh_a,         // a (mm)
+                        alphaRad,            // alpha (rad)
+                        joint.dh_d,          // d (mm)
+                        thetaOffsetRad,      // theta offset (rad)
+                        minRad,              // min angle (rad)
+                        maxRad,              // max angle (rad)
+                        joint.name,          // name
+                        (joint.type == "revolute") // isRevolute
+                    );
+
+                    // Set joint limits and velocities on JogController
+                    m_jogController->setJointLimits(static_cast<int>(i), joint.limit_min, joint.limit_max);
+                    m_jogController->setMaxVelocity(static_cast<int>(i), joint.velocity_max);
+                }
+
+                // Set flange/tool offset
+                kinConfig.toolOffset = kinematics::Vector3d(
+                    package->flange_offset[0],
+                    package->flange_offset[1],
+                    package->flange_offset[2]
+                );
+
+                m_jogController->initializeKinematics(kinConfig);
+                LOG_INFO("Kinematics initialized for package '{}' with {} joints",
+                         package->name, kinConfig.dhParams.size());
+
+                // Initialize URDF FK (primary FK, replaces DH FK)
+                auto urdfJoints = kinematics::buildUrdfJointsFromPackage(*package);
+                if (!urdfJoints.empty()) {
+                    kinematics::Vector3d toolOffset(
+                        package->flange_offset[0],
+                        package->flange_offset[1],
+                        package->flange_offset[2]
+                    );
+                    m_jogController->initializeUrdfKinematics(urdfJoints, toolOffset);
+                    LOG_INFO("URDF kinematics initialized for package '{}' with {} joints, tool offset ({},{},{})",
+                             package->name, urdfJoints.size(),
+                             toolOffset.x(), toolOffset.y(), toolOffset.z());
+                } else {
+                    LOG_WARN("No URDF origin data found in package '{}', using DH kinematics as fallback",
+                             package->name);
+                }
+            }
+
+            // Store active package for homing and other operations
+            m_activePackage = *package;
 
             response["success"] = true;
             auto packageJson = packageToJson(*package);
@@ -1666,6 +1911,187 @@ void RobotController::registerIpcHandlers() {
             }
 
             return response;
+        });
+
+    // ========================================================================
+    // Jog Control Handlers
+    // ========================================================================
+
+    // JOG_START handler - Enable jog mode
+    m_ipcServer->registerHandler(MessageType::JOG_START,
+        [this](const Message& request) -> nlohmann::json {
+            auto req = request.payload.get<ipc::JogStartRequest>();
+
+            LOG_INFO("JOG_START request: enableDeadman={}", req.enableDeadman);
+
+            // Debug file logging
+            {
+                std::ofstream dbg("E:/DEV_CONTEXT_PROJECTs/Robot_controller/jog_debug_core.log", std::ios::app);
+                dbg << "[CORE] JOG_START: enableDeadman=" << req.enableDeadman
+                    << " firmwareDriver=" << (m_jogController ? "exists" : "null")
+                    << " stateMachine.state=" << toString(m_stateMachine->currentState())
+                    << " stateMachine.enabled=" << m_stateMachine->isEnabled()
+                    << " stateMachine.homed=" << m_stateMachine->isHomed()
+                    << " stateMachine.canJog=" << m_stateMachine->canJog()
+                    << std::endl;
+            }
+
+            bool success = m_jogController->enable();
+
+            {
+                std::ofstream dbg("E:/DEV_CONTEXT_PROJECTs/Robot_controller/jog_debug_core.log", std::ios::app);
+                dbg << "[CORE] JOG_START result: success=" << success << std::endl;
+            }
+
+            ipc::JogStartResponse response{success, success ? "" : "Failed to enable jog mode"};
+            return response;
+        });
+
+    // JOG_STOP handler - Stop jog motion (keep jog mode enabled)
+    m_ipcServer->registerHandler(MessageType::JOG_STOP,
+        [this](const Message& request) -> nlohmann::json {
+            LOG_INFO("JOG_STOP request");
+
+            {
+                std::ofstream dbg("E:/DEV_CONTEXT_PROJECTs/Robot_controller/jog_debug_core.log", std::ios::app);
+                dbg << "[CORE] JOG_STOP received" << std::endl;
+            }
+
+            m_jogController->stopJog();
+            // Don't disable jog mode - just stop current motion
+
+            ipc::JogStartResponse response{true, ""};
+            return response;
+        });
+
+    // JOG_MOVE handler - Continuous jog
+    m_ipcServer->registerHandler(MessageType::JOG_MOVE,
+        [this](const Message& request) -> nlohmann::json {
+            auto req = request.payload.get<ipc::JogMoveRequest>();
+
+            LOG_DEBUG("JOG_MOVE request: mode={} axis={} dir={} speed={}% frame={}",
+                      req.mode, req.axis, req.direction, req.speedPercent, req.frame);
+
+            {
+                std::ofstream dbg("E:/DEV_CONTEXT_PROJECTs/Robot_controller/jog_debug_core.log", std::ios::app);
+                dbg << "[CORE] JOG_MOVE: mode=" << req.mode << " axis=" << req.axis
+                    << " dir=" << req.direction << " speed=" << req.speedPercent
+                    << " jogEnabled=" << m_jogController->getState().enabled
+                    << std::endl;
+            }
+
+            std::string error = m_jogController->startContinuousJog(
+                req.mode, req.axis, req.direction, req.speedPercent, req.frame);
+
+            {
+                std::ofstream dbg("E:/DEV_CONTEXT_PROJECTs/Robot_controller/jog_debug_core.log", std::ios::app);
+                dbg << "[CORE] JOG_MOVE result: error='" << error << "'" << std::endl;
+            }
+
+            ipc::JogMoveResponse response{error.empty(), error};
+            return response;
+        });
+
+    // JOG_STEP handler - Incremental jog
+    m_ipcServer->registerHandler(MessageType::JOG_STEP,
+        [this](const Message& request) -> nlohmann::json {
+            auto req = request.payload.get<ipc::JogStepRequest>();
+
+            LOG_DEBUG("JOG_STEP request: mode={} axis={} dir={} inc={} speed={}% frame={}",
+                      req.mode, req.axis, req.direction, req.increment, req.speedPercent, req.frame);
+
+            {
+                std::ofstream dbg("E:/DEV_CONTEXT_PROJECTs/Robot_controller/jog_debug_core.log", std::ios::app);
+                dbg << "[CORE] JOG_STEP: mode=" << req.mode << " axis=" << req.axis
+                    << " dir=" << req.direction << " inc=" << req.increment
+                    << " speed=" << req.speedPercent
+                    << " jogEnabled=" << m_jogController->getState().enabled
+                    << std::endl;
+            }
+
+            std::string error = m_jogController->jogStep(
+                req.mode, req.axis, req.direction,
+                req.increment, req.speedPercent, req.frame);
+
+            {
+                std::ofstream dbg("E:/DEV_CONTEXT_PROJECTs/Robot_controller/jog_debug_core.log", std::ios::app);
+                dbg << "[CORE] JOG_STEP result: error='" << error << "'" << std::endl;
+            }
+
+            ipc::JogMoveResponse response{error.empty(), error};
+            return response;
+        });
+
+    // ========================================================================
+    // Firmware Control Handlers
+    // ========================================================================
+
+    // FIRMWARE_CONNECT handler
+    m_ipcServer->registerHandler(MessageType::FIRMWARE_CONNECT,
+        [this](const Message& request) -> nlohmann::json {
+            std::string port = request.payload.value("port", "");
+            int baudRate = request.payload.value("baud_rate", 115200);
+
+            LOG_INFO("FIRMWARE_CONNECT request: port={}, baud={}", port, baudRate);
+
+            bool success = false;
+            if (port.empty()) {
+                success = switchToRealMode();
+            } else {
+                success = switchToRealMode(port);
+            }
+
+            auto realPtr = std::dynamic_pointer_cast<firmware::RealFirmwareDriver>(m_realDriver);
+            std::string realPort = (success && realPtr) ? realPtr->getPortName() : "";
+
+            return {
+                {"success", success},
+                {"mode", success ? "REAL" : "SIM"},
+                {"port", realPort},
+                {"driver_name", m_activeDriver->getDriverName()},
+                {"error", success ? "" : "Failed to connect to hardware"}
+            };
+        });
+
+    // FIRMWARE_DISCONNECT handler
+    m_ipcServer->registerHandler(MessageType::FIRMWARE_DISCONNECT,
+        [this](const Message& request) -> nlohmann::json {
+            LOG_INFO("FIRMWARE_DISCONNECT request");
+
+            switchToSimMode();
+
+            return {
+                {"success", true},
+                {"mode", "SIM"},
+                {"driver_name", m_activeDriver->getDriverName()}
+            };
+        });
+
+    // FIRMWARE_GET_MODE handler
+    m_ipcServer->registerHandler(MessageType::FIRMWARE_GET_MODE,
+        [this](const Message& request) -> nlohmann::json {
+            auto realPtr = std::dynamic_pointer_cast<firmware::RealFirmwareDriver>(m_realDriver);
+            std::string port = (!m_isSimMode && realPtr) ? realPtr->getPortName() : "";
+            return {
+                {"mode", m_isSimMode ? "SIM" : "REAL"},
+                {"is_connected", m_activeDriver->isConnected()},
+                {"driver_name", m_activeDriver->getDriverName()},
+                {"is_simulation", m_activeDriver->isSimulation()},
+                {"port", port}
+            };
+        });
+
+    // FIRMWARE_SCAN_PORTS handler
+    m_ipcServer->registerHandler(MessageType::FIRMWARE_SCAN_PORTS,
+        [this](const Message& request) -> nlohmann::json {
+            LOG_INFO("FIRMWARE_SCAN_PORTS request");
+
+            auto ports = firmware::RealFirmwareDriver::scanPorts();
+
+            return {
+                {"ports", ports},
+                {"count", ports.size()}
+            };
         });
 
     LOG_DEBUG("IPC handlers registered");

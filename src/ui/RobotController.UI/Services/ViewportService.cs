@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.IO;
+using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Media3D;
 using HelixToolkit.Wpf;
@@ -26,6 +28,9 @@ public interface IViewportService
 
     /// <summary>Update joint angles from status</summary>
     void UpdateJointAngles(double[] anglesDegrees);
+
+    /// <summary>Update joint angles and TCP pose from Core FK</summary>
+    void UpdateJointAngles(double[] anglesDegrees, double[]? tcpPose);
 
     /// <summary>Get the 3D model group for binding</summary>
     Model3DGroup? GetModelGroup();
@@ -135,15 +140,34 @@ public class ViewportService : IViewportService
 
     public void UpdateJointAngles(double[] anglesDegrees)
     {
+        UpdateJointAngles(anglesDegrees, null);
+    }
+
+    public void UpdateJointAngles(double[] anglesDegrees, double[]? tcpPose)
+    {
         if (_robot == null) return;
 
         _robot.SetAllJointAngles(anglesDegrees);
 
-        // Update TCP marker position
+        // Update TCP marker position and orientation
+        // Uses URDF transform (consistent with viewport mesh rendering)
+        // Note: DH FK orientation differs from URDF due to convention mismatch
+        // (Modified DH params + URDF origins from standard ROS convention)
         if (_tcpMarker != null)
         {
             var tcpPos = _robot.TcpPosition;
-            _tcpMarker.Transform = new TranslateTransform3D(tcpPos.X, tcpPos.Y, tcpPos.Z);
+            var tcpOri = _robot.TcpOrientation;
+
+            var rotOnly = new Matrix3D(
+                tcpOri.M11, tcpOri.M12, tcpOri.M13, 0,
+                tcpOri.M21, tcpOri.M22, tcpOri.M23, 0,
+                tcpOri.M31, tcpOri.M32, tcpOri.M33, 0,
+                0, 0, 0, 1);
+
+            var transformGroup = new Transform3DGroup();
+            transformGroup.Children.Add(new MatrixTransform3D(rotOnly));
+            transformGroup.Children.Add(new TranslateTransform3D(tcpPos.X, tcpPos.Y, tcpPos.Z));
+            _tcpMarker.Transform = transformGroup;
         }
 
         ModelUpdated?.Invoke(this, EventArgs.Empty);
@@ -221,18 +245,22 @@ public class ViewportService : IViewportService
         var group = new Model3DGroup();
         double radius = length / 40;
         double arrowLength = length / 5;
+        double labelOffset = length + 30;
 
         // X axis - Red
         AddAxis(group, new Point3D(0, 0, 0), new Point3D(length, 0, 0),
             radius, arrowLength, Colors.Red);
+        AddAxisLabel(group, "X", new Point3D(labelOffset, 0, 0), Colors.Red);
 
         // Y axis - Green
         AddAxis(group, new Point3D(0, 0, 0), new Point3D(0, length, 0),
             radius, arrowLength, Colors.LimeGreen);
+        AddAxisLabel(group, "Y", new Point3D(0, labelOffset, 0), Colors.LimeGreen);
 
         // Z axis - Blue
         AddAxis(group, new Point3D(0, 0, 0), new Point3D(0, 0, length),
             radius, arrowLength, Colors.DodgerBlue);
+        AddAxisLabel(group, "Z", new Point3D(0, 0, labelOffset), Colors.DodgerBlue);
 
         return group;
     }
@@ -259,27 +287,102 @@ public class ViewportService : IViewportService
     public Model3DGroup CreateTcpMarker()
     {
         var group = new Model3DGroup();
-        var builder = new MeshBuilder();
 
-        // Small sphere at TCP
-        builder.AddSphere(new Point3D(0, 0, 0), 15, 16, 16);
+        // Small sphere at TCP (magenta)
+        var sphereBuilder = new MeshBuilder();
+        sphereBuilder.AddSphere(new Point3D(0, 0, 0), 12, 16, 16);
+        var sphereMat = new DiffuseMaterial(new SolidColorBrush(Colors.Magenta));
+        group.Children.Add(new GeometryModel3D(sphereBuilder.ToMesh(), sphereMat) { BackMaterial = sphereMat });
 
-        // Small coordinate frame
-        double axisLength = 50;
+        double axisLength = 60;
         double axisRadius = 2;
+        double coneRadius = 5;
+        double coneLength = 12;
 
-        // X
-        builder.AddCylinder(new Point3D(0, 0, 0), new Point3D(axisLength, 0, 0), axisRadius, 8);
-        // Y
-        builder.AddCylinder(new Point3D(0, 0, 0), new Point3D(0, axisLength, 0), axisRadius, 8);
-        // Z
-        builder.AddCylinder(new Point3D(0, 0, 0), new Point3D(0, 0, axisLength), axisRadius, 8);
+        // X axis (Red)
+        AddColoredAxis(group, new Point3D(0, 0, 0), new Point3D(axisLength, 0, 0),
+            axisRadius, coneRadius, coneLength, Colors.Red);
+        AddAxisLabel(group, "X", new Point3D(axisLength + 15, 0, 0), Colors.Red);
 
-        var mesh = builder.ToMesh();
-        var material = new DiffuseMaterial(new SolidColorBrush(Colors.Magenta));
-        group.Children.Add(new GeometryModel3D(mesh, material) { BackMaterial = material });
+        // Y axis (Green)
+        AddColoredAxis(group, new Point3D(0, 0, 0), new Point3D(0, axisLength, 0),
+            axisRadius, coneRadius, coneLength, Colors.LimeGreen);
+        AddAxisLabel(group, "Y", new Point3D(0, axisLength + 15, 0), Colors.LimeGreen);
+
+        // Z axis (Blue)
+        AddColoredAxis(group, new Point3D(0, 0, 0), new Point3D(0, 0, axisLength),
+            axisRadius, coneRadius, coneLength, Colors.DodgerBlue);
+        AddAxisLabel(group, "Z", new Point3D(0, 0, axisLength + 15), Colors.DodgerBlue);
 
         _tcpMarker = group;
         return group;
+    }
+
+    private static void AddColoredAxis(Model3DGroup group, Point3D from, Point3D to,
+        double radius, double coneRadius, double coneLength, Color color)
+    {
+        var builder = new MeshBuilder();
+        builder.AddCylinder(from, to, radius, 8);
+
+        // Arrow cone at the tip
+        var dir = to - from;
+        dir.Normalize();
+        var coneEnd = to + dir * coneLength;
+        builder.AddCone(to, dir, coneRadius, 0, coneLength, false, true, 12);
+
+        var material = new DiffuseMaterial(new SolidColorBrush(color));
+        group.Children.Add(new GeometryModel3D(builder.ToMesh(), material) { BackMaterial = material });
+    }
+
+    private static void AddAxisLabel(Model3DGroup group, string text, Point3D position, Color color)
+    {
+        // Create text as a textured quad
+        double size = 12;
+
+        // Create a simple quad mesh at the label position
+        var builder = new MeshBuilder();
+        // Billboard-like quad facing camera (approximate - face towards +Y for now)
+        var p0 = new Point3D(position.X - size / 2, position.Y - size / 2, position.Z - size / 2);
+        var p1 = new Point3D(position.X + size / 2, position.Y - size / 2, position.Z - size / 2);
+        var p2 = new Point3D(position.X + size / 2, position.Y + size / 2, position.Z + size / 2);
+        var p3 = new Point3D(position.X - size / 2, position.Y + size / 2, position.Z + size / 2);
+
+        builder.AddQuad(p0, p1, p2, p3);
+
+        // Render text to a brush
+        var textBrush = CreateTextBrush(text, color);
+        var material = new DiffuseMaterial(textBrush);
+        var emissiveMat = new EmissiveMaterial(textBrush);
+        var matGroup = new MaterialGroup();
+        matGroup.Children.Add(material);
+        matGroup.Children.Add(emissiveMat);
+
+        group.Children.Add(new GeometryModel3D(builder.ToMesh(), matGroup) { BackMaterial = matGroup });
+    }
+
+    private static Brush CreateTextBrush(string text, Color color)
+    {
+        var visual = new DrawingVisual();
+        using (var dc = visual.RenderOpen())
+        {
+            var formattedText = new FormattedText(
+                text,
+                CultureInfo.InvariantCulture,
+                FlowDirection.LeftToRight,
+                new Typeface("Arial"),
+                48,
+                new SolidColorBrush(color),
+                1.0);
+
+            // Center the text
+            dc.DrawText(formattedText, new Point(
+                (64 - formattedText.Width) / 2,
+                (64 - formattedText.Height) / 2));
+        }
+
+        var bmp = new System.Windows.Media.Imaging.RenderTargetBitmap(64, 64, 96, 96, PixelFormats.Pbgra32);
+        bmp.Render(visual);
+
+        return new ImageBrush(bmp) { Opacity = 1.0 };
     }
 }

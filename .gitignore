@@ -20,7 +20,6 @@ CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
 Makefile
-*.cmake
 
 # .NET
 *.dll
@@ -49,3 +48,42 @@ Thumbs.db
 # Temporary
 *.tmp
 *.temp
+nul
+
+# ============================================================================
+# Exclude from repo: docs, research, PDFs, markdown, CLAUDE.md
+# ============================================================================
+
+# PDFs
+*.pdf
+
+# All markdown files
+*.md
+# Exception: keep README.md at root if exists
+!README.md
+
+# Research documents
+ressearch_doc/
+ressearch_doc_md/
+
+# Docs folder (plans, architecture, etc.)
+docs/
+
+# Claude AI config
+CLAUDE.md
+.claude/
+.impl_checkpoint.md
+.impl_checkpoint_*.md
+
+# Batch/test scripts at root
+*.bat
+test_*.cpp
+test_*.py
+test_*.xml
+verify_*.py
+
+# Config files that are generated
+config/robots/
+src/config/robots/*/robot_dh_backup.yaml
+src/config/robots/*/robot_dh_only.yaml.bak
+src/config/robots/*/robot_urdf.yaml

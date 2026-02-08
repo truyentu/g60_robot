@@ -17,6 +17,10 @@ namespace config {
 // Default library path - will be set during initialization
 std::filesystem::path RobotPackageLoader::s_libraryPath = "";
 
+// Cache for built-in packages (to avoid re-scanning on every request)
+static std::vector<RobotPackageInfo> s_cachedPackages;
+static bool s_cacheValid = false;
+
 void RobotPackageLoader::setLibraryPath(const std::filesystem::path& path) {
     s_libraryPath = path;
     LOG_INFO("Robot library path set to: {}", path.string());
@@ -24,6 +28,13 @@ void RobotPackageLoader::setLibraryPath(const std::filesystem::path& path) {
 
 std::filesystem::path RobotPackageLoader::getLibraryPath() {
     return s_libraryPath;
+}
+
+void RobotPackageLoader::reload() {
+    // Clear cached packages and re-scan
+    s_cachedPackages.clear();
+    s_cacheValid = false;
+    LOG_INFO("Robot packages cache cleared, will re-scan on next request");
 }
 
 std::optional<RobotPackage> RobotPackageLoader::loadFromDirectory(
@@ -106,6 +117,11 @@ std::string RobotPackageLoader::validate(const RobotPackage& package) {
 }
 
 std::vector<RobotPackageInfo> RobotPackageLoader::getBuiltInPackages() {
+    // Return cached packages if available
+    if (s_cacheValid && !s_cachedPackages.empty()) {
+        return s_cachedPackages;
+    }
+
     std::vector<RobotPackageInfo> packages;
 
     if (s_libraryPath.empty() || !std::filesystem::exists(s_libraryPath)) {
@@ -113,12 +129,20 @@ std::vector<RobotPackageInfo> RobotPackageLoader::getBuiltInPackages() {
         return packages;
     }
 
+    LOG_DEBUG("Scanning robot packages in: {}", s_libraryPath.string());
+
     // Iterate through subdirectories
     for (const auto& entry : std::filesystem::directory_iterator(s_libraryPath)) {
         if (!entry.is_directory()) continue;
 
+        LOG_DEBUG("Checking directory: {}", entry.path().filename().string());
+
         auto robotYaml = entry.path() / "robot.yaml";
-        if (!std::filesystem::exists(robotYaml)) continue;
+        if (!std::filesystem::exists(robotYaml)) {
+            LOG_DEBUG("  No robot.yaml found, skipping");
+            continue;
+        }
+        LOG_DEBUG("  Found robot.yaml: {}", robotYaml.string());
 
         try {
             YAML::Node config = YAML::LoadFile(robotYaml.string());
@@ -153,6 +177,10 @@ std::vector<RobotPackageInfo> RobotPackageLoader::getBuiltInPackages() {
             LOG_WARN("Failed to parse {}: {}", robotYaml.string(), e.what());
         }
     }
+
+    // Update cache
+    s_cachedPackages = packages;
+    s_cacheValid = true;
 
     return packages;
 }

@@ -93,6 +93,7 @@ enum class MessageType {
     LOAD_ROBOT_PACKAGE,
     GET_ACTIVE_PACKAGE,
     ROBOT_PACKAGE_CHANGED,
+    RELOAD_PACKAGES,
 
     // Program Execution (Virtual Simulation)
     LOAD_PROGRAM,
@@ -109,6 +110,19 @@ enum class MessageType {
     // URDF Import (Auto robot package creation)
     PARSE_URDF,
     GENERATE_ROBOT_YAML,
+
+    // Jog Control
+    JOG_START,
+    JOG_STOP,
+    JOG_MOVE,
+    JOG_STEP,
+
+    // Firmware Control
+    FIRMWARE_CONNECT,
+    FIRMWARE_DISCONNECT,
+    FIRMWARE_GET_MODE,
+    FIRMWARE_SET_MODE,
+    FIRMWARE_SCAN_PORTS,
 
     // Commands
     COMMAND,
@@ -183,6 +197,7 @@ inline std::string messageTypeToString(MessageType type) {
         case MessageType::GET_ROBOT_PACKAGES:  return "GET_ROBOT_PACKAGES";
         case MessageType::LOAD_ROBOT_PACKAGE:  return "LOAD_ROBOT_PACKAGE";
         case MessageType::GET_ACTIVE_PACKAGE:  return "GET_ACTIVE_PACKAGE";
+        case MessageType::RELOAD_PACKAGES:     return "RELOAD_PACKAGES";
         case MessageType::ROBOT_PACKAGE_CHANGED: return "ROBOT_PACKAGE_CHANGED";
         case MessageType::LOAD_PROGRAM:        return "LOAD_PROGRAM";
         case MessageType::RUN_PROGRAM:         return "RUN_PROGRAM";
@@ -196,6 +211,15 @@ inline std::string messageTypeToString(MessageType type) {
         case MessageType::GET_POINTS:          return "GET_POINTS";
         case MessageType::PARSE_URDF:          return "PARSE_URDF";
         case MessageType::GENERATE_ROBOT_YAML: return "GENERATE_ROBOT_YAML";
+        case MessageType::JOG_START:          return "JOG_START";
+        case MessageType::JOG_STOP:           return "JOG_STOP";
+        case MessageType::JOG_MOVE:           return "JOG_MOVE";
+        case MessageType::JOG_STEP:           return "JOG_STEP";
+        case MessageType::FIRMWARE_CONNECT:   return "FIRMWARE_CONNECT";
+        case MessageType::FIRMWARE_DISCONNECT: return "FIRMWARE_DISCONNECT";
+        case MessageType::FIRMWARE_GET_MODE:  return "FIRMWARE_GET_MODE";
+        case MessageType::FIRMWARE_SET_MODE:  return "FIRMWARE_SET_MODE";
+        case MessageType::FIRMWARE_SCAN_PORTS: return "FIRMWARE_SCAN_PORTS";
         case MessageType::COMMAND:             return "COMMAND";
         case MessageType::COMMAND_ACK:         return "COMMAND_ACK";
         case MessageType::ERROR:               return "ERROR";
@@ -264,6 +288,7 @@ inline MessageType stringToMessageType(const std::string& str) {
     if (str == "GET_ROBOT_PACKAGES")  return MessageType::GET_ROBOT_PACKAGES;
     if (str == "LOAD_ROBOT_PACKAGE")  return MessageType::LOAD_ROBOT_PACKAGE;
     if (str == "GET_ACTIVE_PACKAGE")  return MessageType::GET_ACTIVE_PACKAGE;
+    if (str == "RELOAD_PACKAGES")     return MessageType::RELOAD_PACKAGES;
     if (str == "ROBOT_PACKAGE_CHANGED") return MessageType::ROBOT_PACKAGE_CHANGED;
     if (str == "LOAD_PROGRAM")        return MessageType::LOAD_PROGRAM;
     if (str == "RUN_PROGRAM")         return MessageType::RUN_PROGRAM;
@@ -277,6 +302,15 @@ inline MessageType stringToMessageType(const std::string& str) {
     if (str == "GET_POINTS")          return MessageType::GET_POINTS;
     if (str == "PARSE_URDF")          return MessageType::PARSE_URDF;
     if (str == "GENERATE_ROBOT_YAML") return MessageType::GENERATE_ROBOT_YAML;
+    if (str == "JOG_START")          return MessageType::JOG_START;
+    if (str == "JOG_STOP")           return MessageType::JOG_STOP;
+    if (str == "JOG_MOVE")           return MessageType::JOG_MOVE;
+    if (str == "JOG_STEP")           return MessageType::JOG_STEP;
+    if (str == "FIRMWARE_CONNECT")   return MessageType::FIRMWARE_CONNECT;
+    if (str == "FIRMWARE_DISCONNECT") return MessageType::FIRMWARE_DISCONNECT;
+    if (str == "FIRMWARE_GET_MODE")  return MessageType::FIRMWARE_GET_MODE;
+    if (str == "FIRMWARE_SET_MODE")  return MessageType::FIRMWARE_SET_MODE;
+    if (str == "FIRMWARE_SCAN_PORTS") return MessageType::FIRMWARE_SCAN_PORTS;
     if (str == "COMMAND")             return MessageType::COMMAND;
     if (str == "COMMAND_ACK")         return MessageType::COMMAND_ACK;
     if (str == "ERROR")               return MessageType::ERROR;

@@ -111,6 +111,14 @@
 
             <!-- Buttons -->
             <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,10,0,0">
+                <Button Content="Import"
+                        Command="{Binding OpenImportDialogCommand}"
+                        Padding="15,8"
+                        Margin="0,0,5,0"
+                        Background="#0078D4"
+                        Foreground="White"
+                        BorderThickness="0"
+                        ToolTip="Import robot from URDF/XACRO"/>
                 <Button Content="Refresh"
                         Command="{Binding RefreshPackagesCommand}"
                         Padding="15,8"
@@ -118,13 +126,22 @@
                         Background="#404040"
                         Foreground="White"
                         BorderThickness="0"/>
-                <Button Content="Load Selected"
+                <Button Content="Load"
                         Command="{Binding LoadSelectedPackageCommand}"
                         Padding="15,8"
+                        Margin="0,0,5,0"
                         Background="#4CAF50"
                         Foreground="White"
                         BorderThickness="0"
                         IsEnabled="{Binding SelectedPackage, Converter={StaticResource NullToBoolConverter}}"/>
+                <Button Content="Delete"
+                        Command="{Binding DeleteSelectedPackageCommand}"
+                        Padding="15,8"
+                        Background="#D32F2F"
+                        Foreground="White"
+                        BorderThickness="0"
+                        IsEnabled="{Binding SelectedPackage, Converter={StaticResource NullToBoolConverter}}"
+                        ToolTip="Delete selected robot package"/>
             </StackPanel>
 
             <!-- Status Bar -->

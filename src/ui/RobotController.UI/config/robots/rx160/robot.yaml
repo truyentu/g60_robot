@@ -1,0 +1,162 @@
+# RX160 Robot Package
+# Auto-generated from URDF
+# Note: DH parameters need to be filled in manually or calculated
+
+name: "RX160"
+manufacturer: ""
+type: "6-axis-industrial"
+payload_kg: 0  # TODO: Fill in
+reach_mm: 0    # TODO: Fill in
+
+kinematics:
+  convention: "modified_dh"
+  joints:
+    # Joint A1 (joint_1)
+    - name: "A1"
+      type: "revolute"
+      # DH parameters (TODO: Calculate from geometry)
+      dh:
+        a: 0      # Link length (mm)
+        alpha: 0  # Link twist (degrees)
+        d: 0      # Link offset (mm)
+        theta_offset: 0
+      # URDF origin (from URDF file)
+      origin:
+        xyz: [0, 0, 550]
+        rpy: [0, 0, 0]
+      axis: [0, 0, 1]
+      limits:
+        min: -160
+        max: 160
+        vel_max: 200
+        accel_max: 720  # TODO: Fill in
+      mesh:
+        visual: "meshes/visual/link1.stl"
+
+    # Joint A2 (joint_2)
+    - name: "A2"
+      type: "revolute"
+      # DH parameters (TODO: Calculate from geometry)
+      dh:
+        a: 0      # Link length (mm)
+        alpha: 0  # Link twist (degrees)
+        d: 0      # Link offset (mm)
+        theta_offset: 0
+      # URDF origin (from URDF file)
+      origin:
+        xyz: [150, 0, 0]
+        rpy: [0, 0, 0]
+      axis: [0, 1, 0]
+      limits:
+        min: -137.5
+        max: 137.5
+        vel_max: 200
+        accel_max: 720  # TODO: Fill in
+      mesh:
+        visual: "meshes/visual/link2.stl"
+
+    # Joint A3 (joint_3)
+    - name: "A3"
+      type: "revolute"
+      # DH parameters (TODO: Calculate from geometry)
+      dh:
+        a: 0      # Link length (mm)
+        alpha: 0  # Link twist (degrees)
+        d: 0      # Link offset (mm)
+        theta_offset: 0
+      # URDF origin (from URDF file)
+      origin:
+        xyz: [0, 0, 825]
+        rpy: [0, 0, 0]
+      axis: [0, 1, 0]
+      limits:
+        min: -150
+        max: 150
+        vel_max: 255
+        accel_max: 720  # TODO: Fill in
+      mesh:
+        visual: "meshes/visual/link3.stl"
+
+    # Joint A4 (joint_4)
+    - name: "A4"
+      type: "revolute"
+      # DH parameters (TODO: Calculate from geometry)
+      dh:
+        a: 0      # Link length (mm)
+        alpha: 0  # Link twist (degrees)
+        d: 0      # Link offset (mm)
+        theta_offset: 0
+      # URDF origin (from URDF file)
+      origin:
+        xyz: [0, 0, 0]
+        rpy: [0, 0, 0]
+      axis: [0, 0, 1]
+      limits:
+        min: -270
+        max: 270
+        vel_max: 315
+        accel_max: 720  # TODO: Fill in
+      mesh:
+        visual: "meshes/visual/link4.stl"
+
+    # Joint A5 (joint_5)
+    - name: "A5"
+      type: "revolute"
+      # DH parameters (TODO: Calculate from geometry)
+      dh:
+        a: 0      # Link length (mm)
+        alpha: 0  # Link twist (degrees)
+        d: 0      # Link offset (mm)
+        theta_offset: 0
+      # URDF origin (from URDF file)
+      origin:
+        xyz: [0, 0, 625]
+        rpy: [0, 0, 0]
+      axis: [0, 1, 0]
+      limits:
+        min: -105
+        max: 120
+        vel_max: 360
+        accel_max: 720  # TODO: Fill in
+      mesh:
+        visual: "meshes/visual/link5.stl"
+
+    # Joint A6 (joint_6)
+    - name: "A6"
+      type: "revolute"
+      # DH parameters (TODO: Calculate from geometry)
+      dh:
+        a: 0      # Link length (mm)
+        alpha: 0  # Link twist (degrees)
+        d: 0      # Link offset (mm)
+        theta_offset: 0
+      # URDF origin (from URDF file)
+      origin:
+        xyz: [0, 0, 110]
+        rpy: [0, 0, 0]
+      axis: [0, 0, 1]
+      limits:
+        min: -270
+        max: 270
+        vel_max: 870
+        accel_max: 720  # TODO: Fill in
+      mesh:
+        visual: "meshes/visual/link6.stl"
+
+home_position: [0, 0, 0, 0, 0, 0]
+
+base:
+  mesh: "meshes/visual/base.stl"
+  origin:
+    x: 0
+    y: 0
+    z: 0
+    rx: 0
+    ry: 0
+    rz: 0
+
+flange:
+  offset:
+    x: 0
+    y: 0
+    z: 0

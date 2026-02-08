@@ -13,6 +13,10 @@
 #include "../interpreter/Executor.hpp"
 #include "../interpreter/Lexer.hpp"
 #include "../interpreter/Parser.hpp"
+#include "../jog/JogController.hpp"
+#include "../firmware/IFirmwareDriver.hpp"
+#include "../firmware/FirmwareSimulator.hpp"
+#include "../config/RobotPackageSchema.hpp"
 #include <memory>
 #include <array>
 #include <atomic>
@@ -105,6 +109,11 @@ public:
     bool jogCartesian(int axis, double speed);
     bool stopJog();
 
+    // Firmware mode switch (Phase 9)
+    bool switchToSimMode();
+    bool switchToRealMode(const std::string& portName = "");
+    std::string getFirmwareMode() const;
+
     // Program execution (Phase 8)
     bool loadProgram(const std::string& source);
     void runProgram();
@@ -131,6 +140,12 @@ private:
     std::unique_ptr<ipc::IpcServer> m_ipcServer;
     std::unique_ptr<frame::BaseFrameManager> m_baseFrameManager;
     std::unique_ptr<override::OverrideManager> m_overrideManager;
+    std::unique_ptr<jog::JogController> m_jogController;
+    std::shared_ptr<firmware::IFirmwareDriver> m_activeDriver;
+    std::shared_ptr<firmware::FirmwareSimulator> m_simDriver;
+    std::shared_ptr<firmware::IFirmwareDriver> m_realDriver;
+    bool m_isSimMode{true};
+    std::optional<config::RobotPackage> m_activePackage;
     std::unique_ptr<interpreter::Executor> m_programExecutor;
 
     // Status

@@ -28,6 +28,49 @@
             <Setter Property="GridLinesVisibility" Value="Horizontal"/>
             <Setter Property="HorizontalGridLinesBrush" Value="#404040"/>
         </Style>
+
+        <!-- Dark theme TextBlock style for labels -->
+        <Style x:Key="DarkLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#E0E0E0"/>
+        </Style>
+
+        <!-- Dark theme GroupBox style -->
+        <Style TargetType="GroupBox">
+            <Setter Property="Foreground" Value="#E0E0E0"/>
+            <Setter Property="BorderBrush" Value="#404040"/>
+        </Style>
+
+        <!-- Dark theme Button style -->
+        <Style TargetType="Button">
+            <Setter Property="Background" Value="#404040"/>
+            <Setter Property="Foreground" Value="#E0E0E0"/>
+            <Setter Property="BorderBrush" Value="#505050"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="1" CornerRadius="3"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#505050"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#606060"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="border" Property="Background" Value="#2A2A2A"/>
+                                <Setter Property="Foreground" Value="#666666"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
 
     <Grid Margin="20">
@@ -41,7 +84,7 @@
 
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="0,0,0,20">
-            <TextBlock Text="URDF Import Wizard" FontSize="24" FontWeight="Bold"/>
+            <TextBlock Text="URDF Import Wizard" FontSize="24" FontWeight="Bold" Foreground="#E0E0E0"/>
             <TextBlock Text="Import robot packages from ROS-Industrial URDF/xacro files"
                        Foreground="Gray" Margin="0,5,0,0"/>
         </StackPanel>
@@ -61,7 +104,7 @@
         </GroupBox>
 
         <!-- Robot Info Section -->
-        <GroupBox Grid.Row="2" Header="2. Robot Information" Margin="0,0,0,15">
+        <GroupBox Grid.Row="2" Header="2. Robot Information &amp; Meshes" Margin="0,0,0,15">
             <Grid Margin="10">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -72,25 +115,35 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <TextBlock Grid.Row="0" Grid.Column="0" Text="Robot Name:" VerticalAlignment="Center" Margin="0,0,10,10"/>
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Robot Name:" Foreground="#E0E0E0" VerticalAlignment="Center" Margin="0,0,10,10"/>
                 <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding RobotName, UpdateSourceTrigger=PropertyChanged}"
                          Style="{StaticResource DarkTextBox}"
                          Margin="0,0,20,10"/>
 
-                <TextBlock Grid.Row="0" Grid.Column="2" Text="Manufacturer:" VerticalAlignment="Center" Margin="0,0,10,10"/>
+                <TextBlock Grid.Row="0" Grid.Column="2" Text="Manufacturer:" Foreground="#E0E0E0" VerticalAlignment="Center" Margin="0,0,10,10"/>
                 <TextBox Grid.Row="0" Grid.Column="3" Text="{Binding Manufacturer, UpdateSourceTrigger=PropertyChanged}"
                          Style="{StaticResource DarkTextBox}"
                          Margin="0,0,0,10"/>
 
-                <TextBlock Grid.Row="1" Grid.Column="0" Text="Output Dir:" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="Output Dir:" Foreground="#E0E0E0" VerticalAlignment="Center" Margin="0,0,10,10"/>
                 <TextBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
                          Text="{Binding OutputDirectory, UpdateSourceTrigger=PropertyChanged}"
                          Style="{StaticResource DarkTextBox}"
-                         IsReadOnly="True" Margin="0,0,10,0"/>
+                         IsReadOnly="True" Margin="0,0,10,10"/>
                 <Button Grid.Row="1" Grid.Column="3" Content="Browse..."
-                           Command="{Binding BrowseOutputDirectoryCommand}" HorizontalAlignment="Left"/>
+                           Command="{Binding BrowseOutputDirectoryCommand}" HorizontalAlignment="Left" Margin="0,0,0,10"/>
+
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="Mesh Folder:" Foreground="#E0E0E0" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <TextBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2"
+                         Text="{Binding MeshSourceDirectory, UpdateSourceTrigger=PropertyChanged}"
+                         Style="{StaticResource DarkTextBox}"
+                         IsReadOnly="True" Margin="0,0,10,0"
+                         ToolTip="Folder containing STL mesh files (e.g. meshes/visual from ROS package)"/>
+                <Button Grid.Row="2" Grid.Column="3" Content="Browse..."
+                           Command="{Binding BrowseMeshDirectoryCommand}" HorizontalAlignment="Left"/>
             </Grid>
         </GroupBox>
 
@@ -165,6 +218,7 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
             <TextBlock Grid.Column="0" Text="{Binding StatusMessage}"
@@ -177,7 +231,15 @@
 
             <Button Grid.Column="2" Content="Generate robot.yaml"
                        Command="{Binding GenerateYamlCommand}"
+                       Margin="0,0,10,0"
                        IsEnabled="{Binding IsParsed}"/>
+
+            <Button Grid.Column="3" Content="Copy to Core &amp; Refresh"
+                       Command="{Binding CopyToCoreAndRefreshCommand}"
+                       Background="#4CAF50"
+                       Foreground="White"
+                       IsEnabled="{Binding IsPackageReady}"
+                       ToolTip="Copy package to Core build folder and refresh package list"/>
         </Grid>
 
         <!-- Loading Overlay -->

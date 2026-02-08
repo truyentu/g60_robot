@@ -180,6 +180,21 @@ public class LoadRobotPackageResponse
     public RobotPackagePayload? Package { get; set; }
 }
 
+/// <summary>
+/// Response for RELOAD_PACKAGES
+/// </summary>
+public class ReloadPackagesResponse
+{
+    [JsonPropertyName("success")]
+    public bool Success { get; set; }
+
+    [JsonPropertyName("packages")]
+    public List<RobotPackageInfoPayload> Packages { get; set; } = new();
+
+    [JsonPropertyName("count")]
+    public int Count { get; set; }
+}
+
 // ============================================================================
 // Program Execution Payloads
 // ============================================================================

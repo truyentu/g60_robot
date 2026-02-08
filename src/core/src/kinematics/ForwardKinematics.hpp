@@ -1,6 +1,10 @@
 /**
  * @file ForwardKinematics.hpp
  * @brief Forward kinematics solver for 6-DOF robot
+ *
+ * DEPRECATED: Modified DH FK produces incorrect results for MA2010.
+ * Use UrdfForwardKinematics instead (IMPL_P10_01).
+ * Kept for IK backward compatibility until KDL IK is integrated (IMPL_P10_02).
  */
 
 #pragma once

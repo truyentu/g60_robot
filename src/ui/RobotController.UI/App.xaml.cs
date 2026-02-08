@@ -50,6 +50,10 @@ public partial class App : Application
                 // Viewport Service
                 services.AddSingleton<IViewportService, ViewportService>();
 
+                // URDF Import Services
+                services.AddSingleton<IUrdfImportService, UrdfImportService>();
+                services.AddSingleton<IRobotPackageGenerator, RobotPackageGenerator>();
+
                 // ViewModels
                 services.AddSingleton<MainViewModel>();
                 services.AddSingleton<RobotPackageBrowserViewModel>();

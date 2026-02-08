@@ -6,7 +6,9 @@ using RobotController.UI.Models;
 using RobotController.UI.Services;
 using RobotController.UI.ViewModels.Pages;
 using Serilog;
+using System;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Text.Json;
 using System.Windows.Media;
 using System.Windows.Media.Media3D;
@@ -364,6 +366,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
         });
     }
 
+    private int _statusLogCounter = 0;
+
     private void UpdateStatus(StatusPayload status)
     {
         RobotState = status.State;
@@ -382,8 +386,27 @@ public partial class MainViewModel : ObservableObject, IDisposable
             }
             OnPropertyChanged(nameof(JointPositions));
 
-            // Update 3D model
-            _viewportService.UpdateJointAngles(angles);
+            // Debug log: only log every 50th status or when any joint != 0
+            _statusLogCounter++;
+            bool anyNonZero = false;
+            for (int i = 0; i < 6; i++) { if (Math.Abs(angles[i]) > 0.001) anyNonZero = true; }
+            if (anyNonZero || _statusLogCounter % 50 == 0)
+            {
+                try
+                {
+                    var line = $"[{DateTime.Now:HH:mm:ss.fff}] [UI-STATUS] state={status.State} joints=[{string.Join(",", angles.Select(a => a.ToString("F2")))}] homed={status.Homed}";
+                    System.IO.File.AppendAllText(
+                        System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "jog_debug.log"),
+                        line + Environment.NewLine);
+                }
+                catch { }
+            }
+
+            // Update 3D model with TCP pose from Core FK
+            double[]? tcpPose = status.TcpPosition.Count >= 6
+                ? status.TcpPosition.ToArray()
+                : null;
+            _viewportService.UpdateJointAngles(angles, tcpPose);
         }
 
         // Update TCP position

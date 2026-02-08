@@ -39,8 +39,10 @@ namespace {
 
     std::vector<std::string> findElements(const std::string& xml, const std::string& tag) {
         std::vector<std::string> elements;
-        // Pattern: <tag\s[^>]*(?:/>|>[\s\S]*?<\/)tag>
-        std::string pattern_str = "<" + tag + "\\s[^>]*(?:/>|>[\\s\\S]*?<\\/)" + tag + ">";
+        std::smatch match;
+
+        // Pattern 1: Tag with attributes - <tag attr="val">content</tag>
+        std::string pattern_str = "<" + tag + "\\s[^>]*(?:/>|>[\\s\\S]*?<\\/" + tag + ">)";
         std::regex pattern(pattern_str);
 
         auto begin = std::sregex_iterator(xml.begin(), xml.end(), pattern);
@@ -50,21 +52,47 @@ namespace {
             elements.push_back(it->str());
         }
 
+        // Pattern 2: Tag without attributes - <tag>content</tag>
+        // Only search if we didn't find with attributes pattern
+        if (elements.empty()) {
+            pattern_str = "<" + tag + ">[\\s\\S]*?<\\/" + tag + ">";
+            pattern = std::regex(pattern_str);
+
+            begin = std::sregex_iterator(xml.begin(), xml.end(), pattern);
+            for (auto it = begin; it != end; ++it) {
+                elements.push_back(it->str());
+            }
+        }
+
         return elements;
     }
 
     std::string findChildElement(const std::string& parent, const std::string& tag) {
-        // Pattern: <tag\s[^>]*(?:/>|>[\s\S]*?<\/)tag>
-        std::string pattern_str = "<" + tag + "\\s[^>]*(?:/>|>[\\s\\S]*?<\\/)" + tag + ">";
-        std::regex pattern(pattern_str);
         std::smatch match;
 
+        // Pattern 1: Tag with attributes - <tag attr="val">content</tag>
+        std::string pattern_str = "<" + tag + "\\s[^>]*(?:/>|>[\\s\\S]*?<\\/" + tag + ">)";
+        std::regex pattern(pattern_str);
         if (std::regex_search(parent, match, pattern)) {
             return match[0].str();
         }
 
-        // Try self-closing tag: <tag\s[^/>]*/?>
-        pattern_str = "<" + tag + "\\s[^/>]*/?>";
+        // Pattern 2: Tag without attributes - <tag>content</tag>
+        pattern_str = "<" + tag + ">[\\s\\S]*?<\\/" + tag + ">";
+        pattern = std::regex(pattern_str);
+        if (std::regex_search(parent, match, pattern)) {
+            return match[0].str();
+        }
+
+        // Pattern 3: Self-closing with attributes - <tag attr="val"/>
+        pattern_str = "<" + tag + "\\s[^>]*/>";
+        pattern = std::regex(pattern_str);
+        if (std::regex_search(parent, match, pattern)) {
+            return match[0].str();
+        }
+
+        // Pattern 4: Self-closing without attributes - <tag/>
+        pattern_str = "<" + tag + "/>";
         pattern = std::regex(pattern_str);
         if (std::regex_search(parent, match, pattern)) {
             return match[0].str();
@@ -133,8 +161,14 @@ UrdfParseResult UrdfParser::parseString(const std::string& xml_content) {
                     std::string mesh = findChildElement(geometry, "mesh");
                     if (!mesh.empty()) {
                         std::string mesh_file = getAttributeValue(mesh, "filename");
+                        LOG_DEBUG("Link {} raw mesh_file: '{}'", link.name, mesh_file);
                         link.visual_mesh = extractMeshFilename(mesh_file);
+                        LOG_DEBUG("Link {} extracted mesh: '{}'", link.name, link.visual_mesh);
+                    } else {
+                        LOG_DEBUG("Link {} has geometry but no mesh element", link.name);
                     }
+                } else {
+                    LOG_DEBUG("Link {} has visual but no geometry element", link.name);
                 }
 
                 // Visual origin
@@ -147,6 +181,8 @@ UrdfParseResult UrdfParser::parseString(const std::string& xml_content) {
                         link.visual_origin_rpy
                     );
                 }
+            } else {
+                LOG_DEBUG("Link {} has no visual element", link.name);
             }
 
             result.model.links.push_back(link);
@@ -288,22 +324,22 @@ double UrdfParser::expandXacroExpression(const std::string& expr) {
 }
 
 std::string UrdfParser::extractMeshFilename(const std::string& mesh_path) {
-    // Extract filename from package://pkg/meshes/file.stl
-    // Pattern: package://[^/]+/meshes/[^/]+/(?:visual|collision)/(.+\.stl)
-    std::regex package_pattern("package://[^/]+/meshes/[^/]+/(?:visual|collision)/(.+\\.stl)");
+    // Extract filename from various mesh path formats:
+    // 1. package://pkg_name/meshes/visual/file.stl
+    // 2. package://pkg_name/meshes/gp110/visual/file.stl
+    // 3. file:///path/to/file.stl
+    // 4. meshes/visual/file.stl
+
+    // Try to find just the filename (last component ending in .stl or .STL)
+    std::regex filename_pattern("([^/\\\\]+\\.[sS][tT][lL])\\s*$");
     std::smatch match;
 
-    if (std::regex_search(mesh_path, match, package_pattern)) {
+    if (std::regex_search(mesh_path, match, filename_pattern)) {
         return match[1].str();
     }
 
-    // Try simpler pattern: ([^/]+\.stl)
-    std::regex simple_pattern("([^/]+\\.stl)");
-    if (std::regex_search(mesh_path, match, simple_pattern)) {
-        return match[1].str();
-    }
-
-    return mesh_path;
+    // If no match, return empty (will use fallback)
+    return "";
 }
 
 std::string UrdfParser::findBaseLink(const UrdfModel& model) {
@@ -444,7 +480,7 @@ std::string UrdfParser::generateYaml(
             yaml << "        visual: \"meshes/visual/" << link->visual_mesh << "\"\n";
         } else {
             yaml << "      mesh:\n";
-            yaml << "        visual: \"meshes/visual/link" << joint_num << ".stl\"\n";
+            yaml << "        visual: \"meshes/visual/link_" << joint_num << ".stl\"\n";
         }
 
         yaml << "\n";
@@ -458,9 +494,17 @@ std::string UrdfParser::generateYaml(
     }
     yaml << "]\n\n";
 
-    // Base mesh
+    // Base mesh - find actual base mesh from model
+    std::string base_mesh = "base_link.stl";  // Default
+    for (const auto& link : model.links) {
+        if (link.name == model.base_link_name && !link.visual_mesh.empty()) {
+            base_mesh = link.visual_mesh;
+            break;
+        }
+    }
+
     yaml << "base:\n";
-    yaml << "  mesh: \"meshes/visual/base.stl\"\n";
+    yaml << "  mesh: \"meshes/visual/" << base_mesh << "\"\n";
     yaml << "  origin:\n";
     yaml << "    x: 0\n";
     yaml << "    y: 0\n";

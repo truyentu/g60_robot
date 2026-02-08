@@ -1,0 +1,152 @@
+# Yaskawa Motoman MA2010 Robot Package
+# Generated from ROS-Industrial URDF
+# Source: https://github.com/ros-industrial/motoman/tree/noetic-devel/motoman_ma2010_support
+
+name: "MA2010"
+manufacturer: "Yaskawa"
+type: "6-axis-industrial"
+payload_kg: 10
+reach_mm: 2010
+
+kinematics:
+  convention: "modified_dh"
+  joints:
+    # Joint 1 (S-axis) - Base rotation
+    - name: "A1"
+      type: "revolute"
+      # DH parameters (for FK/IK calculations)
+      dh:
+        a: 150           # Link length to J2 (mm)
+        alpha: -90       # Twist angle (degrees)
+        d: 505           # Joint offset (mm)
+        theta_offset: 0
+      # URDF origin (for visualization)
+      origin:
+        xyz: [0, 0, 505]      # 0.505m -> 505mm
+        rpy: [0, 0, 0]
+      axis: [0, 0, 1]
+      limits:
+        min: -180             # -3.1416 rad -> -180 deg
+        max: 180              # 3.1416 rad -> 180 deg
+        vel_max: 197          # 3.4383 rad/s -> ~197 deg/s
+        accel_max: 720
+      mesh:
+        visual: "meshes/visual/link_1_s.stl"
+
+    # Joint 2 (L-axis) - Shoulder
+    - name: "A2"
+      type: "revolute"
+      dh:
+        a: 760           # Upper arm length (mm)
+        alpha: 0         # Parallel axes
+        d: 0
+        theta_offset: -90
+      origin:
+        xyz: [150, 0, 0]      # 0.150m -> 150mm
+        rpy: [0, 0, 0]
+      axis: [0, 1, 0]
+      limits:
+        min: -105             # -1.8326 rad -> -105 deg
+        max: 155              # 2.7052 rad -> 155 deg
+        vel_max: 190          # 3.3161 rad/s -> ~190 deg/s
+        accel_max: 720
+      mesh:
+        visual: "meshes/visual/link_2_l.stl"
+
+    # Joint 3 (U-axis) - Elbow
+    - name: "A3"
+      type: "revolute"
+      dh:
+        a: 200           # Elbow offset (mm)
+        alpha: -90       # Twist to wrist
+        d: 0
+        theta_offset: 0
+      origin:
+        xyz: [0, 0, 760]      # 0.760m -> 760mm
+        rpy: [0, 0, 0]
+      axis: [0, -1, 0]
+      limits:
+        min: -86              # -1.5009 rad -> -86 deg
+        max: 160              # 2.7925 rad -> 160 deg
+        vel_max: 210          # 3.6652 rad/s -> ~210 deg/s
+        accel_max: 720
+      mesh:
+        visual: "meshes/visual/link_3_u.stl"
+
+    # Joint 4 (R-axis) - Wrist roll
+    - name: "A4"
+      type: "revolute"
+      dh:
+        a: 0             # No link length
+        alpha: 90        # Twist angle
+        d: 1082          # Forearm length (mm)
+        theta_offset: 0
+      origin:
+        xyz: [0, 0, 200]      # 0.200m -> 200mm
+        rpy: [0, 0, 0]
+      axis: [-1, 0, 0]
+      limits:
+        min: -150             # -2.6180 rad -> -150 deg
+        max: 150              # 2.6180 rad -> 150 deg
+        vel_max: 410          # 7.1558 rad/s -> ~410 deg/s
+        accel_max: 1440
+      mesh:
+        visual: "meshes/visual/link_4_r.stl"
+
+    # Joint 5 (B-axis) - Wrist pitch
+    - name: "A5"
+      type: "revolute"
+      dh:
+        a: 0             # No link length
+        alpha: -90       # Twist angle
+        d: 0
+        theta_offset: 0
+      origin:
+        xyz: [1082, 0, 0]     # 1.082m -> 1082mm
+        rpy: [0, 0, 0]
+      axis: [0, -1, 0]
+      limits:
+        min: -135             # -2.3562 rad -> -135 deg
+        max: 90               # 1.5708 rad -> 90 deg
+        vel_max: 410          # 7.1558 rad/s -> ~410 deg/s
+        accel_max: 1440
+      mesh:
+        visual: "meshes/visual/link_5_b.stl"
+
+    # Joint 6 (T-axis) - Tool rotation
+    - name: "A6"
+      type: "revolute"
+      dh:
+        a: 0             # No link length
+        alpha: 0         # No twist
+        d: 100           # Tool flange offset (mm)
+        theta_offset: 0
+      origin:
+        xyz: [0, 0, 0]        # Same position as J5
+        rpy: [0, 0, 0]
+      axis: [-1, 0, 0]
+      limits:
+        min: -210             # -3.6652 rad -> -210 deg
+        max: 210              # 3.6652 rad -> 210 deg
+        vel_max: 610          # 10.6465 rad/s -> ~610 deg/s
+        accel_max: 2160
+      mesh:
+        visual: "meshes/visual/link_6_t.stl"
+
+home_position: [0, 0, 0, 0, 0, 0]
+
+base:
+  mesh: "meshes/visual/base_link.stl"
+  origin:
+    x: 0
+    y: 0
+    z: 0
+    rx: 0
+    ry: 0
+    rz: 0
+
+flange:
+  offset:
+    x: 100    # tool0 offset from J6: 0.100m -> 100mm
+    y: 0
+    z: 0

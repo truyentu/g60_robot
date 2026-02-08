@@ -343,9 +343,19 @@ inline IKSolution InverseKinematics::computeIterative(
         // Compute Jacobian
         Jacobian J = computeJacobian(q);
 
-        // Damped Least Squares: dq = J^T * (J*J^T + lambda^2*I)^-1 * error
+        // Sugihara 2011 Adaptive Damping (Levenberg-Marquardt):
+        // λ² = wn * ||error||² where wn = dampingFactor
+        // Near singularity → error large → damping increases → stable
+        // Near target → error small → damping decreases → fast convergence
+        double errorNormSq = error.squaredNorm();
+        double lambdaSq = ikConfig_.dampingFactor * errorNormSq;
+
+        // Ensure minimum damping to avoid pure pseudoinverse instability
+        constexpr double MIN_LAMBDA_SQ = 1e-6;
+        lambdaSq = std::max(lambdaSq, MIN_LAMBDA_SQ);
+
         Matrix6d JJT = J * J.transpose();
-        Matrix6d damped = JJT + ikConfig_.dampingFactor * ikConfig_.dampingFactor * Matrix6d::Identity();
+        Matrix6d damped = JJT + lambdaSq * Matrix6d::Identity();
 
         Eigen::Matrix<double, NUM_JOINTS, 1> dq = J.transpose() * damped.ldlt().solve(error);
 

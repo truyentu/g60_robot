@@ -13,6 +13,8 @@
 #endif
 
 #include "InverseKinematics.hpp"
+#include "UrdfForwardKinematics.hpp"
+#include "KDLKinematics.hpp"
 #include <Eigen/Geometry>
 #include <memory>
 #include <mutex>
@@ -109,11 +111,18 @@ public:
     bool isReachable(const TCPPose& pose) override;
     bool areJointAnglesValid(const JointAngles& angles) override;
 
+    // URDF kinematics initialization (Phase 10)
+    void initializeUrdfKinematics(const std::vector<UrdfJointDef>& joints, const Vector3d& toolOffset);
+    bool hasUrdfFK() const { return urdfFk_ != nullptr; }
+    bool hasKDLIK() const { return kdlKin_ != nullptr && kdlKin_->isInitialized(); }
+
 private:
     mutable std::mutex mutex_;
     RobotKinematicConfig config_;
-    ForwardKinematics fk_;
-    InverseKinematics ik_;
+    ForwardKinematics fk_;               // DH FK (deprecated, kept as fallback)
+    std::unique_ptr<UrdfForwardKinematics> urdfFk_;  // URDF FK (primary)
+    std::unique_ptr<KDLKinematics> kdlKin_;          // KDL IK (primary)
+    InverseKinematics ik_;               // DH IK (deprecated fallback)
 };
 
 // ============================================================================
@@ -126,24 +135,37 @@ inline KinematicsService::KinematicsService(const RobotKinematicConfig& config)
 
 inline TCPPose KinematicsService::computeFK(const JointAngles& jointAngles) {
     std::lock_guard<std::mutex> lock(mutex_);
-    return fk_.compute(jointAngles);
+    if (urdfFk_) {
+        return urdfFk_->compute(jointAngles);
+    }
+    return fk_.compute(jointAngles);  // DH fallback
 }
 
 inline Matrix4d KinematicsService::calculateFK(const JointAngles& jointAngles) {
     std::lock_guard<std::mutex> lock(mutex_);
-    return fk_.compute(jointAngles).toTransform();
+    if (urdfFk_) {
+        return urdfFk_->compute(jointAngles).toTransform();
+    }
+    return fk_.compute(jointAngles).toTransform();  // DH fallback
 }
 
 inline std::vector<Vector3d> KinematicsService::computeJointPositions(const JointAngles& jointAngles) {
     std::lock_guard<std::mutex> lock(mutex_);
-    return fk_.computeJointPositions(jointAngles);
+    if (urdfFk_) {
+        return urdfFk_->computeJointPositions(jointAngles);
+    }
+    return fk_.computeJointPositions(jointAngles);  // DH fallback
 }
 
 inline std::optional<IKSolution> KinematicsService::computeIK(
     const TCPPose& targetPose,
     const JointAngles& currentAngles) {
     std::lock_guard<std::mutex> lock(mutex_);
-    return ik_.compute(targetPose, currentAngles);
+    if (kdlKin_ && kdlKin_->isInitialized()) {
+        auto result = kdlKin_->computeIK(targetPose, currentAngles);
+        if (result.has_value()) return result;
+    }
+    return ik_.compute(targetPose, currentAngles);  // DH fallback
 }
 
 inline IKSolutions KinematicsService::computeAllIK(const TCPPose& targetPose) {
@@ -153,17 +175,29 @@ inline IKSolutions KinematicsService::computeAllIK(const TCPPose& targetPose) {
 
 inline Jacobian KinematicsService::computeJacobian(const JointAngles& jointAngles) {
     std::lock_guard<std::mutex> lock(mutex_);
-    return ik_.computeJacobian(jointAngles);
+    if (kdlKin_ && kdlKin_->isInitialized()) {
+        return kdlKin_->computeJacobian(jointAngles);
+    }
+    if (urdfFk_) {
+        return urdfFk_->computeJacobian(jointAngles);
+    }
+    return ik_.computeJacobian(jointAngles);  // DH fallback
 }
 
 inline bool KinematicsService::isNearSingularity(const JointAngles& jointAngles) {
     std::lock_guard<std::mutex> lock(mutex_);
-    return ik_.isNearSingularity(jointAngles);
+    if (kdlKin_ && kdlKin_->isInitialized()) {
+        return kdlKin_->isNearSingularity(jointAngles);
+    }
+    return ik_.isNearSingularity(jointAngles);  // DH fallback
 }
 
 inline double KinematicsService::computeManipulability(const JointAngles& jointAngles) {
     std::lock_guard<std::mutex> lock(mutex_);
-    return ik_.computeManipulability(jointAngles);
+    if (kdlKin_ && kdlKin_->isInitialized()) {
+        return kdlKin_->computeManipulability(jointAngles);
+    }
+    return ik_.computeManipulability(jointAngles);  // DH fallback
 }
 
 inline void KinematicsService::setRobotConfig(const RobotKinematicConfig& config) {
@@ -214,6 +248,10 @@ inline bool KinematicsService::isReachable(const TCPPose& pose) {
 
 inline bool KinematicsService::areJointAnglesValid(const JointAngles& angles) {
     std::lock_guard<std::mutex> lock(mutex_);
+    // Use URDF joints limits if available
+    if (urdfFk_) {
+        // Validation still uses DH params for now (same limits stored in both)
+    }
     for (size_t i = 0; i < config_.dhParams.size(); ++i) {
         const auto& dh = config_.dhParams[i];
         if (angles[i] < dh.minAngle || angles[i] > dh.maxAngle) {
@@ -221,6 +259,14 @@ inline bool KinematicsService::areJointAnglesValid(const JointAngles& angles) {
         }
     }
     return true;
+}
+
+inline void KinematicsService::initializeUrdfKinematics(
+    const std::vector<UrdfJointDef>& joints, const Vector3d& toolOffset) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    urdfFk_ = std::make_unique<UrdfForwardKinematics>(joints, toolOffset);
+    kdlKin_ = std::make_unique<KDLKinematics>();
+    kdlKin_->buildFromUrdfJoints(joints, toolOffset);
 }
 
 } // namespace kinematics

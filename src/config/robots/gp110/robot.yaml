@@ -1,0 +1,150 @@
+# GP110 Robot Package
+# Auto-generated from URDF
+# DH parameters calculated from URDF geometry
+
+name: "GP110"
+manufacturer: "Yaskawa"
+type: "6-axis-industrial"
+payload_kg: 110
+reach_mm: 2665
+
+kinematics:
+  convention: "modified_dh"
+  joints:
+    # Joint A1 (joint_1_s)
+    - name: "A1"
+      type: "revolute"
+      dh:
+        a: 320       # Link length to J2 (mm)
+        alpha: -90   # Twist angle (degrees)
+        d: 540       # Joint offset (mm)
+        theta_offset: 0
+      origin:
+        xyz: [0, 0, 540]
+        rpy: [0, 0, 0]
+      axis: [0, 0, 1]
+      limits:
+        min: -180
+        max: 180
+        vel_max: 140
+        accel_max: 720
+      mesh:
+        visual: "meshes/visual/link_1_s.stl"
+
+    # Joint A2 (joint_2_l)
+    - name: "A2"
+      type: "revolute"
+      dh:
+        a: 870       # Upper arm length (mm)
+        alpha: 0     # Parallel axes
+        d: 0
+        theta_offset: -90
+      origin:
+        xyz: [320, 0, 0]
+        rpy: [0, 0, 0]
+      axis: [0, 1, 0]
+      limits:
+        min: -90
+        max: 155
+        vel_max: 110
+        accel_max: 720
+      mesh:
+        visual: "meshes/visual/link_2_l.stl"
+
+    # Joint A3 (joint_3_u)
+    - name: "A3"
+      type: "revolute"
+      dh:
+        a: 235       # Elbow offset (mm)
+        alpha: -90   # Twist to wrist
+        d: 0
+        theta_offset: 0
+      origin:
+        xyz: [0, 0, 870]
+        rpy: [0, 0, 0]
+      axis: [0, -1, 0]
+      limits:
+        min: -80
+        max: 90
+        vel_max: 130
+        accel_max: 720
+      mesh:
+        visual: "meshes/visual/link_3_u.stl"
+
+    # Joint A4 (joint_4_r)
+    - name: "A4"
+      type: "revolute"
+      dh:
+        a: 0         # No link length
+        alpha: 90    # Twist angle
+        d: 1020      # Forearm length (mm)
+        theta_offset: 0
+      origin:
+        xyz: [0, 0, 235]
+        rpy: [0, 0, 0]
+      axis: [-1, 0, 0]
+      limits:
+        min: -360
+        max: 360
+        vel_max: 175
+        accel_max: 720
+      mesh:
+        visual: "meshes/visual/link_4_r.stl"
+
+    # Joint A5 (joint_5_b)
+    - name: "A5"
+      type: "revolute"
+      dh:
+        a: 0         # No link length
+        alpha: -90   # Twist angle
+        d: 0
+        theta_offset: 0
+      origin:
+        xyz: [1020, 0, 0]
+        rpy: [0, 0, 0]
+      axis: [0, -1, 0]
+      limits:
+        min: -125
+        max: 125
+        vel_max: 175
+        accel_max: 720
+      mesh:
+        visual: "meshes/visual/link_5_b.stl"
+
+    # Joint A6 (joint_6_t)
+    - name: "A6"
+      type: "revolute"
+      dh:
+        a: 0         # No link length
+        alpha: 0     # No twist
+        d: 175       # Tool flange offset (mm)
+        theta_offset: 0
+      origin:
+        xyz: [0, 0, 0]
+        rpy: [0, 0, 0]
+      axis: [-1, 0, 0]
+      limits:
+        min: -360
+        max: 360
+        vel_max: 255
+        accel_max: 720
+      mesh:
+        visual: "meshes/visual/link_6_t.stl"
+
+home_position: [0, 0, 0, 0, 0, 0]
+
+base:
+  mesh: "meshes/visual/base_link.stl"
+  origin:
+    x: 0
+    y: 0
+    z: 0
+    rx: 0
+    ry: 0
+    rz: 0
+
+flange:
+  offset:
+    x: 0
+    y: 0
+    z: 0

@@ -78,6 +78,12 @@ public:
      */
     static std::filesystem::path getLibraryPath();
 
+    /**
+     * Reload packages from library directory
+     * Call this after adding new packages to refresh the list
+     */
+    static void reload();
+
 private:
     /**
      * Parse robot.yaml file

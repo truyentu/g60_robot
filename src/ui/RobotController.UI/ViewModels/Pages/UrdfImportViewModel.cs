@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
@@ -33,7 +34,16 @@ public partial class UrdfImportViewModel : ObservableObject
     private string _outputDirectory = "";
 
     [ObservableProperty]
+    private string _meshSourceDirectory = "";
+
+    [ObservableProperty]
+    private int _meshesCopied;
+
+    [ObservableProperty]
     private string _statusMessage = "Select a URDF or xacro file to import";
+
+    [ObservableProperty]
+    private bool _isPackageReady;
 
     [ObservableProperty]
     private bool _isLoading;
@@ -108,6 +118,43 @@ public partial class UrdfImportViewModel : ObservableObject
         if (dialog.ShowDialog() == true)
         {
             OutputDirectory = dialog.FolderName;
+        }
+    }
+
+    [RelayCommand]
+    private void BrowseMeshDirectory()
+    {
+        var dialog = new OpenFolderDialog
+        {
+            Title = "Select folder containing STL mesh files"
+        };
+
+        // Try to start from URDF file location
+        if (!string.IsNullOrEmpty(UrdfFilePath))
+        {
+            var urdfDir = Path.GetDirectoryName(UrdfFilePath);
+            if (!string.IsNullOrEmpty(urdfDir))
+            {
+                // Look for common mesh folder patterns
+                var meshesVisual = Path.Combine(urdfDir, "..", "meshes", "visual");
+                var meshes = Path.Combine(urdfDir, "..", "meshes");
+
+                if (Directory.Exists(meshesVisual))
+                    dialog.InitialDirectory = Path.GetFullPath(meshesVisual);
+                else if (Directory.Exists(meshes))
+                    dialog.InitialDirectory = Path.GetFullPath(meshes);
+                else
+                    dialog.InitialDirectory = urdfDir;
+            }
+        }
+
+        if (dialog.ShowDialog() == true)
+        {
+            MeshSourceDirectory = dialog.FolderName;
+
+            // Count STL files
+            var stlFiles = Directory.GetFiles(dialog.FolderName, "*.stl", SearchOption.AllDirectories);
+            StatusMessage = $"Found {stlFiles.Length} STL files in mesh folder";
         }
     }
 
@@ -210,10 +257,22 @@ public partial class UrdfImportViewModel : ObservableObject
             {
                 GeneratedYaml = response.YamlContent;
 
+                // Copy STL files if mesh source directory is specified
+                if (!string.IsNullOrEmpty(MeshSourceDirectory) && Directory.Exists(MeshSourceDirectory))
+                {
+                    StatusMessage = "Copying STL mesh files...";
+                    MeshesCopied = await CopyMeshFilesAsync(robotDir);
+                }
+
                 if (!string.IsNullOrEmpty(response.SavedPath))
                 {
-                    StatusMessage = $"Saved to: {response.SavedPath}";
-                    Log.Information("robot.yaml saved to: {Path}", response.SavedPath);
+                    var msg = $"Saved to: {response.SavedPath}";
+                    if (MeshesCopied > 0)
+                        msg += $" | {MeshesCopied} meshes copied";
+                    StatusMessage = msg;
+                    IsPackageReady = true;
+                    Log.Information("robot.yaml saved to: {Path}, meshes copied: {Count}",
+                        response.SavedPath, MeshesCopied);
                 }
                 else
                 {
@@ -237,6 +296,40 @@ public partial class UrdfImportViewModel : ObservableObject
         }
     }
 
+    private async Task<int> CopyMeshFilesAsync(string robotDir)
+    {
+        int copied = 0;
+
+        try
+        {
+            // Create meshes/visual folder
+            var meshOutputDir = Path.Combine(robotDir, "meshes", "visual");
+            Directory.CreateDirectory(meshOutputDir);
+
+            // Find all STL files in source directory (including subdirectories)
+            var stlFiles = Directory.GetFiles(MeshSourceDirectory, "*.stl", SearchOption.AllDirectories);
+
+            foreach (var srcFile in stlFiles)
+            {
+                var fileName = Path.GetFileName(srcFile);
+                var destFile = Path.Combine(meshOutputDir, fileName);
+
+                await Task.Run(() => File.Copy(srcFile, destFile, overwrite: true));
+                copied++;
+
+                Log.Debug("Copied mesh: {Source} -> {Dest}", srcFile, destFile);
+            }
+
+            Log.Information("Copied {Count} mesh files to {Dir}", copied, meshOutputDir);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error copying mesh files");
+        }
+
+        return copied;
+    }
+
     [RelayCommand]
     private void CopyYamlToClipboard()
     {
@@ -245,6 +338,261 @@ public partial class UrdfImportViewModel : ObservableObject
             System.Windows.Clipboard.SetText(GeneratedYaml);
             StatusMessage = "YAML copied to clipboard";
         }
+    }
+
+    [RelayCommand]
+    private async Task CopyToCoreAndRefreshAsync()
+    {
+        if (string.IsNullOrEmpty(RobotName))
+        {
+            StatusMessage = "No package to copy";
+            return;
+        }
+
+        try
+        {
+            IsLoading = true;
+            var robotId = RobotName.ToLower().Replace(" ", "_").Replace("-", "_");
+            var sourceDir = Path.Combine(OutputDirectory, robotId);
+
+            Log.Information("CopyToCoreAndRefresh: robotId={Id}, sourceDir={Source}", robotId, sourceDir);
+
+            if (!Directory.Exists(sourceDir))
+            {
+                StatusMessage = "Package folder not found. Generate first.";
+                Log.Warning("Source directory does not exist: {Dir}", sourceDir);
+                return;
+            }
+
+            // Check source has files
+            var sourceFiles = Directory.GetFiles(sourceDir, "*", SearchOption.AllDirectories);
+            Log.Information("Source directory has {Count} files", sourceFiles.Length);
+            if (sourceFiles.Length == 0)
+            {
+                StatusMessage = "Source folder is empty. Generate package first.";
+                return;
+            }
+
+            var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            int copiedLocations = 0;
+
+            // === LOCATION 1: Core build folder ===
+            var coreConfigPath = Path.GetFullPath(Path.Combine(
+                baseDir, "..", "..", "..", "..", "..", "..", "src", "core", "build", "config", "robots"));
+
+            StatusMessage = "Copying to Core location...";
+            Log.Information("Copying package to Core: {Path}", coreConfigPath);
+
+            try
+            {
+                Directory.CreateDirectory(coreConfigPath);
+                var coreDestDir = Path.Combine(coreConfigPath, robotId);
+                await Task.Run(() => CopyDirectoryRobust(sourceDir, coreDestDir));
+
+                var copiedFiles = Directory.GetFiles(coreDestDir, "*", SearchOption.AllDirectories);
+                if (copiedFiles.Length > 0)
+                {
+                    Log.Information("SUCCESS: Copied {Count} files to Core: {Dest}", copiedFiles.Length, coreDestDir);
+                    copiedLocations++;
+                }
+                else
+                {
+                    Log.Warning("Copy to Core resulted in empty directory: {Dest}", coreDestDir);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Failed to copy to Core location");
+            }
+
+            // === LOCATION 2: UI mesh loading folder ===
+            var uiConfigPath = Path.GetFullPath(Path.Combine(baseDir, "config", "robots"));
+
+            StatusMessage = "Copying to UI location...";
+            Log.Information("Copying package to UI: {Path}", uiConfigPath);
+
+            try
+            {
+                Directory.CreateDirectory(uiConfigPath);
+                var uiDestDir = Path.Combine(uiConfigPath, robotId);
+
+                // Check if source and dest are the same (OutputDirectory is already in UI location)
+                var normalizedSource = Path.GetFullPath(sourceDir).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).ToLowerInvariant();
+                var normalizedDest = Path.GetFullPath(uiDestDir).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).ToLowerInvariant();
+
+                if (normalizedSource == normalizedDest)
+                {
+                    // Already in UI location, just verify files exist
+                    var existingFiles = Directory.GetFiles(uiDestDir, "*", SearchOption.AllDirectories);
+                    if (existingFiles.Length > 0)
+                    {
+                        Log.Information("UI location is same as source, skipping copy. Has {Count} files.", existingFiles.Length);
+                        copiedLocations++;
+                    }
+                    else
+                    {
+                        Log.Warning("UI location is same as source but has no files!");
+                    }
+                }
+                else
+                {
+                    await Task.Run(() => CopyDirectoryRobust(sourceDir, uiDestDir));
+
+                    var copiedFiles = Directory.GetFiles(uiDestDir, "*", SearchOption.AllDirectories);
+                    if (copiedFiles.Length > 0)
+                    {
+                        Log.Information("SUCCESS: Copied {Count} files to UI: {Dest}", copiedFiles.Length, uiDestDir);
+                        copiedLocations++;
+                    }
+                    else
+                    {
+                        Log.Warning("Copy to UI resulted in empty directory: {Dest}", uiDestDir);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Failed to copy to UI location");
+            }
+
+            // === LOCATION 3: Also keep in OutputDirectory (already there from generate) ===
+            // This ensures consistency
+
+            if (copiedLocations == 0)
+            {
+                StatusMessage = "Failed to copy to any location. Check logs.";
+                return;
+            }
+
+            // Reload packages via IPC (Core will re-scan folder)
+            StatusMessage = "Reloading package list...";
+            var response = await _ipcClient.ReloadPackagesAsync();
+
+            if (response != null && response.Success)
+            {
+                var found = response.Packages.Any(p =>
+                    p.Id.Equals(robotId, StringComparison.OrdinalIgnoreCase));
+
+                if (found)
+                    StatusMessage = $"Success! {robotId} is now available ({copiedLocations} locations, {response.Count} packages total)";
+                else
+                    StatusMessage = $"Copied to {copiedLocations} locations but not found in catalog. Restart Core.";
+            }
+            else
+            {
+                StatusMessage = $"Copied to {copiedLocations} locations. Restart Core to load new package.";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Error: {ex.Message}";
+            Log.Error(ex, "Failed to copy package");
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private static void CopyDirectoryRobust(string sourceDir, string destDir)
+    {
+        Log.Debug("CopyDirectoryRobust: {Source} -> {Dest}", sourceDir, destDir);
+
+        // Create destination directory
+        Directory.CreateDirectory(destDir);
+
+        // Copy all files
+        foreach (var file in Directory.GetFiles(sourceDir))
+        {
+            var fileName = Path.GetFileName(file);
+            var destFile = Path.Combine(destDir, fileName);
+
+            try
+            {
+                File.Copy(file, destFile, overwrite: true);
+                Log.Debug("Copied file: {File}", fileName);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Failed to copy file {File}, retrying...", fileName);
+                Thread.Sleep(100);
+                try
+                {
+                    File.Copy(file, destFile, overwrite: true);
+                }
+                catch (Exception ex2)
+                {
+                    Log.Error(ex2, "Failed to copy file {File} after retry", fileName);
+                    throw;
+                }
+            }
+        }
+
+        // Recursively copy subdirectories
+        foreach (var dir in Directory.GetDirectories(sourceDir))
+        {
+            var dirName = Path.GetFileName(dir);
+            var destSubDir = Path.Combine(destDir, dirName);
+            CopyDirectoryRobust(dir, destSubDir);
+        }
+    }
+
+    private static void CopyDirectory(string sourceDir, string destDir)
+    {
+        // Delete destination first to avoid locked file issues
+        if (Directory.Exists(destDir))
+        {
+            try
+            {
+                Directory.Delete(destDir, recursive: true);
+                Thread.Sleep(100); // Wait for filesystem to release
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Could not delete existing directory {Dir}, will try overwrite", destDir);
+            }
+        }
+
+        Directory.CreateDirectory(destDir);
+
+        // Copy files with retry for locked files
+        foreach (var file in Directory.GetFiles(sourceDir))
+        {
+            var destFile = Path.Combine(destDir, Path.GetFileName(file));
+            CopyFileWithRetry(file, destFile, maxRetries: 5, delayMs: 200);
+        }
+
+        // Copy subdirectories
+        foreach (var dir in Directory.GetDirectories(sourceDir))
+        {
+            var destSubDir = Path.Combine(destDir, Path.GetFileName(dir));
+            CopyDirectory(dir, destSubDir);
+        }
+    }
+
+    private static void CopyFileWithRetry(string source, string dest, int maxRetries, int delayMs)
+    {
+        for (int i = 0; i < maxRetries; i++)
+        {
+            try
+            {
+                // Delete destination file first if it exists
+                if (File.Exists(dest))
+                {
+                    File.Delete(dest);
+                    Thread.Sleep(50);
+                }
+                File.Copy(source, dest, overwrite: true);
+                return;
+            }
+            catch (IOException) when (i < maxRetries - 1)
+            {
+                Log.Debug("File locked, retry {Attempt}/{Max}: {File}", i + 1, maxRetries, dest);
+                Thread.Sleep(delayMs);
+            }
+        }
+        // Final attempt - let exception propagate
+        File.Copy(source, dest, overwrite: true);
     }
 }
 

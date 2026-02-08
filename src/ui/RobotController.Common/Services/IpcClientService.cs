@@ -704,6 +704,19 @@ public class IpcClientService : IIpcClientService
         return null;
     }
 
+    public async Task<ReloadPackagesResponse?> ReloadPackagesAsync(CancellationToken cancellationToken = default)
+    {
+        var request = IpcMessage.Create(MessageTypes.RELOAD_PACKAGES);
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<ReloadPackagesResponse>();
+        }
+
+        return null;
+    }
+
     // ========================================================================
     // Program Execution (Virtual Simulation)
     // ========================================================================
@@ -873,6 +886,137 @@ public class IpcClientService : IIpcClientService
         if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
         {
             return response.Payload.Deserialize<GenerateRobotYamlResponse>();
+        }
+
+        return null;
+    }
+
+    // ========================================================================
+    // Jog Control
+    // ========================================================================
+
+    public async Task<JogStartResponse?> StartJogModeAsync(bool enableDeadman = true, CancellationToken cancellationToken = default)
+    {
+        var payload = new JogStartRequest { EnableDeadman = enableDeadman };
+        var request = IpcMessage.Create(MessageTypes.JOG_START, JsonSerializer.SerializeToElement(payload));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<JogStartResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<JogStartResponse?> StopJogModeAsync(CancellationToken cancellationToken = default)
+    {
+        var request = IpcMessage.Create(MessageTypes.JOG_STOP, JsonSerializer.SerializeToElement(new { }));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<JogStartResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<JogMoveResponse?> JogMoveAsync(JogMode mode, int axis, int direction, double speedPercent, JogFrame frame = JogFrame.World, CancellationToken cancellationToken = default)
+    {
+        var payload = new JogMoveRequest
+        {
+            Mode = (int)mode,
+            Axis = axis,
+            Direction = direction,
+            SpeedPercent = speedPercent,
+            Frame = (int)frame
+        };
+        var request = IpcMessage.Create(MessageTypes.JOG_MOVE, JsonSerializer.SerializeToElement(payload));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<JogMoveResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<JogMoveResponse?> JogStepAsync(JogMode mode, int axis, int direction, double increment, double speedPercent, JogFrame frame = JogFrame.World, CancellationToken cancellationToken = default)
+    {
+        var payload = new JogStepRequest
+        {
+            Mode = (int)mode,
+            Axis = axis,
+            Direction = direction,
+            Increment = increment,
+            SpeedPercent = speedPercent,
+            Frame = (int)frame
+        };
+        var request = IpcMessage.Create(MessageTypes.JOG_STEP, JsonSerializer.SerializeToElement(payload));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<JogMoveResponse>();
+        }
+
+        return null;
+    }
+
+    // ========================================================================
+    // Firmware Control
+    // ========================================================================
+
+    public async Task<FirmwareConnectResponse?> ConnectFirmwareAsync(string port = "", int baudRate = 115200, CancellationToken cancellationToken = default)
+    {
+        var payload = new FirmwareConnectRequest { Port = port, BaudRate = baudRate };
+        var request = IpcMessage.Create(MessageTypes.FIRMWARE_CONNECT, JsonSerializer.SerializeToElement(payload));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<FirmwareConnectResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<FirmwareConnectResponse?> DisconnectFirmwareAsync(CancellationToken cancellationToken = default)
+    {
+        var request = IpcMessage.Create(MessageTypes.FIRMWARE_DISCONNECT, JsonSerializer.SerializeToElement(new { }));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<FirmwareConnectResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<FirmwareModeResponse?> GetFirmwareModeAsync(CancellationToken cancellationToken = default)
+    {
+        var request = IpcMessage.Create(MessageTypes.FIRMWARE_GET_MODE, JsonSerializer.SerializeToElement(new { }));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<FirmwareModeResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<ScanPortsResponse?> ScanPortsAsync(CancellationToken cancellationToken = default)
+    {
+        var request = IpcMessage.Create(MessageTypes.FIRMWARE_SCAN_PORTS, JsonSerializer.SerializeToElement(new { }));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<ScanPortsResponse>();
         }
 
         return null;
