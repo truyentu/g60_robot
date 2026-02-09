@@ -357,6 +357,96 @@ endif()
 gtest_discover_tests(test_analytical_kinematics)
 
 # ============================================================================
+# Double S-Curve Velocity Profile Tests
+# ============================================================================
+add_executable(test_double_scurve
+    tests/test_double_scurve.cpp
+    src/trajectory/DoubleSCurveProfile.cpp
+)
+
+target_include_directories(test_double_scurve
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_double_scurve
+    PRIVATE
+        GTest::gtest
+        GTest::gtest_main
+)
+
+if(WIN32)
+    target_compile_definitions(test_double_scurve PRIVATE
+        NOMINMAX
+    )
+endif()
+
+gtest_discover_tests(test_double_scurve)
+
+# ============================================================================
+# Cartesian Interpolator Tests (MoveL & MoveC)
+# ============================================================================
+add_executable(test_cartesian_interpolator
+    tests/test_cartesian_interpolator.cpp
+    src/trajectory/CartesianInterpolator.cpp
+    src/trajectory/DoubleSCurveProfile.cpp
+)
+
+target_include_directories(test_cartesian_interpolator
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_cartesian_interpolator
+    PRIVATE
+        GTest::gtest
+        GTest::gtest_main
+        Eigen3::Eigen
+)
+
+if(WIN32)
+    target_compile_definitions(test_cartesian_interpolator PRIVATE
+        NOMINMAX
+        _USE_MATH_DEFINES
+    )
+    target_compile_options(test_cartesian_interpolator PRIVATE /utf-8)
+endif()
+
+gtest_discover_tests(test_cartesian_interpolator)
+
+# ============================================================================
+# Look-Ahead Optimizer Tests
+# ============================================================================
+add_executable(test_look_ahead
+    tests/test_look_ahead.cpp
+    src/trajectory/LookAheadOptimizer.cpp
+)
+
+target_include_directories(test_look_ahead
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_look_ahead
+    PRIVATE
+        GTest::gtest
+        GTest::gtest_main
+)
+
+if(WIN32)
+    target_compile_definitions(test_look_ahead PRIVATE
+        NOMINMAX
+        _USE_MATH_DEFINES
+    )
+    target_compile_options(test_look_ahead PRIVATE /utf-8)
+endif()
+
+gtest_discover_tests(test_look_ahead)
+
+# ============================================================================
 # MA2010 Critical Geometry Tests (h3/h4 sign & theta5 negation verification)
 # ============================================================================
 add_executable(test_ma2010_critical_geometry
