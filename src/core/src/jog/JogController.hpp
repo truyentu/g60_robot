@@ -6,7 +6,6 @@
 #include "../kinematics/UrdfForwardKinematics.hpp"
 #include "../kinematics/KDLKinematics.hpp"
 #include "../kinematics/InverseKinematics.hpp"
-#include "../kinematics/AnalyticalIK.hpp"
 #include <memory>
 #include <array>
 
@@ -92,16 +91,15 @@ private:
     std::unique_ptr<kinematics::KDLKinematics> m_kdlKin;           // KDL IK (primary)
     std::unique_ptr<kinematics::ForwardKinematics> m_fk;           // DH FK (deprecated fallback)
     std::unique_ptr<kinematics::InverseKinematics> m_ik;           // DH IK (deprecated fallback)
-    std::unique_ptr<kinematics::AnalyticalIK> m_analyticalIK;      // Analytical IK (deprecated fallback)
 
     static constexpr double SOFT_LIMIT_MARGIN = 0.5;
     static constexpr double CONTINUOUS_JOG_RANGE = 9999.0;
     static constexpr double CARTESIAN_JOG_STEP = 5.0;     // mm per incremental jog step
     static constexpr double CARTESIAN_ROT_STEP = 1.0;     // deg per incremental rotation step
-    static constexpr double MAX_TCP_LINEAR_SPEED = 250.0;  // mm/s at 100% speed
-    static constexpr double MAX_TCP_ROT_SPEED = 60.0;      // deg/s at 100% speed
-    static constexpr double TCP_ACCEL_RATE = 1000.0;        // mm/s^2 acceleration
-    static constexpr double TCP_ROT_ACCEL_RATE = 300.0;     // deg/s^2 rotation acceleration
+    static constexpr double MAX_TCP_LINEAR_SPEED = 1000.0; // mm/s at 100% speed (MA2010 max ~2000)
+    static constexpr double MAX_TCP_ROT_SPEED = 180.0;     // deg/s at 100% speed
+    static constexpr double TCP_ACCEL_RATE = 2000.0;       // mm/s^2 acceleration
+    static constexpr double TCP_ROT_ACCEL_RATE = 600.0;    // deg/s^2 rotation acceleration
 };
 
 } // namespace jog

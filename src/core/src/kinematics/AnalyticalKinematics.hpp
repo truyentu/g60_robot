@@ -77,6 +77,14 @@ struct IKSolution {
     size_t count() const { return solutions.size(); }
 };
 
+struct WeldingIKResult {
+    JointAngles joints;
+    double psi;             // Tool Z rotation angle (rad) used
+    double jointLimitCost;  // H(q) = Σ((qi - qi_mid) / qi_range)²
+    double manipulability;  // Yoshikawa manipulability measure
+    bool valid = false;
+};
+
 // Robot configuration flags
 enum class ShoulderConfig { LEFT, RIGHT };
 enum class ElbowConfig { UP, DOWN };
@@ -150,6 +158,34 @@ public:
      */
     std::optional<JointAngles> computeIKNearest(
         const Pose& target, const JointAngles& q_ref) const;
+
+    // ========================================================================
+    // Welding IK — Redundancy Resolution via Tool Z Rotation
+    // ========================================================================
+
+    /**
+     * Compute IK for welding application exploiting tool Z rotation redundancy.
+     *
+     * In arc welding, the wire is along tool Z axis, so rotating around tool Z
+     * does not affect weld quality. This DOF is used to find joint configurations
+     * that stay furthest from joint limits.
+     *
+     * Algorithm: Coarse sampling of ψ (rotation around tool Z), solve analytical
+     * IK for each rotated target, select solution with lowest joint-limit cost.
+     *
+     * @param target Target TCP pose (position + orientation)
+     * @param currentJoints Current joint angles (for nearest-solution selection)
+     * @return WeldingIKResult with best solution, or invalid if unreachable
+     */
+    WeldingIKResult computeWeldingIK(
+        const Pose& target, const JointAngles& currentJoints) const;
+
+    /**
+     * Compute joint-limit cost function.
+     * H(q) = Σ ((qi - qi_mid) / qi_range)²
+     * Lower is better (joints closer to center of range).
+     */
+    double jointLimitCost(const JointAngles& q) const;
 
     // ========================================================================
     // Jacobian & Singularity

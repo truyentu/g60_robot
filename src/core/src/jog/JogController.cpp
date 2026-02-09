@@ -27,7 +27,6 @@ void JogController::setFirmwareDriver(std::shared_ptr<firmware::IFirmwareDriver>
 void JogController::initializeKinematics(const kinematics::RobotKinematicConfig& config) {
     m_fk = std::make_unique<kinematics::ForwardKinematics>(config);
     m_ik = std::make_unique<kinematics::InverseKinematics>(config);
-    m_analyticalIK = std::make_unique<kinematics::AnalyticalIK>(config);
 
     LOG_INFO("JogController: DH Kinematics initialized (IK only, FK deprecated)");
 }
@@ -245,7 +244,7 @@ void JogController::transformDeltaToWorld(int frame, int axis, double delta,
 }
 
 std::string JogController::startCartesianJog(int axis, int direction, double speedPercent, int frame) {
-    if (!m_urdfFk || (!m_kdlKin && !m_analyticalIK)) {
+    if (!m_urdfFk || !m_kdlKin) {
         return "Kinematics not initialized for Cartesian jog";
     }
 
@@ -276,8 +275,8 @@ std::string JogController::startCartesianJog(int axis, int direction, double spe
 
 void JogController::updateCartesianVelocityStreaming(double dt) {
     if (!m_cartesianStreaming || !m_urdfFk || !m_firmwareDriver) return;
-    // Need at least one IK solver
-    if (!m_kdlKin && !m_analyticalIK) return;
+    // Need KDL IK solver
+    if (!m_kdlKin) return;
 
     bool isLinear = (m_currentAxis < 3);
     double accelRate = isLinear ? TCP_ACCEL_RATE : TCP_ROT_ACCEL_RATE;
@@ -324,22 +323,10 @@ void JogController::updateCartesianVelocityStreaming(double dt) {
     kinematics::TCPPose targetPose = currentPose;
     transformDeltaToWorld(m_currentFrame, m_currentAxis, delta, currentPose, targetPose);
 
-    // === Solve IK (KDL primary, AnalyticalIK fallback) ===
+    // === Solve IK (KDL only — deprecated AnalyticalIK removed) ===
     std::optional<kinematics::IKSolution> ikResult;
     if (m_kdlKin && m_kdlKin->isInitialized()) {
         ikResult = m_kdlKin->computeIK(targetPose, jointRad);
-    }
-    if (!ikResult.has_value() && m_analyticalIK) {
-        auto analyticalResult = m_analyticalIK->compute(targetPose, jointRad);
-        if (analyticalResult.has_value()) {
-            kinematics::IKSolution sol;
-            sol.angles = analyticalResult->angles;
-            sol.isValid = analyticalResult->isValid;
-            sol.configuration = analyticalResult->configuration;
-            sol.residualError = analyticalResult->residualError;
-            sol.iterations = 0;
-            ikResult = sol;
-        }
     }
     if (!ikResult.has_value()) {
         // Workspace limit reached - stop streaming
@@ -353,7 +340,7 @@ void JogController::updateCartesianVelocityStreaming(double dt) {
         return;
     }
 
-    // Debug: verify orientation is preserved after IK
+    // Verify orientation is preserved after IK - REJECT if too far off
     {
         auto verifyPose = m_urdfFk->compute(ikResult->angles);
         double posErr = (verifyPose.position - targetPose.position).norm();
@@ -361,12 +348,20 @@ void JogController::updateCartesianVelocityStreaming(double dt) {
         double orientErr = std::acos(std::clamp((R_err.trace() - 1.0) / 2.0, -1.0, 1.0));
         double orientErrDeg = orientErr * 180.0 / M_PI;
 
-        if (orientErrDeg > 1.0) {
-            LOG_WARN("JogController: IK orientation drift! posErr={:.3f}mm orientErr={:.1f}deg "
+        if (orientErrDeg > 0.5) {
+            LOG_WARN("JogController: IK orientation drift REJECTED! posErr={:.3f}mm orientErr={:.1f}deg "
                      "target RPY=[{:.1f},{:.1f},{:.1f}] actual RPY=[{:.1f},{:.1f},{:.1f}]",
                      posErr, orientErrDeg,
                      targetPose.rpy[0]*180/M_PI, targetPose.rpy[1]*180/M_PI, targetPose.rpy[2]*180/M_PI,
                      verifyPose.rpy[0]*180/M_PI, verifyPose.rpy[1]*180/M_PI, verifyPose.rpy[2]*180/M_PI);
+            // Stop streaming — orientation cannot be maintained
+            m_tcpVelocity = 0.0;
+            m_targetTcpVelocity = 0.0;
+            m_cartesianStreaming = false;
+            m_isJogging = false;
+            m_currentDirection = 0;
+            m_currentSpeed = 0.0;
+            return;
         }
     }
 
@@ -405,7 +400,7 @@ void JogController::updateCartesianVelocityStreaming(double dt) {
 }
 
 std::string JogController::jogCartesianStep(int axis, int direction, double increment, double speedPercent, int frame) {
-    if (!m_urdfFk || (!m_kdlKin && !m_analyticalIK)) {
+    if (!m_urdfFk || !m_kdlKin) {
         return "Kinematics not initialized for Cartesian jog";
     }
 
@@ -427,22 +422,10 @@ std::string JogController::jogCartesianStep(int axis, int direction, double incr
 
     transformDeltaToWorld(frame, axis, delta, tcpPose, targetPose);
 
-    // IK (KDL primary, AnalyticalIK fallback)
+    // IK (KDL only — deprecated AnalyticalIK removed)
     std::optional<kinematics::IKSolution> ikResult;
     if (m_kdlKin && m_kdlKin->isInitialized()) {
         ikResult = m_kdlKin->computeIK(targetPose, jointRad);
-    }
-    if (!ikResult.has_value() && m_analyticalIK) {
-        auto analyticalResult = m_analyticalIK->compute(targetPose, jointRad);
-        if (analyticalResult.has_value()) {
-            kinematics::IKSolution sol;
-            sol.angles = analyticalResult->angles;
-            sol.isValid = analyticalResult->isValid;
-            sol.configuration = analyticalResult->configuration;
-            sol.residualError = analyticalResult->residualError;
-            sol.iterations = 0;
-            ikResult = sol;
-        }
     }
     if (!ikResult.has_value()) {
         return "IK solution not found (out of workspace)";

@@ -526,6 +526,96 @@ std::optional<JointAngles> AnalyticalKinematics::computeIKNearest(
 }
 
 // ============================================================================
+// Joint Limit Cost Function
+// ============================================================================
+
+double AnalyticalKinematics::jointLimitCost(const JointAngles& q) const {
+    double cost = 0.0;
+    for (int i = 0; i < NUM_JOINTS; ++i) {
+        double q_mid = 0.5 * (dh_[i].q_min + dh_[i].q_max);
+        double q_range = dh_[i].q_max - dh_[i].q_min;
+        if (q_range < 1e-10) continue;
+        double normalized = (q[i] - q_mid) / q_range;
+        cost += normalized * normalized;
+    }
+    return cost;
+}
+
+// ============================================================================
+// Welding IK — Redundancy Resolution via Tool Z Rotation
+// ============================================================================
+
+WeldingIKResult AnalyticalKinematics::computeWeldingIK(
+    const Pose& target, const JointAngles& currentJoints) const
+{
+    WeldingIKResult best;
+    best.valid = false;
+    best.jointLimitCost = std::numeric_limits<double>::max();
+
+    // Coarse sampling: 13 values of ψ (rotation around tool Z)
+    // 0°, ±30°, ±60°, ±90°, ±120°, ±150°, 180°
+    constexpr int NUM_PSI_SAMPLES = 13;
+    constexpr double PSI_SAMPLES[NUM_PSI_SAMPLES] = {
+        0.0,
+         30.0 * DEG2RAD,  -30.0 * DEG2RAD,
+         60.0 * DEG2RAD,  -60.0 * DEG2RAD,
+         90.0 * DEG2RAD,  -90.0 * DEG2RAD,
+        120.0 * DEG2RAD, -120.0 * DEG2RAD,
+        150.0 * DEG2RAD, -150.0 * DEG2RAD,
+        180.0 * DEG2RAD, -180.0 * DEG2RAD
+    };
+
+    Eigen::Matrix3d R_target = target.rotationMatrix();
+
+    for (int i = 0; i < NUM_PSI_SAMPLES; ++i) {
+        double psi = PSI_SAMPLES[i];
+
+        // Rotate target around its own Z axis by ψ
+        // R_rotated = R_target * Rz(ψ)
+        double cp = std::cos(psi);
+        double sp = std::sin(psi);
+        Eigen::Matrix3d Rz_psi;
+        Rz_psi << cp, -sp, 0,
+                  sp,  cp, 0,
+                   0,   0, 1;
+
+        Pose rotatedTarget;
+        rotatedTarget.position = target.position;
+        rotatedTarget.orientation = Eigen::Quaterniond(R_target * Rz_psi);
+        rotatedTarget.orientation.normalize();
+
+        // Solve IK for this rotated target
+        auto ik = computeIK(rotatedTarget);
+        if (!ik.hasSolution()) continue;
+
+        // Find nearest solution to current joints
+        for (const auto& sol : ik.solutions) {
+            double jlCost = jointLimitCost(sol);
+
+            // Also factor in joint travel from current position (small weight)
+            double travelCost = 0.0;
+            for (int j = 0; j < NUM_JOINTS; ++j) {
+                double diff = normalizeAngle(sol[j] - currentJoints[j]);
+                travelCost += diff * diff;
+            }
+
+            // Combined cost: joint limit avoidance (primary) + travel (secondary)
+            double totalCost = jlCost + 0.1 * travelCost;
+
+            if (totalCost < best.jointLimitCost) {
+                best.joints = sol;
+                best.psi = psi;
+                best.jointLimitCost = totalCost;
+                best.manipulability = manipulabilityMeasure(sol);
+                best.valid = true;
+            }
+        }
+    }
+
+    return best;
+}
+
+// ============================================================================
 // Analytical Jacobian
 // ============================================================================
 

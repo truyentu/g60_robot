@@ -16,6 +16,7 @@
 #include "../logging/Logger.hpp"
 #include <kdl/frames.hpp>
 #include <cassert>
+#include <algorithm>
 
 namespace robot_controller {
 namespace kinematics {
@@ -111,14 +112,18 @@ void KDLKinematics::buildFromUrdfJoints(
     fkSolver_ = std::make_unique<KDL::ChainFkSolverPos_recursive>(chain_);
 
     // LMA solver with weights adjusted for mm-scale
-    // Default L = [1,1,1,0.01,0.01,0.01] for meters
-    // For mm: position errors ~1mm, rotation ~0.01rad
-    // Weight rotation more to ensure orientation convergence
+    // L weights control the relative importance of position vs orientation.
+    // Position: 1mm error → 1.0 weighted error
+    // Rotation: 1rad (~57°) error → weight * 1.0 weighted error
+    //
+    // Old weights [1,1,1,0.01,0.01,0.01] caused orientation drift during
+    // Cartesian jogging because rotation was 100x less important than position.
+    // Fix: equal weights so solver preserves both position AND orientation.
     Eigen::Matrix<double, 6, 1> L;
-    L << 1.0, 1.0, 1.0, 0.01, 0.01, 0.01;
+    L << 1.0, 1.0, 1.0, 1.0, 1.0, 1.0;
     ikSolver_ = std::make_unique<KDL::ChainIkSolverPos_LMA>(
         chain_, L,
-        1e-3,   // eps (weighted error tolerance for mm scale)
+        1e-5,   // eps (tight tolerance for position+orientation)
         500,    // max iterations
         1e-15   // eps_joints
     );
@@ -207,14 +212,25 @@ std::optional<IKSolution> KDLKinematics::computeIK(
         }
 
         if (sol.isValid) {
-            // Verify result with KDL FK
+            // Verify result with KDL FK — check BOTH position AND orientation
             auto verifyPose = computeFK(sol.angles);
             sol.residualError = (verifyPose.position - target.position).norm();
 
-            // Check if residual is acceptable
+            // Check position residual
             if (sol.residualError > 1.0) {  // > 1mm position error
-                LOG_WARN("KDLKinematics: IK solution residual too large: {:.3f}mm", sol.residualError);
+                LOG_WARN("KDLKinematics: IK position residual too large: {:.3f}mm", sol.residualError);
                 sol.isValid = false;
+            }
+
+            // Check orientation residual
+            if (sol.isValid) {
+                Matrix3d R_err = verifyPose.rotation.transpose() * target.rotation;
+                double oriErr = std::acos(std::clamp((R_err.trace() - 1.0) / 2.0, -1.0, 1.0));
+                if (oriErr > 0.01) {  // > 0.01 rad (~0.57°)
+                    LOG_WARN("KDLKinematics: IK orientation residual too large: {:.4f}rad ({:.2f}deg)",
+                             oriErr, oriErr * 180.0 / M_PI);
+                    sol.isValid = false;
+                }
             }
         }
 
