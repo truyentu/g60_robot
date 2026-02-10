@@ -39,6 +39,9 @@ public class ToolData
     public ToolTCPData Tcp { get; set; } = new();
     public ToolInertiaData Inertia { get; set; } = new();
     public bool IsActive { get; set; }
+    public string VisualMeshPath { get; set; } = string.Empty;
+    public double[] MeshOffset { get; set; } = new double[6];
+    public double MeshScale { get; set; } = 1.0;  // Scale factor for STL (1.0=mm, 1000.0=meters→mm)
 }
 
 // ============================================================================

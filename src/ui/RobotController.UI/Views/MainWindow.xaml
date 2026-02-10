@@ -137,6 +137,8 @@
                         <ListBoxItem Content="Diagnostics"/>
                         <ListBoxItem Content="Robot Catalog"/>
                         <ListBoxItem Content="URDF Import"/>
+                        <ListBoxItem Content="Tool Management"/>
+                        <ListBoxItem Content="Station Setup"/>
                     </ListBox>
                 </Grid>
             </Border>
@@ -155,6 +157,9 @@
                                            CoordinateSystemLabelForeground="White"
                                            ZoomExtentsWhenLoaded="True"
                                            CameraRotationMode="Turntable"
+                                           MouseLeftButtonDown="Viewport3D_MouseLeftButtonDown"
+                                           MouseMove="Viewport3D_MouseMove"
+                                           MouseLeftButtonUp="Viewport3D_MouseLeftButtonUp"
                                            IsRotationEnabled="True"
                                            IsPanEnabled="True"
                                            IsZoomEnabled="True"
@@ -202,7 +207,30 @@
                         <!-- TCP Marker Container -->
                         <ModelVisual3D x:Name="TcpMarkerVisual"/>
 
+                        <!-- Scene Objects Container (individual ModelVisual3D per object) -->
+                        <ModelVisual3D x:Name="SceneObjectsVisual"/>
+
+                        <!-- Object dragging is handled via mouse events in code-behind -->
+
+                        <!-- Base Frame Axes Container -->
+                        <ModelVisual3D x:Name="BaseFrameAxesVisual"/>
+
                     </helix:HelixViewport3D>
+                </Border>
+
+                <!-- TCP Pick Mode Banner (overlay on viewport) -->
+                <Border x:Name="TcpPickBanner" VerticalAlignment="Top" HorizontalAlignment="Stretch"
+                        Background="#CC2196F3" Padding="15,10" Margin="20,10,20,0"
+                        CornerRadius="6" Visibility="Collapsed">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <TextBlock Text="Click on the tool mesh to pick TCP point"
+                                   Foreground="White" FontSize="14" FontWeight="SemiBold"
+                                   VerticalAlignment="Center"/>
+                        <Button Content="Cancel" Margin="20,0,0,0" Padding="12,4"
+                                Click="CancelTcpPick_Click"
+                                Background="#33FFFFFF" Foreground="White" BorderBrush="White"
+                                FontSize="12"/>
+                    </StackPanel>
                 </Border>
 
                 <!-- Page Content Overlay -->
@@ -227,6 +255,9 @@
                                     <Setter Property="Visibility" Value="Visible"/>
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding SelectedNavIndex}" Value="6">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding SelectedNavIndex}" Value="7">
                                     <Setter Property="Visibility" Value="Visible"/>
                                 </DataTrigger>
                             </Style.Triggers>
@@ -317,6 +348,20 @@
                                 </Style>
                             </pages:UrdfImportPage.Style>
                         </pages:UrdfImportPage>
+
+                        <!-- Tool Management View (Index 7) -->
+                        <controls:ToolPanel DataContext="{Binding Tool}">
+                            <controls:ToolPanel.Style>
+                                <Style TargetType="controls:ToolPanel">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding DataContext.SelectedNavIndex, RelativeSource={RelativeSource AncestorType=Window}}" Value="7">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </controls:ToolPanel.Style>
+                        </controls:ToolPanel>
                     </Grid>
                 </Border>
             </Grid>
@@ -347,6 +392,12 @@
                                 <Setter Property="Visibility" Value="Collapsed"/>
                             </DataTrigger>
                             <DataTrigger Binding="{Binding SelectedNavIndex}" Value="6">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding SelectedNavIndex}" Value="7">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding SelectedNavIndex}" Value="8">
                                 <Setter Property="Visibility" Value="Collapsed"/>
                             </DataTrigger>
                         </Style.Triggers>
@@ -512,6 +563,20 @@
                     </StackPanel>
                 </ScrollViewer>
             </Border>
+
+            <!-- Station Setup Panel (Index 8) - replaces Properties panel -->
+            <pages:StationSetupPage Grid.Column="4" DataContext="{Binding StationSetup}">
+                <pages:StationSetupPage.Style>
+                    <Style TargetType="pages:StationSetupPage">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding DataContext.SelectedNavIndex, RelativeSource={RelativeSource AncestorType=Window}}" Value="8">
+                                <Setter Property="Visibility" Value="Visible"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </pages:StationSetupPage.Style>
+            </pages:StationSetupPage>
         </Grid>
 
         <!-- Status Bar -->

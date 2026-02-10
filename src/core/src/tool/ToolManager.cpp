@@ -31,70 +31,86 @@ ToolManager::ToolManager(kinematics::KinematicsService* kinematics)
 // ============================================================================
 
 bool ToolManager::createTool(const ToolData& tool) {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
 
-    if (tool.id.empty()) {
-        spdlog::error("[ToolManager] Cannot create tool with empty ID");
-        return false;
+        if (tool.id.empty()) {
+            spdlog::error("[ToolManager] Cannot create tool with empty ID");
+            return false;
+        }
+
+        if (m_tools.find(tool.id) != m_tools.end()) {
+            spdlog::error("[ToolManager] Tool already exists: {}", tool.id);
+            return false;
+        }
+
+        m_tools[tool.id] = tool;
+        spdlog::info("[ToolManager] Created tool: {} ({})", tool.name, tool.id);
     }
-
-    if (m_tools.find(tool.id) != m_tools.end()) {
-        spdlog::error("[ToolManager] Tool already exists: {}", tool.id);
-        return false;
-    }
-
-    m_tools[tool.id] = tool;
-    spdlog::info("[ToolManager] Created tool: {} ({})", tool.name, tool.id);
+    // autoSave calls saveToDirectory which also locks m_mutex,
+    // so must be called OUTSIDE the lock scope to avoid deadlock
+    autoSave();
     return true;
 }
 
 bool ToolManager::updateTool(const std::string& id, const ToolData& tool) {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    bool wasActive = false;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
 
-    auto it = m_tools.find(id);
-    if (it == m_tools.end()) {
-        spdlog::error("[ToolManager] Tool not found: {}", id);
-        return false;
+        auto it = m_tools.find(id);
+        if (it == m_tools.end()) {
+            spdlog::error("[ToolManager] Tool not found: {}", id);
+            return false;
+        }
+
+        wasActive = it->second.isActive;
+        it->second = tool;
+        it->second.id = id; // Ensure ID doesn't change
+        it->second.isActive = wasActive;
+
+        spdlog::info("[ToolManager] Updated tool: {}", id);
     }
-
-    bool wasActive = it->second.isActive;
-    it->second = tool;
-    it->second.id = id; // Ensure ID doesn't change
-    it->second.isActive = wasActive;
-
-    spdlog::info("[ToolManager] Updated tool: {}", id);
-
+    // Notify OUTSIDE lock to avoid deadlock
     if (wasActive) {
         notifyToolChanged(id);
     }
+    autoSave();
 
     return true;
 }
 
 bool ToolManager::deleteTool(const std::string& id) {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    bool wasActive = false;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
 
-    if (id == "tool_default") {
-        spdlog::error("[ToolManager] Cannot delete default tool");
-        return false;
+        if (id == "tool_default") {
+            spdlog::error("[ToolManager] Cannot delete default tool");
+            return false;
+        }
+
+        auto it = m_tools.find(id);
+        if (it == m_tools.end()) {
+            spdlog::error("[ToolManager] Tool not found: {}", id);
+            return false;
+        }
+
+        wasActive = (id == m_activeToolId);
+        m_tools.erase(it);
+
+        if (wasActive) {
+            m_activeToolId = "tool_default";
+            m_tools[m_activeToolId].isActive = true;
+        }
+
+        spdlog::info("[ToolManager] Deleted tool: {}", id);
     }
-
-    auto it = m_tools.find(id);
-    if (it == m_tools.end()) {
-        spdlog::error("[ToolManager] Tool not found: {}", id);
-        return false;
-    }
-
-    bool wasActive = (id == m_activeToolId);
-    m_tools.erase(it);
-
+    // Notify OUTSIDE lock to avoid deadlock
     if (wasActive) {
-        m_activeToolId = "tool_default";
-        m_tools[m_activeToolId].isActive = true;
-        notifyToolChanged(m_activeToolId);
+        notifyToolChanged("tool_default");
     }
-
-    spdlog::info("[ToolManager] Deleted tool: {}", id);
+    autoSave();
     return true;
 }
 
@@ -129,31 +145,34 @@ bool ToolManager::toolExists(const std::string& id) const {
 // ============================================================================
 
 bool ToolManager::setActiveTool(const std::string& id) {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
 
-    auto it = m_tools.find(id);
-    if (it == m_tools.end()) {
-        spdlog::error("[ToolManager] Cannot set active tool, not found: {}", id);
-        return false;
+        auto it = m_tools.find(id);
+        if (it == m_tools.end()) {
+            spdlog::error("[ToolManager] Cannot set active tool, not found: {}", id);
+            return false;
+        }
+
+        // Deactivate current
+        if (!m_activeToolId.empty() && m_tools.find(m_activeToolId) != m_tools.end()) {
+            m_tools[m_activeToolId].isActive = false;
+        }
+
+        // Activate new
+        m_activeToolId = id;
+        it->second.isActive = true;
+
+        spdlog::info("[ToolManager] Active tool set to: {} ({})", it->second.name, id);
+
+        // Update kinematics with new tool offset
+        if (m_kinematics) {
+            m_kinematics->setToolOffset(it->second.tcp.toArray());
+        }
     }
-
-    // Deactivate current
-    if (!m_activeToolId.empty() && m_tools.find(m_activeToolId) != m_tools.end()) {
-        m_tools[m_activeToolId].isActive = false;
-    }
-
-    // Activate new
-    m_activeToolId = id;
-    it->second.isActive = true;
-
-    spdlog::info("[ToolManager] Active tool set to: {} ({})", it->second.name, id);
-
-    // Update kinematics with new tool offset
-    if (m_kinematics) {
-        m_kinematics->setToolOffset(it->second.tcp.toArray());
-    }
-
+    // Notify OUTSIDE lock to avoid deadlock (callback may call getActiveTool)
     notifyToolChanged(id);
+    autoSave();
     return true;
 }
 
@@ -345,6 +364,24 @@ bool ToolManager::saveToDirectory(const std::string& path) {
                 << YAML::EndSeq;
             out << YAML::EndMap;
 
+            // Visual mesh (optional)
+            if (!tool.visualMeshPath.empty()) {
+                out << YAML::Key << "visual_mesh" << YAML::Value << tool.visualMeshPath;
+
+                out << YAML::Key << "mesh_offset" << YAML::BeginMap;
+                out << YAML::Key << "x" << YAML::Value << tool.meshOffsetX;
+                out << YAML::Key << "y" << YAML::Value << tool.meshOffsetY;
+                out << YAML::Key << "z" << YAML::Value << tool.meshOffsetZ;
+                out << YAML::Key << "rx" << YAML::Value << tool.meshOffsetRx;
+                out << YAML::Key << "ry" << YAML::Value << tool.meshOffsetRy;
+                out << YAML::Key << "rz" << YAML::Value << tool.meshOffsetRz;
+                out << YAML::EndMap;
+
+                if (tool.meshScale != 1.0) {
+                    out << YAML::Key << "mesh_scale" << YAML::Value << tool.meshScale;
+                }
+            }
+
             out << YAML::EndMap; // tool
             out << YAML::EndMap;
 
@@ -397,6 +434,9 @@ bool ToolManager::loadFromDirectory(const std::string& path) {
                 }
             }
         }
+
+        // Remember config directory for auto-save
+        m_configDir = path;
 
         spdlog::info("[ToolManager] Loaded {} tools from {}", m_tools.size(), path);
         return true;
@@ -451,6 +491,23 @@ bool ToolManager::loadToolFromFile(const std::string& filepath) {
             }
         }
 
+        // Visual mesh (optional, backward compatible)
+        if (toolNode["visual_mesh"]) {
+            tool.visualMeshPath = toolNode["visual_mesh"].as<std::string>("");
+        }
+        if (toolNode["mesh_offset"]) {
+            auto moNode = toolNode["mesh_offset"];
+            tool.meshOffsetX = moNode["x"].as<double>(0.0);
+            tool.meshOffsetY = moNode["y"].as<double>(0.0);
+            tool.meshOffsetZ = moNode["z"].as<double>(0.0);
+            tool.meshOffsetRx = moNode["rx"].as<double>(0.0);
+            tool.meshOffsetRy = moNode["ry"].as<double>(0.0);
+            tool.meshOffsetRz = moNode["rz"].as<double>(0.0);
+        }
+        if (toolNode["mesh_scale"]) {
+            tool.meshScale = toolNode["mesh_scale"].as<double>(1.0);
+        }
+
         m_tools[tool.id] = tool;
         spdlog::debug("[ToolManager] Loaded tool: {} from {}", tool.id, filepath);
         return true;
@@ -476,6 +533,17 @@ int ToolManager::getRequiredPoints(CalibrationMethod method) const {
         case CalibrationMethod::FOUR_POINT: return 4;
         case CalibrationMethod::SIX_POINT: return 6;
         default: return 0;
+    }
+}
+
+void ToolManager::autoSave() {
+    if (m_configDir.empty()) return;
+
+    // Run save without holding m_mutex (caller already released it)
+    if (!saveToDirectory(m_configDir)) {
+        spdlog::warn("[ToolManager] Auto-save failed to {}", m_configDir);
+    } else {
+        spdlog::debug("[ToolManager] Auto-saved to {}", m_configDir);
     }
 }
 

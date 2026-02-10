@@ -81,6 +81,11 @@ public:
     bool isLoaded() const { return m_loaded; }
 
     /**
+     * Get the config directory path
+     */
+    const std::string& configDir() const { return m_configDir; }
+
+    /**
      * Get configuration as JSON (for IPC)
      */
     std::string robotConfigToJson() const;

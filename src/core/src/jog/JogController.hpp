@@ -6,6 +6,7 @@
 #include "../kinematics/UrdfForwardKinematics.hpp"
 #include "../kinematics/KDLKinematics.hpp"
 #include "../kinematics/InverseKinematics.hpp"
+#include <Eigen/Dense>
 #include <memory>
 #include <array>
 
@@ -24,6 +25,9 @@ public:
     void initializeUrdfKinematics(const std::vector<kinematics::UrdfJointDef>& joints,
                                    const kinematics::Vector3d& toolOffset);
     bool hasKinematics() const { return m_urdfFk != nullptr && m_kdlKin != nullptr && m_kdlKin->isInitialized(); }
+
+    // Tool transform for True TCP jogging (Phase 11)
+    void setToolTransform(const Eigen::Matrix4d& T_tool);
 
     // Initialize joint limits from robot config
     void setJointLimits(int joint, double minDeg, double maxDeg);
@@ -91,6 +95,11 @@ private:
     std::unique_ptr<kinematics::KDLKinematics> m_kdlKin;           // KDL IK (primary)
     std::unique_ptr<kinematics::ForwardKinematics> m_fk;           // DH FK (deprecated fallback)
     std::unique_ptr<kinematics::InverseKinematics> m_ik;           // DH IK (deprecated fallback)
+
+    // Tool transform for True TCP (Phase 11)
+    Eigen::Matrix4d m_toolTransform = Eigen::Matrix4d::Identity();
+    Eigen::Matrix4d m_toolInvTransform = Eigen::Matrix4d::Identity();
+    bool m_hasToolOffset = false;
 
     static constexpr double SOFT_LIMIT_MARGIN = 0.5;
     static constexpr double CONTINUOUS_JOG_RANGE = 9999.0;

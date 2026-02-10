@@ -1,9 +1,11 @@
 #pragma once
 
 #include "../tool/ToolTypes.hpp"
+#include "../config/ConfigManager.hpp"
 #include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
+#include <filesystem>
 
 namespace robot_controller {
 namespace ipc {
@@ -74,6 +76,9 @@ struct ToolDataPayload {
     ToolTCPPayload tcp;
     ToolInertiaPayload inertia;
     bool isActive = false;
+    std::string visualMeshPath;
+    std::array<double, 6> meshOffset = {0,0,0,0,0,0};
+    double meshScale = 1.0;  // Scale factor for STL (1.0=mm, 1000.0=meters→mm)
 
     static ToolDataPayload fromToolData(const tool::ToolData& data) {
         ToolDataPayload p;
@@ -83,6 +88,31 @@ struct ToolDataPayload {
         p.tcp = ToolTCPPayload::fromToolTCP(data.tcp);
         p.inertia = ToolInertiaPayload::fromToolInertia(data.inertia);
         p.isActive = data.isActive;
+
+        // Resolve relative mesh path to absolute path for UI
+        if (!data.visualMeshPath.empty()) {
+            namespace fs = std::filesystem;
+            fs::path meshPath(data.visualMeshPath);
+            if (meshPath.is_relative()) {
+                auto& config = config::ConfigManager::instance();
+                if (!config.configDir().empty()) {
+                    fs::path absPath = fs::absolute(fs::path(config.configDir()) / "tools" / data.visualMeshPath);
+                    if (fs::exists(absPath)) {
+                        p.visualMeshPath = absPath.string();
+                    } else {
+                        p.visualMeshPath = data.visualMeshPath;
+                    }
+                } else {
+                    p.visualMeshPath = data.visualMeshPath;
+                }
+            } else {
+                p.visualMeshPath = data.visualMeshPath;
+            }
+        }
+
+        p.meshOffset = {data.meshOffsetX, data.meshOffsetY, data.meshOffsetZ,
+                        data.meshOffsetRx, data.meshOffsetRy, data.meshOffsetRz};
+        p.meshScale = data.meshScale;
         return p;
     }
 
@@ -97,6 +127,14 @@ struct ToolDataPayload {
         data.inertia.cogY = inertia.cogY;
         data.inertia.cogZ = inertia.cogZ;
         data.isActive = isActive;
+        data.visualMeshPath = visualMeshPath;
+        data.meshOffsetX = meshOffset[0];
+        data.meshOffsetY = meshOffset[1];
+        data.meshOffsetZ = meshOffset[2];
+        data.meshOffsetRx = meshOffset[3];
+        data.meshOffsetRy = meshOffset[4];
+        data.meshOffsetRz = meshOffset[5];
+        data.meshScale = meshScale;
         return data;
     }
 };
@@ -108,7 +146,10 @@ inline void to_json(json& j, const ToolDataPayload& p) {
         {"description", p.description},
         {"tcp", p.tcp},
         {"inertia", p.inertia},
-        {"isActive", p.isActive}
+        {"isActive", p.isActive},
+        {"visualMeshPath", p.visualMeshPath},
+        {"meshOffset", p.meshOffset},
+        {"meshScale", p.meshScale}
     };
 }
 
@@ -121,6 +162,11 @@ inline void from_json(const json& j, ToolDataPayload& p) {
         j.at("inertia").get_to(p.inertia);
     }
     p.isActive = j.value("isActive", false);
+    p.visualMeshPath = j.value("visualMeshPath", "");
+    if (j.contains("meshOffset")) {
+        j.at("meshOffset").get_to(p.meshOffset);
+    }
+    p.meshScale = j.value("meshScale", 1.0);
 }
 
 // ============================================================================

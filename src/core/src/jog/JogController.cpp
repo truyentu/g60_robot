@@ -50,6 +50,21 @@ void JogController::initializeUrdfKinematics(
     LOG_INFO("JogController: URDF FK + KDL IK initialized ({} joints)", joints.size());
 }
 
+void JogController::setToolTransform(const Eigen::Matrix4d& T_tool) {
+    m_toolTransform = T_tool;
+
+    // Efficient inverse: T⁻¹ = [R' | -R'*t]
+    Eigen::Matrix3d R = T_tool.block<3,3>(0,0);
+    Eigen::Vector3d t = T_tool.block<3,1>(0,3);
+    m_toolInvTransform = Eigen::Matrix4d::Identity();
+    m_toolInvTransform.block<3,3>(0,0) = R.transpose();
+    m_toolInvTransform.block<3,1>(0,3) = -R.transpose() * t;
+
+    m_hasToolOffset = (t.norm() > 1e-9 || !R.isIdentity(1e-9));
+
+    LOG_INFO("JogController: Tool transform updated, hasOffset={}", m_hasToolOffset);
+}
+
 void JogController::setJointLimits(int joint, double minDeg, double maxDeg) {
     if (joint >= 0 && joint < 6) {
         m_minLimits[joint] = minDeg;
@@ -317,16 +332,34 @@ void JogController::updateCartesianVelocityStreaming(double dt) {
         jointRad[i] = positions[i] * M_PI / 180.0;
     }
 
-    auto currentPose = m_urdfFk->compute(jointRad);
+    // FK returns FLANGE pose (no ToolData TCP)
+    auto flangePose = m_urdfFk->compute(jointRad);
+
+    // Compute TRUE TCP pose = T_flange × T_tool (Phase 11)
+    kinematics::TCPPose currentTcpPose = flangePose;
+    if (m_hasToolOffset) {
+        Eigen::Matrix4d T_flange = flangePose.toTransform();
+        Eigen::Matrix4d T_tcp = T_flange * m_toolTransform;
+        currentTcpPose = kinematics::TCPPose::fromTransform(T_tcp);
+    }
 
     // === Apply Cartesian delta in the selected frame ===
-    kinematics::TCPPose targetPose = currentPose;
-    transformDeltaToWorld(m_currentFrame, m_currentAxis, delta, currentPose, targetPose);
+    // Delta is applied on TRUE TCP pose (not flange)
+    kinematics::TCPPose targetTcpPose = currentTcpPose;
+    transformDeltaToWorld(m_currentFrame, m_currentAxis, delta, currentTcpPose, targetTcpPose);
 
-    // === Solve IK (KDL only — deprecated AnalyticalIK removed) ===
+    // === Back-calculation: T_flange_desired = T_tcp_desired × T_tool⁻¹ ===
+    kinematics::TCPPose targetFlangePose = targetTcpPose;
+    if (m_hasToolOffset) {
+        Eigen::Matrix4d T_tcp_desired = targetTcpPose.toTransform();
+        Eigen::Matrix4d T_flange_desired = T_tcp_desired * m_toolInvTransform;
+        targetFlangePose = kinematics::TCPPose::fromTransform(T_flange_desired);
+    }
+
+    // === Solve IK for FLANGE pose (not TCP!) ===
     std::optional<kinematics::IKSolution> ikResult;
     if (m_kdlKin && m_kdlKin->isInitialized()) {
-        ikResult = m_kdlKin->computeIK(targetPose, jointRad);
+        ikResult = m_kdlKin->computeIK(targetFlangePose, jointRad);
     }
     if (!ikResult.has_value()) {
         // Workspace limit reached - stop streaming
@@ -343,8 +376,8 @@ void JogController::updateCartesianVelocityStreaming(double dt) {
     // Verify orientation is preserved after IK - REJECT if too far off
     {
         auto verifyPose = m_urdfFk->compute(ikResult->angles);
-        double posErr = (verifyPose.position - targetPose.position).norm();
-        kinematics::Matrix3d R_err = verifyPose.rotation.transpose() * targetPose.rotation;
+        double posErr = (verifyPose.position - targetFlangePose.position).norm();
+        kinematics::Matrix3d R_err = verifyPose.rotation.transpose() * targetFlangePose.rotation;
         double orientErr = std::acos(std::clamp((R_err.trace() - 1.0) / 2.0, -1.0, 1.0));
         double orientErrDeg = orientErr * 180.0 / M_PI;
 
@@ -352,7 +385,7 @@ void JogController::updateCartesianVelocityStreaming(double dt) {
             LOG_WARN("JogController: IK orientation drift REJECTED! posErr={:.3f}mm orientErr={:.1f}deg "
                      "target RPY=[{:.1f},{:.1f},{:.1f}] actual RPY=[{:.1f},{:.1f},{:.1f}]",
                      posErr, orientErrDeg,
-                     targetPose.rpy[0]*180/M_PI, targetPose.rpy[1]*180/M_PI, targetPose.rpy[2]*180/M_PI,
+                     targetFlangePose.rpy[0]*180/M_PI, targetFlangePose.rpy[1]*180/M_PI, targetFlangePose.rpy[2]*180/M_PI,
                      verifyPose.rpy[0]*180/M_PI, verifyPose.rpy[1]*180/M_PI, verifyPose.rpy[2]*180/M_PI);
             // Stop streaming — orientation cannot be maintained
             m_tcpVelocity = 0.0;
@@ -415,17 +448,35 @@ std::string JogController::jogCartesianStep(int axis, int direction, double incr
         jointRad[i] = positions[i] * M_PI / 180.0;
     }
 
-    auto tcpPose = m_urdfFk->compute(jointRad);
-    kinematics::TCPPose targetPose = tcpPose;
+    // FK returns FLANGE pose
+    auto flangePose = m_urdfFk->compute(jointRad);
 
+    // Compute TRUE TCP pose = T_flange × T_tool (Phase 11)
+    kinematics::TCPPose tcpPose = flangePose;
+    if (m_hasToolOffset) {
+        Eigen::Matrix4d T_flange = flangePose.toTransform();
+        Eigen::Matrix4d T_tcp = T_flange * m_toolTransform;
+        tcpPose = kinematics::TCPPose::fromTransform(T_tcp);
+    }
+
+    kinematics::TCPPose targetTcpPose = tcpPose;
     double delta = increment * direction;  // mm for linear, deg for rotation
 
-    transformDeltaToWorld(frame, axis, delta, tcpPose, targetPose);
+    // Delta applied on true TCP pose
+    transformDeltaToWorld(frame, axis, delta, tcpPose, targetTcpPose);
 
-    // IK (KDL only — deprecated AnalyticalIK removed)
+    // Back-calculation: T_flange_desired = T_tcp_desired × T_tool⁻¹
+    kinematics::TCPPose targetFlangePose = targetTcpPose;
+    if (m_hasToolOffset) {
+        Eigen::Matrix4d T_tcp_desired = targetTcpPose.toTransform();
+        Eigen::Matrix4d T_flange_desired = T_tcp_desired * m_toolInvTransform;
+        targetFlangePose = kinematics::TCPPose::fromTransform(T_flange_desired);
+    }
+
+    // IK solves for FLANGE pose
     std::optional<kinematics::IKSolution> ikResult;
     if (m_kdlKin && m_kdlKin->isInitialized()) {
-        ikResult = m_kdlKin->computeIK(targetPose, jointRad);
+        ikResult = m_kdlKin->computeIK(targetFlangePose, jointRad);
     }
     if (!ikResult.has_value()) {
         return "IK solution not found (out of workspace)";
@@ -490,7 +541,17 @@ std::array<double, 6> JogController::getTcpPose() const {
         jointRad[i] = positions[i] * M_PI / 180.0;
     }
 
-    auto pose = m_urdfFk->compute(jointRad);
+    // FK returns flange pose
+    auto flangePose = m_urdfFk->compute(jointRad);
+
+    // Apply T_tool for TRUE TCP (Phase 11)
+    kinematics::TCPPose pose = flangePose;
+    if (m_hasToolOffset) {
+        Eigen::Matrix4d T_flange = flangePose.toTransform();
+        Eigen::Matrix4d T_tcp = T_flange * m_toolTransform;
+        pose = kinematics::TCPPose::fromTransform(T_tcp);
+    }
+
     auto vec = pose.toVector();
 
     std::array<double, 6> result;

@@ -4,6 +4,7 @@
 #include <array>
 #include <vector>
 #include <optional>
+#include <Eigen/Dense>
 
 namespace robot_controller {
 namespace tool {
@@ -24,6 +25,16 @@ struct ToolTCP {
     static ToolTCP fromArray(const std::array<double, 6>& arr) {
         return {arr[0], arr[1], arr[2], arr[3], arr[4], arr[5]};
     }
+
+    /// Compute 4x4 homogeneous transform from flange to TCP
+    /// T_tool = Translation(x,y,z) * Rz(rz) * Ry(ry) * Rx(rx)
+    Eigen::Matrix4d toTransform() const;
+
+    /// Compute inverse: T_tool⁻¹ (TCP to flange)
+    Eigen::Matrix4d toInverseTransform() const;
+
+    /// Check if TCP offset is effectively zero (no tool)
+    bool isZero() const;
 };
 
 /// Tool inertia data for dynamics
@@ -45,6 +56,18 @@ struct ToolData {
     ToolTCP tcp;
     ToolInertia inertia;
     bool isActive = false;
+
+    // Visual mesh for 3D visualization
+    std::string visualMeshPath;      // Path to STL file (relative to tool config dir)
+
+    // Mesh visual offset from flange (if STL origin != flange center)
+    double meshOffsetX = 0.0;        // mm
+    double meshOffsetY = 0.0;
+    double meshOffsetZ = 0.0;
+    double meshOffsetRx = 0.0;       // degrees
+    double meshOffsetRy = 0.0;
+    double meshOffsetRz = 0.0;
+    double meshScale = 1.0;            // Scale factor for STL (1.0=mm, 1000.0=meters→mm)
 };
 
 /// TCP Calibration methods

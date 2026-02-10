@@ -14,7 +14,11 @@ public class RobotModel3D
     private readonly List<RobotLink> _links = new();
     private readonly double[] _jointAngles = new double[6];
     private double[] _flangeOffset = new double[3]; // [x, y, z] in mm
+    private double[] _toolTcpOffset = new double[6]; // [x,y,z,rx,ry,rz] TCP offset from flange (mm, degrees)
     private Model3DGroup? _modelGroup;
+    private GeometryModel3D? _toolGeometry;
+    private double[] _toolMeshOffset = new double[6]; // [x,y,z,rx,ry,rz] mesh offset
+    private double _toolMeshScale = 1.0; // Scale factor for tool STL (1.0=mm, 1000.0=meters→mm)
     private static readonly string _debugLogPath = Path.Combine(
         AppDomain.CurrentDomain.BaseDirectory, "stl_debug.log");
 
@@ -555,6 +559,53 @@ public class RobotModel3D
     }
 
     /// <summary>
+    /// Set tool mesh for 3D visualization
+    /// </summary>
+    public bool SetToolMesh(string stlPath, double[] meshOffset, double meshScale = 1.0)
+    {
+        ClearToolMesh();
+
+        if (string.IsNullOrEmpty(stlPath) || !File.Exists(stlPath))
+        {
+            Log.Warning("[RobotModel3D] Tool mesh file not found: {Path}", stlPath);
+            return false;
+        }
+
+        _toolMeshOffset = meshOffset ?? new double[6];
+        _toolMeshScale = meshScale > 0 ? meshScale : 1.0;
+
+        var geometry = LoadStlGeometry(stlPath, Color.FromRgb(180, 180, 50)); // Yellow-ish for tool
+        if (geometry == null)
+        {
+            Log.Warning("[RobotModel3D] Failed to load tool mesh: {Path}", stlPath);
+            return false;
+        }
+
+        _toolGeometry = geometry;
+        _modelGroup?.Children.Add(_toolGeometry);
+
+        // Update transform to match current flange position
+        UpdateForwardKinematics();
+
+        Log.Information("[RobotModel3D] Tool mesh loaded: {Path}", stlPath);
+        return true;
+    }
+
+    /// <summary>
+    /// Remove tool mesh from viewport
+    /// </summary>
+    public void ClearToolMesh()
+    {
+        if (_toolGeometry != null && _modelGroup != null)
+        {
+            _modelGroup.Children.Remove(_toolGeometry);
+        }
+        _toolGeometry = null;
+        _toolMeshOffset = new double[6];
+        _toolMeshScale = 1.0;
+    }
+
+    /// <summary>
     /// Update forward kinematics - recalculate all transforms
     /// </summary>
     public void UpdateForwardKinematics()
@@ -616,7 +667,7 @@ public class RobotModel3D
             }
         }
 
-        // Update TCP position (from last link + flange offset)
+        // Update TCP position (from last link + flange offset + tool TCP offset)
         if (_links.Count > 0)
         {
             var lastLink = _links[^1];
@@ -626,12 +677,76 @@ public class RobotModel3D
                 _flangeOffset[0],
                 _flangeOffset[1],
                 _flangeOffset[2]);
-            TcpPosition = lastLink.WorldTransform.Transform(flangeLocal);
-            TcpOrientation = lastLink.WorldTransform;
 
-            Log.Debug("TCP position: ({X:F1}, {Y:F1}, {Z:F1}), FlangeOffset: [{FX:F1}, {FY:F1}, {FZ:F1}]",
+            // Flange position in world (used for marker when no tool TCP)
+            var flangeWorldPos = lastLink.WorldTransform.Transform(flangeLocal);
+
+            // Compute actual TCP: flange world transform + tool TCP offset
+            // T_tcp = T_lastLink * T_flangeOffset * T_toolTcp
+            bool hasToolTcp = _toolTcpOffset.Length >= 3 &&
+                (Math.Abs(_toolTcpOffset[0]) > 0.001 ||
+                 Math.Abs(_toolTcpOffset[1]) > 0.001 ||
+                 Math.Abs(_toolTcpOffset[2]) > 0.001);
+
+            if (hasToolTcp)
+            {
+                // Build flange world transform
+                var flangeOffsetMat = Matrix3D.Identity;
+                flangeOffsetMat.Translate(new Vector3D(_flangeOffset[0], _flangeOffset[1], _flangeOffset[2]));
+                var flangeWorldMat = Matrix3D.Multiply(flangeOffsetMat, lastLink.WorldTransform);
+
+                // Apply tool TCP offset (translation + rotation)
+                double tcpRx = _toolTcpOffset.Length >= 4 ? _toolTcpOffset[3] * Math.PI / 180.0 : 0;
+                double tcpRy = _toolTcpOffset.Length >= 5 ? _toolTcpOffset[4] * Math.PI / 180.0 : 0;
+                double tcpRz = _toolTcpOffset.Length >= 6 ? _toolTcpOffset[5] * Math.PI / 180.0 : 0;
+
+                var tcpOffsetMat = CreateTransformFromURDF(
+                    new[] { _toolTcpOffset[0], _toolTcpOffset[1], _toolTcpOffset[2] },
+                    new[] { tcpRx, tcpRy, tcpRz },
+                    new[] { 0.0, 0.0, 1.0 }, 0.0);
+
+                var tcpWorldMat = Matrix3D.Multiply(tcpOffsetMat, flangeWorldMat);
+                TcpPosition = new Point3D(tcpWorldMat.OffsetX, tcpWorldMat.OffsetY, tcpWorldMat.OffsetZ);
+                TcpOrientation = tcpWorldMat;
+            }
+            else
+            {
+                TcpPosition = flangeWorldPos;
+                TcpOrientation = lastLink.WorldTransform;
+            }
+
+            Log.Debug("TCP position: ({X:F1}, {Y:F1}, {Z:F1}), FlangeOffset: [{FX:F1}, {FY:F1}, {FZ:F1}], ToolTCP: [{TX:F1}, {TY:F1}, {TZ:F1}]",
                 TcpPosition.X, TcpPosition.Y, TcpPosition.Z,
-                _flangeOffset[0], _flangeOffset[1], _flangeOffset[2]);
+                _flangeOffset[0], _flangeOffset[1], _flangeOffset[2],
+                _toolTcpOffset.Length >= 3 ? _toolTcpOffset[0] : 0,
+                _toolTcpOffset.Length >= 3 ? _toolTcpOffset[1] : 0,
+                _toolTcpOffset.Length >= 3 ? _toolTcpOffset[2] : 0);
+        }
+
+        // Update tool mesh transform: attach to flange frame
+        if (_toolGeometry != null && _links.Count > 0)
+        {
+            var lastLink = _links[^1];
+            var flangeTransform = lastLink.WorldTransform;
+
+            // Apply mesh offset (visual compensation)
+            var meshOffsetTransform = CreateTransformFromURDF(
+                new[] { _toolMeshOffset[0], _toolMeshOffset[1], _toolMeshOffset[2] },
+                new[] { _toolMeshOffset[3] * Math.PI / 180.0, _toolMeshOffset[4] * Math.PI / 180.0, _toolMeshOffset[5] * Math.PI / 180.0 },
+                new[] { 0.0, 0.0, 1.0 },
+                0.0);
+
+            // Flange offset transform (same as TCP calculation)
+            var flangeOffsetTransform = Matrix3D.Identity;
+            flangeOffsetTransform.Translate(new Vector3D(_flangeOffset[0], _flangeOffset[1], _flangeOffset[2]));
+
+            // Tool world = MeshOffset × FlangeOffset × FlangeWorldTransform
+            var toolWorld = Matrix3D.Multiply(meshOffsetTransform, Matrix3D.Multiply(flangeOffsetTransform, flangeTransform));
+
+            var transformGroup = new Transform3DGroup();
+            transformGroup.Children.Add(new ScaleTransform3D(_toolMeshScale, _toolMeshScale, _toolMeshScale));
+            transformGroup.Children.Add(new MatrixTransform3D(toolWorld));
+            _toolGeometry.Transform = transformGroup;
         }
     }
 
@@ -722,6 +837,41 @@ public class RobotModel3D
 
         return new[] { x, y, z, rx, ry, rz };
     }
+
+    /// <summary>
+    /// Set tool TCP offset from flange (for TCP marker positioning)
+    /// </summary>
+    public void SetToolTcpOffset(double[] tcpOffset)
+    {
+        _toolTcpOffset = tcpOffset ?? new double[6];
+        UpdateForwardKinematics();
+        Log.Information("[RobotModel3D] Tool TCP offset set: [{X:F1}, {Y:F1}, {Z:F1}, {Rx:F1}, {Ry:F1}, {Rz:F1}]",
+            _toolTcpOffset[0], _toolTcpOffset[1], _toolTcpOffset[2],
+            _toolTcpOffset[3], _toolTcpOffset[4], _toolTcpOffset[5]);
+    }
+
+    /// <summary>
+    /// Get the 4x4 flange world transform (last link + flange offset).
+    /// Used for computing TCP offset from a picked world point.
+    /// </summary>
+    public Matrix3D GetFlangeWorldTransform()
+    {
+        if (_links.Count == 0) return Matrix3D.Identity;
+
+        var lastLink = _links[^1];
+        var flangeTransform = lastLink.WorldTransform;
+
+        // Apply flange offset
+        var flangeOffsetTransform = Matrix3D.Identity;
+        flangeOffsetTransform.Translate(new Vector3D(_flangeOffset[0], _flangeOffset[1], _flangeOffset[2]));
+
+        return Matrix3D.Multiply(flangeOffsetTransform, flangeTransform);
+    }
+
+    /// <summary>
+    /// Get the tool geometry model (for hit-test filtering)
+    /// </summary>
+    public GeometryModel3D? ToolGeometry => _toolGeometry;
 }
 
 /// <summary>

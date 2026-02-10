@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using RobotController.Common.Messages;
 using RobotController.Common.Services;
+using RobotController.UI.Services;
 using System.Collections.ObjectModel;
 
 namespace RobotController.UI.ViewModels;
@@ -45,6 +46,12 @@ public partial class ToolItemViewModel : ObservableObject
     [ObservableProperty]
     private double _mass;
 
+    [ObservableProperty]
+    private string _visualMeshPath = string.Empty;
+
+    [ObservableProperty]
+    private double _meshScale = 1.0;
+
     public static ToolItemViewModel FromToolData(ToolData data)
     {
         return new ToolItemViewModel
@@ -59,7 +66,9 @@ public partial class ToolItemViewModel : ObservableObject
             TcpRx = data.Tcp?.Rx ?? 0,
             TcpRy = data.Tcp?.Ry ?? 0,
             TcpRz = data.Tcp?.Rz ?? 0,
-            Mass = data.Inertia?.Mass ?? 0
+            Mass = data.Inertia?.Mass ?? 0,
+            VisualMeshPath = data.VisualMeshPath ?? string.Empty,
+            MeshScale = data.MeshScale > 0 ? data.MeshScale : 1.0
         };
     }
 
@@ -83,7 +92,9 @@ public partial class ToolItemViewModel : ObservableObject
             Inertia = new ToolInertiaData
             {
                 Mass = Mass
-            }
+            },
+            VisualMeshPath = VisualMeshPath,
+            MeshScale = MeshScale > 0 ? MeshScale : 1.0
         };
     }
 }
@@ -94,6 +105,7 @@ public partial class ToolItemViewModel : ObservableObject
 public partial class ToolViewModel : ObservableObject
 {
     private readonly IIpcClientService _ipcClient;
+    private readonly IViewportService? _viewportService;
     private readonly ILogger<ToolViewModel>? _logger;
 
     // ========================================================================
@@ -158,6 +170,12 @@ public partial class ToolViewModel : ObservableObject
     [ObservableProperty]
     private double _editMass;
 
+    [ObservableProperty]
+    private string _editVisualMeshPath = string.Empty;
+
+    [ObservableProperty]
+    private double _editMeshScale = 1.0;
+
     // Calibration state
     [ObservableProperty]
     private bool _isCalibrating;
@@ -174,6 +192,9 @@ public partial class ToolViewModel : ObservableObject
     [ObservableProperty]
     private string _calibrationStatus = "IDLE";
 
+    [ObservableProperty]
+    private bool _isPickingTcp;
+
     public string[] AvailableCalibrationMethods { get; } = new[]
     {
         "FOUR_POINT",
@@ -184,14 +205,21 @@ public partial class ToolViewModel : ObservableObject
     // Constructor
     // ========================================================================
 
-    public ToolViewModel(IIpcClientService ipcClient, ILogger<ToolViewModel>? logger = null)
+    public ToolViewModel(IIpcClientService ipcClient, IViewportService? viewportService = null, ILogger<ToolViewModel>? logger = null)
     {
         _ipcClient = ipcClient;
+        _viewportService = viewportService;
         _logger = logger;
 
         // Subscribe to events
         _ipcClient.ToolChanged += OnToolChanged;
         _ipcClient.ConnectionStateChanged += OnConnectionStateChanged;
+
+        // Subscribe to TCP pick events
+        if (_viewportService != null)
+        {
+            _viewportService.TcpPointPicked += OnTcpPointPicked;
+        }
     }
 
     // ========================================================================
@@ -262,6 +290,8 @@ public partial class ToolViewModel : ObservableObject
         EditTcpRy = 0;
         EditTcpRz = 0;
         EditMass = 0;
+        EditVisualMeshPath = string.Empty;
+        EditMeshScale = 1.0;
     }
 
     [RelayCommand]
@@ -283,12 +313,19 @@ public partial class ToolViewModel : ObservableObject
         EditTcpRy = SelectedTool.TcpRy;
         EditTcpRz = SelectedTool.TcpRz;
         EditMass = SelectedTool.Mass;
+        EditVisualMeshPath = SelectedTool.VisualMeshPath;
+        EditMeshScale = SelectedTool.MeshScale;
     }
 
     [RelayCommand]
     private async Task SaveToolAsync()
     {
-        if (!_ipcClient.IsConnected) return;
+        if (!_ipcClient.IsConnected)
+        {
+            ErrorMessage = "Not connected to Core engine";
+            HasError = true;
+            return;
+        }
 
         try
         {
@@ -312,34 +349,46 @@ public partial class ToolViewModel : ObservableObject
                 Inertia = new ToolInertiaData
                 {
                     Mass = EditMass
-                }
+                },
+                VisualMeshPath = EditVisualMeshPath,
+                MeshScale = EditMeshScale > 0 ? EditMeshScale : 1.0
             };
 
             if (IsCreatingNew)
             {
                 var response = await _ipcClient.CreateToolAsync(toolData);
-                if (response?.Success == true)
+                if (response == null)
+                {
+                    ErrorMessage = "Core not responding. Ensure C++ backend is running.";
+                    HasError = true;
+                }
+                else if (response.Success)
                 {
                     _logger?.LogInformation("Created tool: {Id}", EditId);
                     await LoadToolsAsync();
                 }
                 else
                 {
-                    ErrorMessage = response?.Error ?? "Failed to create tool";
+                    ErrorMessage = response.Error ?? "Failed to create tool";
                     HasError = true;
                 }
             }
             else
             {
                 var response = await _ipcClient.UpdateToolAsync(EditId, toolData);
-                if (response?.Success == true)
+                if (response == null)
+                {
+                    ErrorMessage = "Core not responding. Ensure C++ backend is running.";
+                    HasError = true;
+                }
+                else if (response.Success)
                 {
                     _logger?.LogInformation("Updated tool: {Id}", EditId);
                     await LoadToolsAsync();
                 }
                 else
                 {
-                    ErrorMessage = response?.Error ?? "Failed to update tool";
+                    ErrorMessage = response.Error ?? "Failed to update tool";
                     HasError = true;
                 }
             }
@@ -448,6 +497,76 @@ public partial class ToolViewModel : ObservableObject
         {
             IsLoading = false;
         }
+    }
+
+    // ========================================================================
+    // Commands - Tool Mesh
+    // ========================================================================
+
+    [RelayCommand]
+    private void BrowseToolMesh()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Select Tool Mesh File",
+            Filter = "STL Files (*.stl)|*.stl|All Files (*.*)|*.*",
+            DefaultExt = ".stl"
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            EditVisualMeshPath = dialog.FileName;
+            _logger?.LogInformation("Tool mesh selected: {Path}", dialog.FileName);
+        }
+    }
+
+    [RelayCommand]
+    private void ClearToolMesh()
+    {
+        EditVisualMeshPath = string.Empty;
+    }
+
+    [RelayCommand]
+    private void PickTcpPoint()
+    {
+        if (_viewportService == null)
+        {
+            _logger?.LogWarning("ViewportService not available for TCP picking");
+            return;
+        }
+
+        if (!IsEditing)
+        {
+            _logger?.LogWarning("Must be in edit mode to pick TCP point");
+            return;
+        }
+
+        if (IsPickingTcp)
+        {
+            // Cancel picking
+            _viewportService.DisableTcpPicking();
+            IsPickingTcp = false;
+            _logger?.LogInformation("TCP picking cancelled");
+        }
+        else
+        {
+            // Start picking
+            _viewportService.EnableTcpPicking();
+            IsPickingTcp = true;
+            _logger?.LogInformation("TCP picking enabled - click on tool mesh to set TCP point");
+        }
+    }
+
+    private void OnTcpPointPicked(object? sender, TcpPickedEventArgs e)
+    {
+        // Populate TCP offset fields with picked point (flange-local coordinates)
+        EditTcpX = Math.Round(e.X, 2);
+        EditTcpY = Math.Round(e.Y, 2);
+        EditTcpZ = Math.Round(e.Z, 2);
+
+        IsPickingTcp = false;
+
+        _logger?.LogInformation("TCP point picked: ({X:F2}, {Y:F2}, {Z:F2}) mm", e.X, e.Y, e.Z);
     }
 
     // ========================================================================

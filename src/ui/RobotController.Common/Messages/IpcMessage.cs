@@ -8,6 +8,13 @@ namespace RobotController.Common.Messages;
 /// </summary>
 public class IpcMessage
 {
+    /// <summary>Shared JSON options with camelCase naming (matches C++ key names)</summary>
+    public static readonly JsonSerializerOptions CamelCaseOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        WriteIndented = false
+    };
+
     [JsonPropertyName("type")]
     public string Type { get; set; } = string.Empty;
 
@@ -53,11 +60,7 @@ public class IpcMessage
     /// </summary>
     public string Serialize()
     {
-        return JsonSerializer.Serialize(this, new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            WriteIndented = false
-        });
+        return JsonSerializer.Serialize(this, CamelCaseOptions);
     }
 
     /// <summary>
@@ -67,10 +70,7 @@ public class IpcMessage
     {
         try
         {
-            return JsonSerializer.Deserialize<T>(json, new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            });
+            return JsonSerializer.Deserialize<T>(json, CamelCaseOptions);
         }
         catch
         {

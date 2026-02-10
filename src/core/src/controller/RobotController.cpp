@@ -103,6 +103,35 @@ bool RobotController::initialize(const std::string& configDir) {
             updateStatus();
         });
 
+    // Initialize ToolManager
+    m_toolManager = std::make_unique<tool::ToolManager>();
+    m_toolManager->setToolChangedCallback([this](const std::string& toolId) {
+        LOG_INFO("Tool changed to: {}", toolId);
+        auto activeTool = m_toolManager->getActiveTool();
+        if (activeTool && m_jogController) {
+            if (activeTool->tcp.isZero()) {
+                m_jogController->setToolTransform(Eigen::Matrix4d::Identity());
+            } else {
+                m_jogController->setToolTransform(activeTool->tcp.toTransform());
+            }
+        }
+        // Publish tool changed event via IPC
+        if (m_ipcServer) {
+            ipc::ToolChangedEvent event;
+            event.toolId = toolId;
+            event.toolName = activeTool ? activeTool->name : toolId;
+            auto eventMsg = ipc::Message::create(ipc::MessageType::TOOL_CHANGED, event);
+            m_ipcServer->publish(eventMsg);
+        }
+    });
+
+    // Load tools from config directory
+    std::filesystem::path toolsDir = std::filesystem::path(configDir) / "tools";
+    if (std::filesystem::exists(toolsDir)) {
+        m_toolManager->loadFromDirectory(toolsDir.string());
+        LOG_INFO("Tools loaded from: {}", toolsDir.string());
+    }
+
     // Initialize complete
     m_stateMachine->processEvent(StateEvent::INIT_COMPLETE);
 
@@ -555,6 +584,12 @@ void RobotController::updateStatus() {
     // TODO: Calculate tcpInBase using KinematicsService + BaseFrameManager
     // Transform TCP from world frame to active base frame
     if (m_baseFrameManager) {
+
+        // Update active tool ID
+        if (m_toolManager) {
+            m_status.activeToolId = m_toolManager->getActiveToolId();
+        }
+
         // Create Frame from tcpPose
         frame::Frame worldTcp{
             m_status.tcpPose[0], m_status.tcpPose[1], m_status.tcpPose[2],
@@ -871,16 +906,11 @@ void RobotController::registerIpcHandlers() {
         [this](const Message& request) -> nlohmann::json {
             GetToolListResponse response;
 
-            // TODO: Get ToolManager instance and return tools
-            // For now, return placeholder data
-            ToolDataPayload defaultTool;
-            defaultTool.id = "tool_default";
-            defaultTool.name = "No Tool";
-            defaultTool.description = "Default tool with no offset";
-            defaultTool.isActive = true;
-
-            response.tools.push_back(defaultTool);
-            response.activeToolId = "tool_default";
+            auto tools = m_toolManager->getAllTools();
+            for (const auto& tool : tools) {
+                response.tools.push_back(ToolDataPayload::fromToolData(tool));
+            }
+            response.activeToolId = m_toolManager->getActiveToolId();
 
             return response;
         });
@@ -893,11 +923,10 @@ void RobotController::registerIpcHandlers() {
 
             LOG_DEBUG("GET_TOOL request: toolId={}", req.toolId);
 
-            if (req.toolId == "tool_default") {
+            auto tool = m_toolManager->getTool(req.toolId);
+            if (tool) {
                 response.success = true;
-                response.tool.id = "tool_default";
-                response.tool.name = "No Tool";
-                response.tool.isActive = true;
+                response.tool = ToolDataPayload::fromToolData(*tool);
             } else {
                 response.success = false;
                 response.error = "Tool not found: " + req.toolId;
@@ -912,10 +941,39 @@ void RobotController::registerIpcHandlers() {
             CreateToolRequest req = request.payload.get<CreateToolRequest>();
             CreateToolResponse response;
 
-            LOG_INFO("CREATE_TOOL request: id={}, name={}", req.tool.id, req.tool.name);
+            LOG_INFO("CREATE_TOOL request: id={}, name={}, visualMeshPath={}", req.tool.id, req.tool.name, req.tool.visualMeshPath);
 
-            // TODO: Connect to ToolManager
-            response.success = true;
+            auto toolData = req.tool.toToolData();
+
+            // Copy mesh file into config/tools/meshes/ if it's an absolute path
+            if (!toolData.visualMeshPath.empty()) {
+                namespace fs = std::filesystem;
+                fs::path srcPath(toolData.visualMeshPath);
+                if (srcPath.is_absolute() && fs::exists(srcPath)) {
+                    auto& config = ConfigManager::instance();
+                    fs::path toolsDir = fs::path(config.configDir()) / "tools" / "meshes";
+                    fs::create_directories(toolsDir);
+
+                    // Use tool ID + original extension as filename
+                    std::string destFilename = toolData.id + srcPath.extension().string();
+                    fs::path destPath = toolsDir / destFilename;
+
+                    try {
+                        fs::copy_file(srcPath, destPath, fs::copy_options::overwrite_existing);
+                        // Store relative path: meshes/<filename>
+                        toolData.visualMeshPath = "meshes/" + destFilename;
+                        LOG_INFO("[CREATE_TOOL] Copied mesh to: {}, relative path: {}",
+                                 destPath.string(), toolData.visualMeshPath);
+                    } catch (const std::exception& e) {
+                        LOG_WARN("[CREATE_TOOL] Failed to copy mesh: {}, keeping original path", e.what());
+                    }
+                }
+            }
+
+            response.success = m_toolManager->createTool(toolData);
+            if (!response.success) {
+                response.error = "Failed to create tool: " + req.tool.id;
+            }
 
             return response;
         });
@@ -928,8 +986,11 @@ void RobotController::registerIpcHandlers() {
 
             LOG_INFO("UPDATE_TOOL request: toolId={}", req.toolId);
 
-            // TODO: Connect to ToolManager
-            response.success = true;
+            auto toolData = req.tool.toToolData();
+            response.success = m_toolManager->updateTool(req.toolId, toolData);
+            if (!response.success) {
+                response.error = "Failed to update tool: " + req.toolId;
+            }
 
             return response;
         });
@@ -946,8 +1007,10 @@ void RobotController::registerIpcHandlers() {
                 response.success = false;
                 response.error = "Cannot delete default tool";
             } else {
-                // TODO: Connect to ToolManager
-                response.success = true;
+                response.success = m_toolManager->deleteTool(req.toolId);
+                if (!response.success) {
+                    response.error = "Failed to delete tool: " + req.toolId;
+                }
             }
 
             return response;
@@ -961,15 +1024,13 @@ void RobotController::registerIpcHandlers() {
 
             LOG_INFO("SELECT_TOOL request: toolId={}", req.toolId);
 
-            // TODO: Connect to ToolManager
-            response.success = true;
-
-            // Publish tool changed event
-            ToolChangedEvent event;
-            event.toolId = req.toolId;
-            event.toolName = req.toolId;  // TODO: Get actual name
-            auto eventMsg = Message::create(MessageType::TOOL_CHANGED, event);
-            m_ipcServer->publish(eventMsg);
+            response.success = m_toolManager->setActiveTool(req.toolId);
+            if (!response.success) {
+                response.error = "Failed to select tool: " + req.toolId;
+            }
+            // Note: ToolChangedCallback (set in initialize()) handles:
+            // - JogController::setToolTransform()
+            // - Publishing TOOL_CHANGED IPC event
 
             return response;
         });
@@ -979,11 +1040,16 @@ void RobotController::registerIpcHandlers() {
         [this](const Message& request) -> nlohmann::json {
             GetActiveToolResponse response;
 
-            // TODO: Connect to ToolManager
-            response.success = true;
-            response.tool.id = "tool_default";
-            response.tool.name = "No Tool";
-            response.tool.isActive = true;
+            auto activeTool = m_toolManager->getActiveTool();
+            if (activeTool) {
+                response.success = true;
+                response.tool = ToolDataPayload::fromToolData(*activeTool);
+                LOG_INFO("GET_ACTIVE_TOOL: id={}, name={}, visualMeshPath='{}'",
+                    response.tool.id, response.tool.name, response.tool.visualMeshPath);
+            } else {
+                response.success = false;
+                response.error = "No active tool";
+            }
 
             return response;
         });
@@ -996,9 +1062,13 @@ void RobotController::registerIpcHandlers() {
 
             LOG_INFO("START_TCP_CALIBRATION request: method={}", req.method);
 
-            // TODO: Connect to ToolManager calibration
-            response.success = true;
-            response.pointsRequired = (req.method == "SIX_POINT") ? 6 : 4;
+            tool::CalibrationMethod method = tool::CalibrationMethod::FOUR_POINT;
+            if (req.method == "SIX_POINT") {
+                method = tool::CalibrationMethod::SIX_POINT;
+            }
+
+            response.success = m_toolManager->startCalibration(method);
+            response.pointsRequired = (method == tool::CalibrationMethod::SIX_POINT) ? 6 : 4;
 
             return response;
         });
@@ -1011,11 +1081,14 @@ void RobotController::registerIpcHandlers() {
 
             LOG_INFO("RECORD_CALIBRATION_POINT request");
 
-            // TODO: Connect to ToolManager calibration
-            response.success = true;
-            response.pointIndex = 1;
-            response.totalRequired = 4;
-            response.isComplete = false;
+            // Get current joint positions from jog controller
+            auto joints = m_jogController->getJointPositions();
+            response.success = m_toolManager->recordCalibrationPoint(joints);
+
+            auto status = m_toolManager->getCalibrationStatus();
+            response.pointIndex = status.pointsRecorded;
+            response.totalRequired = status.pointsRequired;
+            response.isComplete = (status.pointsRecorded >= status.pointsRequired);
 
             return response;
         });
@@ -1027,10 +1100,19 @@ void RobotController::registerIpcHandlers() {
 
             LOG_INFO("FINISH_CALIBRATION request");
 
-            // TODO: Connect to ToolManager calibration
-            response.success = true;
-            response.calculatedTcp = ToolTCPPayload{0, 0, 100, 0, 0, 0};
-            response.residualError = 0.5;
+            auto tcpResult = m_toolManager->calculateTCP();
+            if (tcpResult) {
+                response.success = true;
+                response.calculatedTcp = ToolTCPPayload{
+                    tcpResult->x, tcpResult->y, tcpResult->z,
+                    tcpResult->rx, tcpResult->ry, tcpResult->rz
+                };
+                // Calculate residual error using calibration data
+                response.residualError = 0.0;  // TODO: get from calibration
+            } else {
+                response.success = false;
+                response.error = "Calibration calculation failed";
+            }
 
             return response;
         });
@@ -1040,7 +1122,7 @@ void RobotController::registerIpcHandlers() {
         [this](const Message& request) -> nlohmann::json {
             LOG_INFO("CANCEL_CALIBRATION request");
 
-            // TODO: Connect to ToolManager
+            m_toolManager->cancelCalibration();
             return nlohmann::json{{"success", true}};
         });
 
@@ -1049,11 +1131,21 @@ void RobotController::registerIpcHandlers() {
         [this](const Message& request) -> nlohmann::json {
             CalibrationStatusResponse response;
 
-            // TODO: Connect to ToolManager
-            response.state = "IDLE";
-            response.method = "FOUR_POINT";
-            response.pointsRecorded = 0;
-            response.pointsRequired = 4;
+            auto status = m_toolManager->getCalibrationStatus();
+            switch (status.state) {
+                case tool::CalibrationState::IDLE: response.state = "IDLE"; break;
+                case tool::CalibrationState::COLLECTING_POINTS: response.state = "COLLECTING"; break;
+                case tool::CalibrationState::CALCULATING: response.state = "CALCULATING"; break;
+                case tool::CalibrationState::COMPLETED: response.state = "COMPLETE"; break;
+                case tool::CalibrationState::FAILED: response.state = "ERROR"; break;
+            }
+            switch (status.method) {
+                case tool::CalibrationMethod::FOUR_POINT: response.method = "FOUR_POINT"; break;
+                case tool::CalibrationMethod::SIX_POINT: response.method = "SIX_POINT"; break;
+                default: response.method = "DIRECT_INPUT"; break;
+            }
+            response.pointsRecorded = status.pointsRecorded;
+            response.pointsRequired = status.pointsRequired;
 
             return response;
         });
@@ -1585,6 +1677,19 @@ void RobotController::registerIpcHandlers() {
             // Store active package for homing and other operations
             m_activePackage = *package;
 
+            // Save last active package ID for auto-load on next startup
+            {
+                auto& cfg = ConfigManager::instance();
+                if (!cfg.configDir().empty()) {
+                    std::filesystem::path lastPkgFile = std::filesystem::path(cfg.configDir()) / "last_active_package.txt";
+                    std::ofstream f(lastPkgFile);
+                    if (f.is_open()) {
+                        f << packageId;
+                        LOG_INFO("Saved last active package: {}", packageId);
+                    }
+                }
+            }
+
             response["success"] = true;
             auto packageJson = packageToJson(*package);
 
@@ -1613,10 +1718,15 @@ void RobotController::registerIpcHandlers() {
         [this](const Message& request) -> nlohmann::json {
             nlohmann::json response;
 
-            // TODO: Return stored active package
-            // For now, return null
-            response["success"] = true;
-            response["package"] = nlohmann::json::object();
+            if (m_activePackage) {
+                response["success"] = true;
+                response["package"] = packageToJson(*m_activePackage);
+                response["package_id"] = m_activePackage->id;
+            } else {
+                response["success"] = true;
+                response["package"] = nlohmann::json::object();
+                response["package_id"] = "";
+            }
 
             return response;
         });

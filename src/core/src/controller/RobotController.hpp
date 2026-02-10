@@ -17,6 +17,7 @@
 #include "../firmware/IFirmwareDriver.hpp"
 #include "../firmware/FirmwareSimulator.hpp"
 #include "../config/RobotPackageSchema.hpp"
+#include "../tool/ToolManager.hpp"
 #include <memory>
 #include <array>
 #include <atomic>
@@ -147,6 +148,7 @@ private:
     bool m_isSimMode{true};
     std::optional<config::RobotPackage> m_activePackage;
     std::unique_ptr<interpreter::Executor> m_programExecutor;
+    std::unique_ptr<tool::ToolManager> m_toolManager;
 
     // Status
     RobotStatus m_status;

@@ -54,6 +54,7 @@ public partial class RobotPackageBrowserViewModel : ObservableObject
     private readonly IViewportService _viewportService;
     private readonly IUrdfImportService _urdfImportService;
     private readonly IRobotPackageGenerator _packageGenerator;
+    private readonly IConfigService? _configService;
 
     [ObservableProperty]
     private ObservableCollection<RobotPackageInfoViewModel> _availablePackages = new();
@@ -74,19 +75,21 @@ public partial class RobotPackageBrowserViewModel : ObservableObject
         IIpcClientService ipcClient,
         IViewportService viewportService,
         IUrdfImportService urdfImportService,
-        IRobotPackageGenerator packageGenerator)
+        IRobotPackageGenerator packageGenerator,
+        IConfigService? configService = null)
     {
         _ipcClient = ipcClient;
         _viewportService = viewportService;
         _urdfImportService = urdfImportService;
         _packageGenerator = packageGenerator;
+        _configService = configService;
     }
 
     /// <summary>
     /// Design-time constructor
     /// </summary>
     public RobotPackageBrowserViewModel()
-        : this(null!, null!, new UrdfImportService(), new RobotPackageGenerator())
+        : this(null!, null!, new UrdfImportService(), new RobotPackageGenerator(), null)
     {
     }
 
@@ -229,6 +232,14 @@ public partial class RobotPackageBrowserViewModel : ObservableObject
 
                 // Update viewport
                 await _viewportService.InitializeFromPackageAsync(LoadedPackage);
+
+                // Save last active package to config for auto-restore on next startup
+                if (_configService != null)
+                {
+                    _configService.Config.LastActivePackageId = pkg.Id;
+                    _configService.Save();
+                    Log.Information("Saved last active package: {Id}", pkg.Id);
+                }
 
                 StatusMessage = $"Loaded: {LoadedPackage.Name}";
             }

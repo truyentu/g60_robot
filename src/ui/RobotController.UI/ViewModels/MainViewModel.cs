@@ -101,6 +101,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private int _selectedNavIndex = 0;
 
+    private int _prePickNavIndex = -1; // Nav index before TCP picking
+
     [ObservableProperty]
     private double _speedOverride = 100;
 
@@ -148,6 +150,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private OverrideViewModel? _override;
 
     [ObservableProperty]
+    private StationSetupViewModel? _stationSetup;
+
+    [ObservableProperty]
     private PositionDisplayViewModel? _positionDisplay;
 
     [ObservableProperty]
@@ -156,6 +161,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
     // 3D Model
     public Model3DGroup? RobotModelGroup => _viewportService.GetModelGroup();
     public Model3DGroup? TcpMarkerGroup { get; private set; }
+    public Model3DGroup? SceneObjectsGroup => _viewportService.GetSceneGroup();
+    public Model3DGroup? BaseFrameAxesGroup => _viewportService.GetBaseFrameGroup();
 
     public event EventHandler? RobotModelUpdated;
 
@@ -191,6 +198,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         // Subscribe to viewport events
         _viewportService.ModelUpdated += OnViewportModelUpdated;
+        _viewportService.TcpPickModeChanged += OnTcpPickModeChanged;
 
         // Create TCP marker
         TcpMarkerGroup = _viewportService.CreateTcpMarker();
@@ -206,12 +214,16 @@ public partial class MainViewModel : ObservableObject, IDisposable
         RobotCatalogViewModel = robotCatalogViewModel;
         UrdfImportViewModel = urdfImportViewModel;
         Homing = new HomingViewModel(_ipcClient);
-        Tool = new ToolViewModel(_ipcClient);
+        Tool = new ToolViewModel(_ipcClient, _viewportService);
         Mode = new ModeViewModel(_ipcClient);
         BaseFrame = new BaseFrameViewModel(_ipcClient);
         Override = new OverrideViewModel(_ipcClient);
+        StationSetup = new StationSetupViewModel(_viewportService, _ipcClient);
         PositionDisplay = new PositionDisplayViewModel(_ipcClient);
         ProgramEditor = new ProgramEditorViewModel(_ipcClient);
+
+        // Subscribe to tool change for viewport update
+        _ipcClient.ToolChanged += OnToolChangedForViewport;
 
         // Auto-connect if configured
         if (_configService.Config.Connection.AutoConnect)
@@ -250,8 +262,14 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 CoreUptime = pong.UptimeMs;
             }
 
-            // Initialize robot 3D model with default config (for demo without Core)
-            await InitializeRobotModelWithDefaultAsync();
+            // Auto-restore last session (robot package + tool)
+            bool restored = await AutoRestoreSessionAsync();
+
+            if (!restored)
+            {
+                // Fall back to default robot model (for demo without Core)
+                await InitializeRobotModelWithDefaultAsync();
+            }
 
             // Get initial status
             var status = await _ipcClient.GetStatusAsync();
@@ -259,6 +277,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
             {
                 UpdateStatus(status);
             }
+
+            // Auto-load active tool mesh
+            await AutoLoadActiveToolMeshAsync();
         }
     }
 
@@ -304,6 +325,148 @@ public partial class MainViewModel : ObservableObject, IDisposable
         catch (Exception ex)
         {
             Log.Error(ex, "Failed to initialize robot model");
+        }
+    }
+
+    /// <summary>
+    /// Auto-restore last active robot package from config.
+    /// Returns true if package was successfully loaded.
+    /// </summary>
+    private async Task<bool> AutoRestoreSessionAsync()
+    {
+        try
+        {
+            var lastPackageId = _configService.Config.LastActivePackageId;
+            if (string.IsNullOrEmpty(lastPackageId))
+            {
+                Log.Information("[MainVM] No last active package in config, skipping auto-restore");
+                return false;
+            }
+
+            Log.Information("[MainVM] Auto-restoring last active package: {PackageId}", lastPackageId);
+
+            var response = await _ipcClient.LoadRobotPackageAsync(lastPackageId);
+            if (response == null || !response.Success || response.Package == null)
+            {
+                Log.Warning("[MainVM] Failed to auto-load package '{PackageId}': {Error}",
+                    lastPackageId, response?.Error ?? "null response");
+                return false;
+            }
+
+            var pkg = response.Package;
+
+            // Build package path from ID
+            var packagePath = System.IO.Path.GetFullPath(
+                System.IO.Path.Combine(
+                    AppDomain.CurrentDomain.BaseDirectory,
+                    "config", "robots", pkg.Id));
+
+            var packageData = new RobotPackageData
+            {
+                Name = pkg.Name,
+                Id = pkg.Id,
+                Manufacturer = pkg.Manufacturer,
+                ModelType = pkg.ModelType,
+                PayloadKg = pkg.PayloadKg,
+                ReachMm = pkg.ReachMm,
+                DhConvention = pkg.DhConvention,
+                PackagePath = packagePath
+            };
+
+            // Parse joints
+            foreach (var j in pkg.Joints)
+            {
+                var joint = new JointDefinitionData
+                {
+                    Name = j.Name,
+                    Type = j.Type,
+                    DhA = j.DhA,
+                    DhAlpha = j.DhAlpha,
+                    DhD = j.DhD,
+                    DhThetaOffset = j.DhThetaOffset,
+                    OriginXyz = j.OriginXyz,
+                    OriginRpy = j.OriginRpy,
+                    Axis = j.Axis,
+                    LimitMin = j.LimitMin,
+                    LimitMax = j.LimitMax,
+                    VelocityMax = j.VelocityMax,
+                    AccelerationMax = j.AccelerationMax
+                };
+
+                if (j.Mesh != null)
+                {
+                    joint.Mesh = new JointMeshData
+                    {
+                        VisualMesh = j.Mesh.VisualMesh,
+                        CollisionMesh = j.Mesh.CollisionMesh
+                    };
+                }
+
+                packageData.Joints.Add(joint);
+            }
+
+            packageData.BaseMesh = pkg.BaseMesh ?? "";
+            packageData.HomePosition = pkg.HomePosition;
+            packageData.FlangeOffset = pkg.FlangeOffset ?? new double[3];
+
+            // Update viewport
+            await _viewportService.InitializeFromPackageAsync(packageData);
+            _robotInitialized = true;
+
+            // Update RobotCatalogViewModel if available
+            if (RobotCatalogViewModel != null)
+            {
+                RobotCatalogViewModel.LoadedPackage = packageData;
+            }
+
+            Log.Information("[MainVM] Auto-restored robot package: {Name} ({Id})", pkg.Name, pkg.Id);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[MainVM] Error during auto-restore session");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Auto-load active tool mesh on startup
+    /// </summary>
+    private async Task AutoLoadActiveToolMeshAsync()
+    {
+        try
+        {
+            var response = await _ipcClient.GetActiveToolAsync();
+            if (response?.Success != true || response.Tool == null)
+            {
+                Log.Debug("[MainVM] No active tool to auto-load");
+                return;
+            }
+
+            var toolData = response.Tool;
+            Log.Information("[MainVM] Auto-loading active tool mesh: {Name}, MeshPath='{Path}'",
+                toolData.Name, toolData.VisualMeshPath);
+
+            _dispatcher.Invoke(() =>
+            {
+                // Set tool TCP offset
+                var tcpOffset = new[] {
+                    toolData.Tcp.X, toolData.Tcp.Y, toolData.Tcp.Z,
+                    toolData.Tcp.Rx, toolData.Tcp.Ry, toolData.Tcp.Rz
+                };
+                _viewportService.SetToolTcpOffset(tcpOffset);
+
+                if (!string.IsNullOrEmpty(toolData.VisualMeshPath) &&
+                    System.IO.File.Exists(toolData.VisualMeshPath))
+                {
+                    _viewportService.SetToolMesh(toolData.VisualMeshPath, toolData.MeshOffset, toolData.MeshScale);
+                    Log.Information("[MainVM] Auto-loaded tool mesh: {Path}", toolData.VisualMeshPath);
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "[MainVM] Error auto-loading active tool mesh");
         }
     }
 
@@ -364,6 +527,98 @@ public partial class MainViewModel : ObservableObject, IDisposable
             OnPropertyChanged(nameof(RobotModelGroup));
             RobotModelUpdated?.Invoke(this, EventArgs.Empty);
         });
+    }
+
+    private void OnTcpPickModeChanged(object? sender, bool isPickMode)
+    {
+        _dispatcher.InvokeAsync(() =>
+        {
+            if (isPickMode)
+            {
+                // Save current page and navigate to viewport (index 0 = Manual Jog)
+                _prePickNavIndex = SelectedNavIndex;
+                SelectedNavIndex = 0;
+                Log.Information("[MainVM] TCP pick mode ON - navigated to viewport (was page {Prev})", _prePickNavIndex);
+            }
+            else
+            {
+                // Navigate back to Tool Management page
+                if (_prePickNavIndex >= 0)
+                {
+                    SelectedNavIndex = _prePickNavIndex;
+                    Log.Information("[MainVM] TCP pick mode OFF - returned to page {Page}", _prePickNavIndex);
+                    _prePickNavIndex = -1;
+                }
+            }
+        });
+    }
+
+    private async void OnToolChangedForViewport(object? sender, ToolChangedEvent e)
+    {
+        try
+        {
+            Log.Information("[MainVM] OnToolChangedForViewport called: ToolId={ToolId}, ToolName={ToolName}", e.ToolId, e.ToolName);
+
+            // Small delay to avoid REQ socket race condition:
+            // TOOL_CHANGED event may arrive before the SELECT_TOOL response is received,
+            // and ZeroMQ REQ socket requires strict send-recv-send-recv pattern.
+            await Task.Delay(100);
+
+            // Fetch the full tool data to get visualMeshPath
+            var response = await Task.Run(() => _ipcClient.GetActiveToolAsync());
+            if (response?.Success != true || response.Tool == null)
+            {
+                Log.Warning("[MainVM] GetActiveToolAsync failed: Success={Success}, Tool={Tool}",
+                    response?.Success, response?.Tool != null ? "exists" : "null");
+                _dispatcher.Invoke(() =>
+                {
+                    _viewportService.SetToolTcpOffset(new double[6]);
+                    _viewportService.ClearToolMesh();
+                });
+                return;
+            }
+
+            var toolData = response.Tool;
+            Log.Information("[MainVM] Active tool data: Id={Id}, Name={Name}, VisualMeshPath='{Path}', MeshOffset=[{Offset}]",
+                toolData.Id, toolData.Name, toolData.VisualMeshPath,
+                toolData.MeshOffset != null ? string.Join(",", toolData.MeshOffset) : "null");
+
+            _dispatcher.Invoke(() =>
+            {
+                // Set tool TCP offset for TCP marker positioning
+                var tcpOffset = new[] {
+                    toolData.Tcp.X, toolData.Tcp.Y, toolData.Tcp.Z,
+                    toolData.Tcp.Rx, toolData.Tcp.Ry, toolData.Tcp.Rz
+                };
+                _viewportService.SetToolTcpOffset(tcpOffset);
+
+                if (!string.IsNullOrEmpty(toolData.VisualMeshPath))
+                {
+                    bool fileExists = System.IO.File.Exists(toolData.VisualMeshPath);
+                    Log.Information("[MainVM] VisualMeshPath='{Path}', File.Exists={Exists}", toolData.VisualMeshPath, fileExists);
+
+                    if (fileExists)
+                    {
+                        bool loaded = _viewportService.SetToolMesh(toolData.VisualMeshPath, toolData.MeshOffset, toolData.MeshScale);
+                        Log.Information("[MainVM] SetToolMesh result: {Result}", loaded);
+                    }
+                    else
+                    {
+                        _viewportService.ClearToolMesh();
+                        Log.Warning("[MainVM] Tool mesh file not found: {Path}", toolData.VisualMeshPath);
+                    }
+                }
+                else
+                {
+                    _viewportService.ClearToolMesh();
+                    Log.Debug("[MainVM] Tool '{ToolId}' has no visual mesh (empty path), cleared viewport", e.ToolId);
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "[MainVM] Error updating tool mesh in viewport");
+        }
     }
 
     private int _statusLogCounter = 0;
@@ -473,6 +728,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _ipcClient.ConnectionStateChanged -= OnConnectionStateChanged;
         _ipcClient.ErrorOccurred -= OnErrorOccurred;
         _viewportService.ModelUpdated -= OnViewportModelUpdated;
+        _viewportService.TcpPickModeChanged -= OnTcpPickModeChanged;
         _ipcClient.Dispose();
 
         _disposed = true;

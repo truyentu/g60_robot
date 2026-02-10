@@ -118,9 +118,13 @@ private:
     // Callbacks
     ToolChangedCallback m_toolChangedCallback;
 
+    // Persistence
+    std::string m_configDir;  // Directory for auto-save (set by loadFromDirectory)
+
     // Helper methods
     void notifyToolChanged(const std::string& toolId);
     int getRequiredPoints(CalibrationMethod method) const;
+    void autoSave();  // Save to m_configDir if set
 };
 
 } // namespace tool

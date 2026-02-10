@@ -127,4 +127,7 @@ public class UiConfig
 
     [JsonPropertyName("window")]
     public WindowConfig Window { get; set; } = new();
+
+    [JsonPropertyName("last_active_package_id")]
+    public string LastActivePackageId { get; set; } = "";
 }

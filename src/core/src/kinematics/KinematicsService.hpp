@@ -116,6 +116,14 @@ public:
     bool hasUrdfFK() const { return urdfFk_ != nullptr; }
     bool hasKDLIK() const { return kdlKin_ != nullptr && kdlKin_->isInitialized(); }
 
+    // True TCP support (Phase 11)
+    TCPPose computeFlangePose(const JointAngles& jointAngles);
+    TCPPose computeTcpPose(const JointAngles& jointAngles);
+    std::optional<IKSolution> computeTcpIK(const TCPPose& tcpTarget, const JointAngles& currentAngles);
+    Eigen::Matrix4d getToolTransform() const;
+    Eigen::Matrix4d getToolInverseTransform() const;
+    bool hasToolOffset() const;
+
 private:
     mutable std::mutex mutex_;
     RobotKinematicConfig config_;
@@ -123,6 +131,11 @@ private:
     std::unique_ptr<UrdfForwardKinematics> urdfFk_;  // URDF FK (primary)
     std::unique_ptr<KDLKinematics> kdlKin_;          // KDL IK (primary)
     InverseKinematics ik_;               // DH IK (deprecated fallback)
+
+    // Tool transform (Phase 11)
+    Eigen::Matrix4d toolTransform_ = Eigen::Matrix4d::Identity();
+    Eigen::Matrix4d toolInvTransform_ = Eigen::Matrix4d::Identity();
+    bool hasToolOffset_ = false;
 };
 
 // ============================================================================
@@ -213,6 +226,18 @@ inline void KinematicsService::setToolOffset(const Vector3d& offset, const Matri
     config_.toolRotation = rotation;
     fk_.setToolOffset(offset, rotation);
     ik_.setConfig(config_);
+
+    // Cache T_tool matrices for True TCP (Phase 11)
+    toolTransform_ = Eigen::Matrix4d::Identity();
+    toolTransform_.block<3,3>(0,0) = rotation;
+    toolTransform_.block<3,1>(0,3) = Eigen::Vector3d(offset.x(), offset.y(), offset.z());
+
+    // Efficient inverse: T⁻¹ = [R' | -R'*t]
+    toolInvTransform_ = Eigen::Matrix4d::Identity();
+    toolInvTransform_.block<3,3>(0,0) = rotation.transpose();
+    toolInvTransform_.block<3,1>(0,3) = -rotation.transpose() * Eigen::Vector3d(offset.x(), offset.y(), offset.z());
+
+    hasToolOffset_ = (offset.norm() > 1e-9 || !rotation.isIdentity(1e-9));
 }
 
 inline void KinematicsService::setToolOffset(const std::array<double, 6>& tcpOffset) {
@@ -267,6 +292,74 @@ inline void KinematicsService::initializeUrdfKinematics(
     urdfFk_ = std::make_unique<UrdfForwardKinematics>(joints, toolOffset);
     kdlKin_ = std::make_unique<KDLKinematics>();
     kdlKin_->buildFromUrdfJoints(joints, toolOffset);
+}
+
+// ============================================================================
+// True TCP Support (Phase 11)
+// ============================================================================
+
+inline TCPPose KinematicsService::computeFlangePose(const JointAngles& jointAngles) {
+    // Returns FLANGE pose (FK chain output, no ToolData TCP applied)
+    // KDL/URDF FK chain already returns flange pose (flangeOffset is robot geometry, not tool)
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (urdfFk_) {
+        return urdfFk_->compute(jointAngles);
+    }
+    return fk_.compute(jointAngles);
+}
+
+inline TCPPose KinematicsService::computeTcpPose(const JointAngles& jointAngles) {
+    // Returns TRUE TCP pose = T_flange × T_tool
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    TCPPose flangePose;
+    if (urdfFk_) {
+        flangePose = urdfFk_->compute(jointAngles);
+    } else {
+        flangePose = fk_.compute(jointAngles);
+    }
+
+    if (!hasToolOffset_) {
+        return flangePose;
+    }
+
+    // T_tcp = T_flange × T_tool
+    Eigen::Matrix4d T_flange = flangePose.toTransform();
+    Eigen::Matrix4d T_tcp = T_flange * toolTransform_;
+
+    return TCPPose::fromTransform(T_tcp);
+}
+
+inline std::optional<IKSolution> KinematicsService::computeTcpIK(
+    const TCPPose& tcpTarget, const JointAngles& currentAngles) {
+    // Back-calculation: T_flange = T_tcp_desired × T_tool⁻¹
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    TCPPose flangeTarget = tcpTarget;
+    if (hasToolOffset_) {
+        Eigen::Matrix4d T_tcp_desired = tcpTarget.toTransform();
+        Eigen::Matrix4d T_flange_desired = T_tcp_desired * toolInvTransform_;
+        flangeTarget = TCPPose::fromTransform(T_flange_desired);
+    }
+
+    // Solve IK for flange pose
+    if (kdlKin_ && kdlKin_->isInitialized()) {
+        auto result = kdlKin_->computeIK(flangeTarget, currentAngles);
+        if (result.has_value()) return result;
+    }
+    return ik_.compute(flangeTarget, currentAngles);
+}
+
+inline Eigen::Matrix4d KinematicsService::getToolTransform() const {
+    return toolTransform_;
+}
+
+inline Eigen::Matrix4d KinematicsService::getToolInverseTransform() const {
+    return toolInvTransform_;
+}
+
+inline bool KinematicsService::hasToolOffset() const {
+    return hasToolOffset_;
 }
 
 } // namespace kinematics

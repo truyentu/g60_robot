@@ -62,6 +62,7 @@ set(CORE_SOURCES
     src/state/StateMachine.cpp
     src/controller/RobotController.cpp
     src/homing/HomingService.cpp
+    src/tool/ToolTypes.cpp
     src/tool/ToolManager.cpp
     src/tool/ToolCalibration.cpp
     src/mode/ModeManager.cpp
