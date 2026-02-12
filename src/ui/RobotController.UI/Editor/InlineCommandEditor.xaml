@@ -1,0 +1,108 @@
+<UserControl x:Class="RobotController.UI.Editor.InlineCommandEditor"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DesignWidth="500" d:DesignHeight="40">
+
+    <!-- KUKA-Style Inline Form: appears below the current command line -->
+    <Border Background="#2D2D30" BorderBrush="#007ACC" BorderThickness="1"
+            CornerRadius="4" Padding="8,4" Margin="0,2,0,0">
+        <Border.Effect>
+            <DropShadowEffect Color="Black" BlurRadius="8" ShadowDepth="2" Opacity="0.4"/>
+        </Border.Effect>
+
+        <Grid>
+            <!-- Motion Instruction Form: MoveL/MoveJ/MoveC -->
+            <StackPanel Orientation="Horizontal"
+                        Visibility="{Binding IsMotionCommand, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}">
+
+                <!-- Motion Type -->
+                <TextBlock Text="Motion:" Foreground="#AAAAAA" VerticalAlignment="Center"
+                           FontSize="11" Margin="0,0,4,0"/>
+                <ComboBox ItemsSource="{Binding MotionTypes}"
+                          SelectedItem="{Binding MotionType, Mode=TwoWay}"
+                          Width="70" FontSize="11"
+                          Background="#3C3C3C" Foreground="White"
+                          BorderBrush="#555555"/>
+
+                <!-- Target (read-only label) -->
+                <TextBlock Foreground="#CE9178" VerticalAlignment="Center"
+                           FontSize="11" FontWeight="SemiBold" Margin="10,0,0,0">
+                    <Run Text="Target: "/>
+                    <Run Text="{Binding TargetName}"/>
+                </TextBlock>
+
+                <Rectangle Width="1" Fill="#555555" Margin="10,2"/>
+
+                <!-- Speed Dropdown -->
+                <TextBlock Text="Speed:" Foreground="#AAAAAA" VerticalAlignment="Center"
+                           FontSize="11" Margin="10,0,4,0"/>
+                <ComboBox ItemsSource="{Binding AvailableSpeeds}"
+                          SelectedItem="{Binding SelectedSpeed, Mode=TwoWay}"
+                          DisplayMemberPath="Name"
+                          Width="75" FontSize="11"
+                          Background="#3C3C3C" Foreground="White"
+                          BorderBrush="#555555"/>
+
+                <Rectangle Width="1" Fill="#555555" Margin="10,2"/>
+
+                <!-- Zone Dropdown -->
+                <TextBlock Text="Zone:" Foreground="#AAAAAA" VerticalAlignment="Center"
+                           FontSize="11" Margin="10,0,4,0"/>
+                <ComboBox ItemsSource="{Binding AvailableZones}"
+                          SelectedItem="{Binding SelectedZone, Mode=TwoWay}"
+                          DisplayMemberPath="Name"
+                          Width="70" FontSize="11"
+                          Background="#3C3C3C" Foreground="White"
+                          BorderBrush="#555555"/>
+
+                <Rectangle Width="1" Fill="#555555" Margin="10,2"/>
+
+                <!-- Tool Dropdown -->
+                <TextBlock Text="Tool:" Foreground="#AAAAAA" VerticalAlignment="Center"
+                           FontSize="11" Margin="10,0,4,0"/>
+                <ComboBox ItemsSource="{Binding AvailableTools}"
+                          SelectedItem="{Binding ToolName, Mode=TwoWay}"
+                          Width="80" FontSize="11"
+                          Background="#3C3C3C" Foreground="White"
+                          BorderBrush="#555555"/>
+            </StackPanel>
+
+            <!-- ArcStart Form -->
+            <StackPanel Orientation="Horizontal"
+                        Visibility="{Binding IsArcStartCommand, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}">
+
+                <TextBlock Text="Welding Job:" Foreground="#C586C0" VerticalAlignment="Center"
+                           FontSize="11" FontWeight="SemiBold" Margin="0,0,8,0"/>
+                <ComboBox ItemsSource="{Binding AvailableJobs}"
+                          SelectedItem="{Binding SelectedJob, Mode=TwoWay}"
+                          Width="200" FontSize="11"
+                          Background="#3C3C3C" Foreground="White"
+                          BorderBrush="#555555">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock>
+                                <Run Text="Job "/>
+                                <Run Text="{Binding Id}"/>
+                                <Run Text=": "/>
+                                <Run Text="{Binding Name}"/>
+                            </TextBlock>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+
+                <!-- Job info display -->
+                <TextBlock Foreground="#6A9955" VerticalAlignment="Center"
+                           FontSize="10" Margin="12,0,0,0">
+                    <Run Text="{Binding SelectedJob.Material, FallbackValue=''}"/>
+                    <Run Text=" | "/>
+                    <Run Text="{Binding SelectedJob.WireFeedSpeed, StringFormat={}{0:F1}m/min, FallbackValue=''}"/>
+                    <Run Text=" | "/>
+                    <Run Text="{Binding SelectedJob.Voltage, StringFormat={}{0:F1}V, FallbackValue=''}"/>
+                </TextBlock>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

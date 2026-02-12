@@ -110,9 +110,11 @@ bool RobotController::initialize(const std::string& configDir) {
         auto activeTool = m_toolManager->getActiveTool();
         if (activeTool && m_jogController) {
             if (activeTool->tcp.isZero()) {
-                m_jogController->setToolTransform(Eigen::Matrix4d::Identity());
+                // No tool TCP: just flange offset
+                m_jogController->setToolTransform(m_flangeTransform);
             } else {
-                m_jogController->setToolTransform(activeTool->tcp.toTransform());
+                // T_composed = T_flangeOffset * T_toolTcp
+                m_jogController->setToolTransform(m_flangeTransform * activeTool->tcp.toTransform());
             }
         }
         // Publish tool changed event via IPC
@@ -212,41 +214,60 @@ bool RobotController::home() {
     }
 
     if (m_stateMachine->processEvent(StateEvent::HOME_REQUEST)) {
-        LOG_INFO("Homing started");
+        LOG_INFO("Go Home started (PTP move to park position)");
 
-        // Virtual homing: set joints to home_position from active package
         std::thread([this]() {
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-            // Set firmware simulator to home position
-            if (m_activeDriver) {
-                std::array<double, 6> homePos = {0, 0, 0, 0, 0, 0};
-
-                // Use home_position from active package if available
-                if (m_activePackage && !m_activePackage->home_position.empty()) {
-                    for (size_t i = 0; i < 6 && i < m_activePackage->home_position.size(); i++) {
-                        homePos[i] = m_activePackage->home_position[i];
-                    }
-                    LOG_INFO("Virtual homing to package home_position: [{}, {}, {}, {}, {}, {}]",
-                             homePos[0], homePos[1], homePos[2],
-                             homePos[3], homePos[4], homePos[5]);
-                }
-
-                // Send G-code to move all joints to home position
-                std::ostringstream gcode;
-                gcode << "$J=G90";
-                for (int i = 0; i < 6; i++) {
-                    gcode << " J" << i << ":" << homePos[i];
-                }
-                gcode << " F1000";  // Slow homing speed
-                m_activeDriver->sendCommand(gcode.str());
-
-                // Wait for motion to complete
-                std::this_thread::sleep_for(std::chrono::seconds(1));
+            if (!m_activeDriver) {
+                m_stateMachine->processEvent(StateEvent::HOME_COMPLETE);
+                return;
             }
 
+            // Determine home position ($H_POS equivalent)
+            std::array<double, 6> homePos = {0, 0, 0, 0, 0, 0};
+            if (m_activePackage && !m_activePackage->home_position.empty()) {
+                for (size_t i = 0; i < 6 && i < m_activePackage->home_position.size(); i++) {
+                    homePos[i] = m_activePackage->home_position[i];
+                }
+            }
+            LOG_INFO("Go Home target ($H_POS): [{}, {}, {}, {}, {}, {}]",
+                     homePos[0], homePos[1], homePos[2],
+                     homePos[3], homePos[4], homePos[5]);
+
+            // Get current joint positions
+            auto currentPos = m_activeDriver->getJointPositions();
+
+            // Interpolate from current to home position (smoothstep, 50Hz)
+            const double homingSpeedDegPerSec = 60.0;  // Conservative homing speed
+            double maxDelta = 0.0;
+            for (int i = 0; i < 6; i++) {
+                maxDelta = std::max(maxDelta, std::abs(homePos[i] - currentPos[i]));
+            }
+
+            double totalTime = (maxDelta > 0.1) ? (maxDelta / homingSpeedDegPerSec) : 0.1;
+            totalTime = std::clamp(totalTime, 0.1, 10.0);
+
+            const int hz = 50;
+            int totalSteps = static_cast<int>(totalTime * hz);
+            if (totalSteps < 1) totalSteps = 1;
+
+            for (int step = 1; step <= totalSteps; step++) {
+                double t = static_cast<double>(step) / totalSteps;
+                double s = t * t * (3.0 - 2.0 * t);  // smoothstep
+
+                std::array<double, 6> interpPos;
+                for (int i = 0; i < 6; i++) {
+                    interpPos[i] = currentPos[i] + s * (homePos[i] - currentPos[i]);
+                }
+
+                m_activeDriver->setJointPositionsDirect(interpPos);
+                std::this_thread::sleep_for(std::chrono::milliseconds(1000 / hz));
+            }
+
+            // Final: set exactly home position
+            m_activeDriver->setJointPositionsDirect(homePos);
+
             m_stateMachine->processEvent(StateEvent::HOME_COMPLETE);
-            LOG_INFO("Homing complete (virtual)");
+            LOG_INFO("Go Home complete - robot at park position");
         }).detach();
 
         return true;
@@ -307,12 +328,163 @@ bool RobotController::loadProgram(const std::string& source) {
     if (!m_programExecutor) {
         m_programExecutor = std::make_unique<interpreter::Executor>();
 
-        // Set up motion callback to integrate with trajectory generator
+        // Set up motion callback - resolve point, IK, interpolate, update joints
         m_programExecutor->setMotionCallback([this](const interpreter::MotionStmt& motion) {
-            LOG_INFO("Motion command: {} to point", motion.type);
-            // TODO: Send to trajectory generator in Phase 2
-            // For now, just simulate motion time
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            // 1. Resolve target point name from PointExpr
+            std::string pointName;
+            if (motion.target) {
+                std::visit([&pointName](auto&& e) {
+                    using T = std::decay_t<decltype(e)>;
+                    if constexpr (std::is_same_v<T, interpreter::PointExpr>) {
+                        pointName = e.name;
+                    }
+                }, *motion.target);
+            }
+
+            if (pointName.empty()) {
+                LOG_WARN("Motion {}: no target point name", motion.type);
+                return;
+            }
+
+            // 2. Get target coordinates from executor point database
+            auto targetValues = m_programExecutor->getPoint(pointName);
+            if (targetValues.size() < 3) {
+                LOG_WARN("Motion {}: point '{}' not found or has < 3 values", motion.type, pointName);
+                return;
+            }
+
+            // 3. Build target pose [x, y, z, rx, ry, rz] (mm, degrees)
+            double tx = targetValues[0];
+            double ty = targetValues[1];
+            double tz = targetValues[2];
+
+            // Convert quaternion [q1,q2,q3,q4] to RPY (degrees) if available
+            // robtarget format: [x,y,z, q1,q2,q3,q4, cf1,cf4,cf6,cfx, e1..e6]
+            // q1=w, q2=x, q3=y, q4=z (ABB convention)
+            double rx_deg = 0, ry_deg = 0, rz_deg = 0;
+            if (targetValues.size() >= 7) {
+                double qw = targetValues[3];
+                double qx = targetValues[4];
+                double qy = targetValues[5];
+                double qz = targetValues[6];
+
+                // Quaternion to RPY (ZYX Euler)
+                // Roll (X)
+                double sinr_cosp = 2.0 * (qw * qx + qy * qz);
+                double cosr_cosp = 1.0 - 2.0 * (qx * qx + qy * qy);
+                double rx_rad = std::atan2(sinr_cosp, cosr_cosp);
+
+                // Pitch (Y)
+                double sinp = 2.0 * (qw * qy - qz * qx);
+                double ry_rad;
+                if (std::abs(sinp) >= 1.0)
+                    ry_rad = std::copysign(M_PI / 2, sinp);
+                else
+                    ry_rad = std::asin(sinp);
+
+                // Yaw (Z)
+                double siny_cosp = 2.0 * (qw * qz + qx * qy);
+                double cosy_cosp = 1.0 - 2.0 * (qy * qy + qz * qz);
+                double rz_rad = std::atan2(siny_cosp, cosy_cosp);
+
+                rx_deg = rx_rad * 180.0 / M_PI;
+                ry_deg = ry_rad * 180.0 / M_PI;
+                rz_deg = rz_rad * 180.0 / M_PI;
+            }
+
+            std::array<double, 6> targetPose = {tx, ty, tz, rx_deg, ry_deg, rz_deg};
+
+            LOG_INFO("Motion {} to '{}': [{:.1f}, {:.1f}, {:.1f}, {:.1f}, {:.1f}, {:.1f}]",
+                     motion.type, pointName, tx, ty, tz, rx_deg, ry_deg, rz_deg);
+
+            // 4. Check if kinematics available
+            if (!m_jogController || !m_jogController->hasKinematics()) {
+                LOG_WARN("Motion {}: kinematics not initialized, skipping", motion.type);
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                return;
+            }
+
+            // 5. Get current joint positions (degrees)
+            auto currentJointsDeg = m_activeDriver->getJointPositions();
+            std::array<double, 6> currentJoints;
+            for (int i = 0; i < 6; i++) currentJoints[i] = currentJointsDeg[i];
+
+            // 6. Compute IK for target
+            auto ikResult = m_jogController->computeIK(targetPose, currentJoints);
+            if (!ikResult.has_value()) {
+                LOG_WARN("Motion {}: IK failed for point '{}' (unreachable)", motion.type, pointName);
+                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                return;
+            }
+
+            // 7. Convert IK result from radians to degrees
+            std::array<double, 6> targetJointsDeg;
+            for (int i = 0; i < 6; i++) {
+                targetJointsDeg[i] = ikResult->angles[i] * 180.0 / M_PI;
+            }
+
+            // 8. Interpolate from current to target joints
+            // Determine speed: MoveJ = fast, MoveL = based on velocity
+            double speed_mm_s = motion.velocity;  // mm/s from parser
+            bool isJoint = (motion.type == "PTP" || motion.type == "MoveJ");
+
+            // Calculate interpolation steps
+            double maxJointDelta = 0;
+            for (int i = 0; i < 6; i++) {
+                maxJointDelta = std::max(maxJointDelta, std::abs(targetJointsDeg[i] - currentJointsDeg[i]));
+            }
+
+            // Time estimation: for joint moves use joint speed, for linear use cartesian speed
+            double stepTimeMs = 20.0;  // 50 Hz update rate
+            double totalTimeMs;
+            if (isJoint) {
+                // Joint move: base on max joint delta, assume ~180 deg/s at vmax
+                double jointSpeed = std::min(speed_mm_s / 5000.0, 1.0) * 180.0;  // deg/s
+                if (jointSpeed < 10.0) jointSpeed = 10.0;
+                totalTimeMs = (maxJointDelta / jointSpeed) * 1000.0;
+            } else {
+                // Linear move: base on cartesian distance
+                double dx = tx - (m_status.tcpPose[0]);
+                double dy = ty - (m_status.tcpPose[1]);
+                double dz = tz - (m_status.tcpPose[2]);
+                double dist = std::sqrt(dx*dx + dy*dy + dz*dz);
+                if (speed_mm_s < 1.0) speed_mm_s = 100.0;
+                totalTimeMs = (dist / speed_mm_s) * 1000.0;
+            }
+
+            // Clamp to reasonable range
+            if (totalTimeMs < 100.0) totalTimeMs = 100.0;
+            if (totalTimeMs > 10000.0) totalTimeMs = 10000.0;
+
+            int numSteps = static_cast<int>(totalTimeMs / stepTimeMs);
+            if (numSteps < 2) numSteps = 2;
+
+            LOG_DEBUG("Motion {}: interpolating {} steps over {:.0f}ms (maxDelta={:.1f} deg)",
+                      motion.type, numSteps, totalTimeMs, maxJointDelta);
+
+            // 9. Execute interpolation steps
+            for (int step = 1; step <= numSteps; step++) {
+                // Check for pause/stop
+                if (m_programExecutor->getState() == interpreter::ExecutionState::STOPPED) {
+                    return;
+                }
+
+                double t = static_cast<double>(step) / numSteps;
+
+                // Smooth interpolation (ease in-out)
+                double s = t * t * (3.0 - 2.0 * t);  // smoothstep
+
+                std::array<double, 6> interpJoints;
+                for (int i = 0; i < 6; i++) {
+                    interpJoints[i] = currentJointsDeg[i] + s * (targetJointsDeg[i] - currentJointsDeg[i]);
+                }
+
+                m_activeDriver->setJointPositionsDirect(interpJoints);
+
+                std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(stepTimeMs)));
+            }
+
+            LOG_DEBUG("Motion {} to '{}' completed", motion.type, pointName);
         });
 
         m_programExecutor->setLineCallback([this](int line) {
@@ -732,14 +904,14 @@ void RobotController::registerIpcHandlers() {
                 success = reset();
                 message = success ? "Reset complete" : "Failed to reset";
             }
-            else if (cmd == "home" || cmd == "home_all") {
+            else if (cmd == "home" || cmd == "home_all" || cmd == "go_home") {
                 // In SIM mode, auto-enable if not already enabled
                 if (m_isSimMode && !m_stateMachine->isEnabled()) {
                     enable();
-                    LOG_INFO("Auto-enabled robot for virtual homing (SIM mode)");
+                    LOG_INFO("Auto-enabled robot for Go Home (SIM mode)");
                 }
                 success = home();
-                message = success ? "Homing started" : "Failed to start homing";
+                message = success ? "Go Home started" : "Failed to start Go Home";
             }
             else if (cmd == "set_mode") {
                 std::string modeStr = request.payload.value("mode", "MANUAL");
@@ -1657,17 +1829,14 @@ void RobotController::registerIpcHandlers() {
                          package->name, kinConfig.dhParams.size());
 
                 // Initialize URDF FK (primary FK, replaces DH FK)
+                // toolOffset = Zero: flange_offset is composed into m_toolTransform instead,
+                // to avoid double-counting (FK already includes flange_offset + tool also includes it)
                 auto urdfJoints = kinematics::buildUrdfJointsFromPackage(*package);
                 if (!urdfJoints.empty()) {
-                    kinematics::Vector3d toolOffset(
-                        package->flange_offset[0],
-                        package->flange_offset[1],
-                        package->flange_offset[2]
-                    );
-                    m_jogController->initializeUrdfKinematics(urdfJoints, toolOffset);
-                    LOG_INFO("URDF kinematics initialized for package '{}' with {} joints, tool offset ({},{},{})",
-                             package->name, urdfJoints.size(),
-                             toolOffset.x(), toolOffset.y(), toolOffset.z());
+                    kinematics::Vector3d zeroOffset = kinematics::Vector3d::Zero();
+                    m_jogController->initializeUrdfKinematics(urdfJoints, zeroOffset);
+                    LOG_INFO("URDF kinematics initialized for package '{}' with {} joints (flange_offset in toolTransform)",
+                             package->name, urdfJoints.size());
                 } else {
                     LOG_WARN("No URDF origin data found in package '{}', using DH kinematics as fallback",
                              package->name);
@@ -1676,6 +1845,28 @@ void RobotController::registerIpcHandlers() {
 
             // Store active package for homing and other operations
             m_activePackage = *package;
+
+            // Store flange transform for composing with tool TCP
+            m_flangeTransform = Eigen::Matrix4d::Identity();
+            m_flangeTransform(0,3) = package->flange_offset[0];
+            m_flangeTransform(1,3) = package->flange_offset[1];
+            m_flangeTransform(2,3) = package->flange_offset[2];
+            LOG_INFO("Flange offset stored: ({}, {}, {})",
+                     package->flange_offset[0], package->flange_offset[1], package->flange_offset[2]);
+
+            // Apply flange transform to JogController (with or without active tool)
+            if (m_toolManager) {
+                auto activeTool = m_toolManager->getActiveTool();
+                if (activeTool && !activeTool->tcp.isZero()) {
+                    // T_composed = T_flangeOffset * T_toolTcp
+                    m_jogController->setToolTransform(m_flangeTransform * activeTool->tcp.toTransform());
+                } else {
+                    // No tool: just flange offset
+                    m_jogController->setToolTransform(m_flangeTransform);
+                }
+            } else {
+                m_jogController->setToolTransform(m_flangeTransform);
+            }
 
             // Save last active package ID for auto-load on next startup
             {
@@ -2129,6 +2320,80 @@ void RobotController::registerIpcHandlers() {
             }
 
             ipc::JogMoveResponse response{error.empty(), error};
+            return response;
+        });
+
+    // ========================================================================
+    // Kinematics Handlers (3D Jogging)
+    // ========================================================================
+
+    // COMPUTE_IK handler - Compute inverse kinematics for target pose
+    m_ipcServer->registerHandler(MessageType::COMPUTE_IK,
+        [this](const Message& request) -> nlohmann::json {
+            nlohmann::json response;
+
+            // Parse target pose [x,y,z,rx,ry,rz] in mm/degrees
+            auto targetPose = request.payload.value("target_pose", std::array<double, 6>{0});
+            auto currentJoints = request.payload.value("current_joints", std::array<double, 6>{0});
+
+            LOG_DEBUG("COMPUTE_IK request: target=[{:.1f},{:.1f},{:.1f},{:.1f},{:.1f},{:.1f}]",
+                      targetPose[0], targetPose[1], targetPose[2],
+                      targetPose[3], targetPose[4], targetPose[5]);
+
+            if (!m_jogController || !m_jogController->hasKinematics()) {
+                response["success"] = false;
+                response["error"] = "Kinematics not initialized";
+                response["joints"] = std::array<double, 6>{0};
+                return response;
+            }
+
+            auto ikResult = m_jogController->computeIK(targetPose, currentJoints);
+            if (ikResult.has_value()) {
+                // Convert result from radians to degrees
+                std::array<double, 6> jointsDeg;
+                for (int i = 0; i < 6; i++) {
+                    jointsDeg[i] = ikResult->angles[i] * 180.0 / M_PI;
+                }
+
+                // Apply joints to firmware driver if requested
+                bool apply = request.payload.value("apply", false);
+                if (apply && m_activeDriver) {
+                    m_activeDriver->setJointPositionsDirect(jointsDeg);
+                }
+
+                response["success"] = true;
+                response["joints"] = jointsDeg;
+                response["residual_error"] = ikResult->residualError;
+                response["iterations"] = ikResult->iterations;
+                response["error"] = "";
+            } else {
+                response["success"] = false;
+                response["joints"] = std::array<double, 6>{0};
+                response["error"] = "IK solution not found (target unreachable)";
+            }
+
+            return response;
+        });
+
+    // SET_JOINTS handler - Directly set joint positions on firmware driver
+    m_ipcServer->registerHandler(MessageType::SET_JOINTS,
+        [this](const Message& request) -> nlohmann::json {
+            nlohmann::json response;
+
+            auto joints = request.payload.value("joints", std::array<double, 6>{0});
+
+            LOG_DEBUG("SET_JOINTS request: [{:.1f},{:.1f},{:.1f},{:.1f},{:.1f},{:.1f}]",
+                      joints[0], joints[1], joints[2], joints[3], joints[4], joints[5]);
+
+            if (!m_activeDriver) {
+                response["success"] = false;
+                response["error"] = "No active firmware driver";
+                return response;
+            }
+
+            m_activeDriver->setJointPositionsDirect(joints);
+            response["success"] = true;
+            response["error"] = "";
             return response;
         });
 

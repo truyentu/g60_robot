@@ -70,7 +70,9 @@ void Parser::error(const std::string& message) {
 void Parser::synchronize() {
     advance();
     while (!isAtEnd()) {
+        // Synchronize at statement boundaries
         if (previous().type == TokenType::NEWLINE) return;
+        if (previous().type == TokenType::SEMICOLON) return;
         switch (peek().type) {
             case TokenType::DEF:
             case TokenType::IF:
@@ -79,8 +81,12 @@ void Parser::synchronize() {
             case TokenType::PTP:
             case TokenType::LIN:
             case TokenType::CIRC:
+            case TokenType::MOVEJ:
+            case TokenType::MOVEL:
+            case TokenType::MOVEC:
             case TokenType::WAIT:
             case TokenType::DECL:
+            case TokenType::CONST:
                 return;
             default:
                 advance();
@@ -95,7 +101,22 @@ void Parser::skipNewlines() {
 ProgramStmt Parser::parseProgram() {
     ProgramStmt program;
 
-    // DEF name()
+    skipNewlines();
+
+    // Phase 1: Parse top-level CONST declarations (before DEF)
+    while (check(TokenType::CONST) && !isAtEnd()) {
+        try {
+            auto constDecl = parseConstDeclaration();
+            if (constDecl) {
+                program.constDecls.push_back(constDecl);
+            }
+        } catch (const std::exception&) {
+            synchronize();
+        }
+        skipNewlines();
+    }
+
+    // Phase 2: DEF name() ... END
     consume(TokenType::DEF, "Expected 'DEF'");
     Token name = consume(TokenType::IDENTIFIER, "Expected program name");
     program.name = name.lexeme;
@@ -124,18 +145,43 @@ ProgramStmt Parser::parseProgram() {
 StmtPtr Parser::parseStatement() {
     skipNewlines();
 
+    // Skip standalone semicolons
+    while (match({TokenType::SEMICOLON})) {
+        skipNewlines();
+    }
+
     if (check(TokenType::DECL)) {
         return parseDeclaration();
     }
 
+    if (check(TokenType::CONST)) {
+        auto stmt = parseConstDeclaration();
+        consumeOptionalSemicolon();
+        return stmt;
+    }
+
+    // KRL-style motion: PTP, LIN, CIRC
     if (check(TokenType::PTP) || check(TokenType::LIN) || check(TokenType::CIRC)) {
         TokenType type = peek().type;
         advance();
-        return parseMotion(type);
+        auto stmt = parseMotion(type);
+        consumeOptionalSemicolon();
+        return stmt;
+    }
+
+    // RAPID-style motion: MoveJ, MoveL, MoveC
+    if (check(TokenType::MOVEJ) || check(TokenType::MOVEL) || check(TokenType::MOVEC)) {
+        TokenType type = peek().type;
+        advance();
+        auto stmt = parseRapidMotion(type);
+        consumeOptionalSemicolon();
+        return stmt;
     }
 
     if (check(TokenType::WAIT)) {
-        return parseWait();
+        auto stmt = parseWait();
+        consumeOptionalSemicolon();
+        return stmt;
     }
 
     if (check(TokenType::IF)) {
@@ -151,25 +197,48 @@ StmtPtr Parser::parseStatement() {
     }
 
     if (check(TokenType::DOLLAR)) {
-        return parseSystemAssignment();
+        auto stmt = parseSystemAssignment();
+        consumeOptionalSemicolon();
+        return stmt;
     }
 
     if (check(TokenType::IDENTIFIER)) {
         Token name = advance();
         if (check(TokenType::ASSIGN)) {
-            return parseAssignment(name.lexeme);
+            auto stmt = parseAssignment(name.lexeme);
+            consumeOptionalSemicolon();
+            return stmt;
+        }
+        if (check(TokenType::COLONASSIGN)) {
+            // name := expr (RAPID-style assignment)
+            advance(); // consume :=
+            AssignStmt stmt;
+            stmt.name = name.lexeme;
+            stmt.value = parseExpression();
+            consumeOptionalSemicolon();
+            return makeStmt(stmt);
+        }
+        if (check(TokenType::LPAREN) || check(TokenType::SEMICOLON) || check(TokenType::NEWLINE) || isAtEnd()) {
+            // Function call: ArcStart(...); or ArcEnd;
+            auto stmt = parseFunctionCall(name.lexeme);
+            consumeOptionalSemicolon();
+            return stmt;
         }
         // Could be just a point reference or something else
         error("Unexpected identifier: " + name.lexeme);
         return nullptr;
     }
 
-    if (check(TokenType::NEWLINE) || isAtEnd()) {
+    if (check(TokenType::NEWLINE) || check(TokenType::SEMICOLON) || isAtEnd()) {
         return nullptr;
     }
 
     error("Unexpected token: " + peek().lexeme);
     return nullptr;
+}
+
+void Parser::consumeOptionalSemicolon() {
+    match({TokenType::SEMICOLON});
 }
 
 StmtPtr Parser::parseDeclaration() {
@@ -194,9 +263,207 @@ StmtPtr Parser::parseDeclaration() {
     Token name = consume(TokenType::IDENTIFIER, "Expected variable name");
     stmt.name = name.lexeme;
 
-    // Optional initializer
-    if (match({TokenType::ASSIGN})) {
+    // Optional initializer (= or :=)
+    if (match({TokenType::ASSIGN, TokenType::COLONASSIGN})) {
         stmt.initializer = parseExpression();
+    }
+
+    consumeOptionalSemicolon();
+    return makeStmt(stmt);
+}
+
+StmtPtr Parser::parseConstDeclaration() {
+    int line = peek().line;
+    consume(TokenType::CONST, "Expected 'CONST'");
+
+    ConstDeclStmt stmt;
+    stmt.sourceLine = line;
+
+    // Type (robtarget, or any identifier)
+    if (match({TokenType::ROBTARGET})) {
+        stmt.type = "robtarget";
+    } else if (check(TokenType::IDENTIFIER)) {
+        stmt.type = advance().lexeme;
+    } else {
+        error("Expected type after CONST");
+        return nullptr;
+    }
+
+    // Name
+    Token name = consume(TokenType::IDENTIFIER, "Expected variable name");
+    stmt.name = name.lexeme;
+
+    // := value
+    if (!match({TokenType::COLONASSIGN})) {
+        consume(TokenType::ASSIGN, "Expected ':=' or '='");
+    }
+
+    // Capture raw value using bracket counting for inline arrays [[...]]
+    std::string rawValue;
+    if (check(TokenType::LBRACKET)) {
+        int bracketDepth = 0;
+        while (!isAtEnd()) {
+            Token tok = peek();
+            if (tok.type == TokenType::LBRACKET) {
+                bracketDepth++;
+                rawValue += "[";
+                advance();
+            } else if (tok.type == TokenType::RBRACKET) {
+                bracketDepth--;
+                rawValue += "]";
+                advance();
+                if (bracketDepth <= 0) break;
+            } else if (tok.type == TokenType::COMMA) {
+                rawValue += ",";
+                advance();
+            } else if (tok.type == TokenType::NUMBER) {
+                rawValue += tok.lexeme;
+                advance();
+            } else if (tok.type == TokenType::MINUS) {
+                rawValue += "-";
+                advance();
+            } else if (tok.type == TokenType::NEWLINE || tok.type == TokenType::SEMICOLON) {
+                break;
+            } else {
+                rawValue += tok.lexeme;
+                advance();
+            }
+        }
+    } else {
+        // Non-array value (just capture until semicolon/newline)
+        while (!check(TokenType::SEMICOLON) && !check(TokenType::NEWLINE) && !isAtEnd()) {
+            rawValue += peek().lexeme;
+            advance();
+        }
+    }
+
+    stmt.rawValue = rawValue;
+    consumeOptionalSemicolon();
+    return makeStmt(stmt);
+}
+
+StmtPtr Parser::parseFunctionCall(const std::string& name) {
+    int line = previous().line;
+
+    FunctionCallStmt stmt;
+    stmt.name = name;
+    stmt.sourceLine = line;
+
+    // Optional argument list
+    if (match({TokenType::LPAREN})) {
+        // Parse arguments (possibly named: key:=value)
+        while (!check(TokenType::RPAREN) && !isAtEnd()) {
+            std::string argName;
+            ExprPtr argValue;
+
+            if (check(TokenType::IDENTIFIER)) {
+                Token id = advance();
+                if (match({TokenType::COLONASSIGN})) {
+                    // Named argument: key := value
+                    argName = id.lexeme;
+                    argValue = parseExpression();
+                } else {
+                    // Positional argument
+                    VariableExpr ve;
+                    ve.name = id.lexeme;
+                    argValue = makeExpr(ve);
+                }
+            } else {
+                argValue = parseExpression();
+            }
+
+            stmt.args.push_back({argName, argValue});
+
+            if (!match({TokenType::COMMA})) break;
+        }
+        consume(TokenType::RPAREN, "Expected ')'");
+    }
+
+    return makeStmt(stmt);
+}
+
+StmtPtr Parser::parseRapidMotion(TokenType motionType) {
+    int line = previous().line;
+
+    MotionStmt stmt;
+    stmt.sourceLine = line;
+
+    switch (motionType) {
+        case TokenType::MOVEJ: stmt.type = "MoveJ"; break;
+        case TokenType::MOVEL: stmt.type = "MoveL"; break;
+        case TokenType::MOVEC: stmt.type = "MoveC"; break;
+        default: break;
+    }
+
+    // RAPID motion: MoveL target, speed, zone, tool;
+    // First arg: target point
+    if (check(TokenType::HOME)) {
+        advance();
+        PointExpr point;
+        point.name = "HOME";
+        stmt.target = makeExpr(point);
+    } else if (check(TokenType::IDENTIFIER)) {
+        Token name = advance();
+        PointExpr point;
+        point.name = name.lexeme;
+        stmt.target = makeExpr(point);
+    } else {
+        error("Expected point name");
+        return nullptr;
+    }
+
+    // For MoveC, need auxiliary point before end point
+    if (motionType == TokenType::MOVEC && check(TokenType::COMMA)) {
+        advance(); // consume comma
+        if (check(TokenType::IDENTIFIER)) {
+            Token auxName = advance();
+            PointExpr auxPoint;
+            auxPoint.name = auxName.lexeme;
+            stmt.auxPoint = makeExpr(auxPoint);
+        }
+    }
+
+    // Remaining args: speed, zone, tool (comma separated identifiers)
+    if (match({TokenType::COMMA})) {
+        // Speed (v100, vmax, etc.)
+        if (check(TokenType::IDENTIFIER) || check(TokenType::NUMBER)) {
+            Token speedTok = advance();
+            stmt.speedName = speedTok.lexeme;
+
+            // Parse speed value from name (v100 → 100, vmax → 5000)
+            std::string sn = stmt.speedName;
+            std::transform(sn.begin(), sn.end(), sn.begin(), ::tolower);
+            if (sn == "vmax") {
+                stmt.velocity = 5000;
+                stmt.velocityUnit = "mm/s";
+            } else if (sn.size() > 1 && sn[0] == 'v') {
+                try {
+                    stmt.velocity = std::stod(sn.substr(1));
+                    stmt.velocityUnit = "mm/s";
+                } catch (...) {}
+            }
+        }
+
+        if (match({TokenType::COMMA})) {
+            // Zone (fine, z50, etc.)
+            if (check(TokenType::IDENTIFIER) || check(TokenType::NUMBER)) {
+                stmt.zoneName = advance().lexeme;
+                std::string zn = stmt.zoneName;
+                std::transform(zn.begin(), zn.end(), zn.begin(), ::tolower);
+                if (zn == "fine") {
+                    stmt.continuous = false;
+                } else {
+                    stmt.continuous = true;  // fly-by zone
+                }
+            }
+
+            if (match({TokenType::COMMA})) {
+                // Tool (tool0, etc.)
+                if (check(TokenType::IDENTIFIER)) {
+                    stmt.toolName = advance().lexeme;
+                }
+            }
+        }
     }
 
     return makeStmt(stmt);

@@ -3,8 +3,10 @@ using System.IO;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Media3D;
+using CommunityToolkit.Mvvm.Messaging;
 using HelixToolkit.Wpf;
 using RobotController.Common.Messages;
+using RobotController.UI.Messages;
 using RobotController.UI.Models;
 using Serilog;
 
@@ -141,6 +143,94 @@ public interface IViewportService
 
     /// <summary>Get the scene objects container visual (for MainWindow to add to viewport)</summary>
     ModelVisual3D SceneObjectsContainer { get; }
+
+    // ========================================================================
+    // TCP Gizmo (3D Interactive Jogging)
+    // ========================================================================
+
+    /// <summary>Create TCP gizmo with translate arrows and rotation rings</summary>
+    ModelVisual3D CreateTcpGizmo();
+
+    /// <summary>Update gizmo position/orientation to current TCP</summary>
+    void UpdateTcpGizmoTransform();
+
+    /// <summary>Show or hide the TCP gizmo</summary>
+    void ShowTcpGizmo(bool show);
+
+    /// <summary>Is gizmo currently visible</summary>
+    bool IsTcpGizmoVisible { get; }
+
+    /// <summary>Hit test gizmo - returns axis name ("tx","ty","tz","rx","ry","rz") or null</summary>
+    string? HitTestGizmo(Visual3D hitVisual, GeometryModel3D? hitModel);
+
+    /// <summary>Get current TCP pose as [x,y,z,rx,ry,rz] in mm/degrees</summary>
+    double[]? GetCurrentTcpPose();
+
+    /// <summary>Set gizmo frame mode (World or Tool)</summary>
+    void SetGizmoFrame(GizmoFrame frame);
+
+    /// <summary>Current gizmo frame mode</summary>
+    GizmoFrame CurrentGizmoFrame { get; }
+
+    /// <summary>Get the gizmo orientation matrix (Identity for World, TcpOrientation for Tool)</summary>
+    Matrix3D GetGizmoOrientation();
+
+    // ========================================================================
+    // Ghost Robot (3D Jogging Preview)
+    // ========================================================================
+
+    /// <summary>Create ghost robot visual (semi-transparent clone of real robot)</summary>
+    ModelVisual3D? CreateGhostRobot();
+
+    /// <summary>Update ghost robot joint angles</summary>
+    void UpdateGhostJoints(double[] jointsDegrees);
+
+    /// <summary>Show or hide ghost robot</summary>
+    void ShowGhost(bool show);
+
+    /// <summary>Is ghost currently visible</summary>
+    bool IsGhostVisible { get; }
+
+    /// <summary>Set ghost reachability color (green=reachable, red=unreachable)</summary>
+    void SetGhostReachable(bool reachable);
+
+    // ========================================================================
+    // Path Highlight (Editor <-> Viewport Sync)
+    // ========================================================================
+
+    /// <summary>Highlight a point in 3D viewport at given coordinates (orange sphere)</summary>
+    void HighlightPathPoint(double x, double y, double z, string label = "");
+
+    /// <summary>Clear the path highlight</summary>
+    void ClearPathHighlight();
+
+    // ========================================================================
+    // TCP Path Trace (3D trail visualization)
+    // ========================================================================
+
+    /// <summary>Enable or disable TCP path trace recording</summary>
+    void SetTcpTraceEnabled(bool enabled);
+
+    /// <summary>Is TCP trace currently enabled</summary>
+    bool IsTcpTraceEnabled { get; }
+
+    /// <summary>Clear all recorded trace points</summary>
+    void ClearTcpTrace();
+
+    /// <summary>Get the trace visual for adding to viewport</summary>
+    ModelVisual3D TcpTraceContainer { get; }
+
+    /// <summary>Set the current motion type for color-coding the trace</summary>
+    void SetTraceMotionType(string motionType);
+}
+
+/// <summary>
+/// Gizmo coordinate frame mode
+/// </summary>
+public enum GizmoFrame
+{
+    World,
+    Tool
 }
 
 /// <summary>
@@ -180,11 +270,50 @@ public class ViewportService : IViewportService
     // Height indicator visual
     private ModelVisual3D? _heightIndicatorVisual;
 
+    // TCP Gizmo (3D Interactive Jogging)
+    private ModelVisual3D? _tcpGizmoVisual;
+    private bool _tcpGizmoVisible;
+    private readonly Dictionary<GeometryModel3D, string> _gizmoAxisMap = new();
+    // Gizmo geometry references for hit testing
+    private GeometryModel3D? _gizmoArrowX, _gizmoArrowY, _gizmoArrowZ;
+    private GeometryModel3D? _gizmoRingX, _gizmoRingY, _gizmoRingZ;
+    private GeometryModel3D? _gizmoPlaneXY, _gizmoPlaneXZ, _gizmoPlaneYZ;
+    private GeometryModel3D? _gizmoCenterSphere;
+    private GizmoFrame _gizmoFrame = GizmoFrame.World;
+
+    // Ghost Robot (3D Jogging Preview)
+    private ModelVisual3D? _ghostVisual;
+    private Model3DGroup? _ghostModelGroup;
+    private bool _ghostVisible;
+
+    // Path highlight (Editor <-> Viewport sync)
+    private ModelVisual3D? _pathHighlightVisual;
+    private Model3DGroup? _pathHighlightGroup;
+
+    // TCP Path Trace (3D trail visualization)
+    private readonly ModelVisual3D _tcpTraceContainer = new();
+    private bool _tcpTraceEnabled;
+    private string _traceMotionType = "LIN";
+    private Point3D? _traceLastPoint;
+    private const int MaxTraceSegments = 10000;
+    private const double MinTraceDistance = 0.5; // mm - skip points too close together
+
+    // Per-motion-type trace groups (separate LinesVisual3D for color coding)
+    private readonly Dictionary<string, (LinesVisual3D visual, int count)> _traceLines = new();
+
+    // TCP pose from C++ Core FK (authoritative for IK requests)
+    private double[]? _coreTcpPose;
+
     public RobotModel3D? Robot => _robot;
     public bool IsLoaded => _robot != null;
     public bool IsPickingTcp => _isPickingTcp;
+    public bool IsTcpGizmoVisible => _tcpGizmoVisible;
+    public GizmoFrame CurrentGizmoFrame => _gizmoFrame;
+    public bool IsGhostVisible => _ghostVisible;
     public List<SceneObject> SceneObjects => _sceneObjects;
     public ModelVisual3D SceneObjectsContainer => _sceneObjectsContainer;
+    public bool IsTcpTraceEnabled => _tcpTraceEnabled;
+    public ModelVisual3D TcpTraceContainer => _tcpTraceContainer;
 
     public event EventHandler? ModelUpdated;
     public event EventHandler<TcpPickedEventArgs>? TcpPointPicked;
@@ -198,6 +327,21 @@ public class ViewportService : IViewportService
             AppDomain.CurrentDomain.BaseDirectory,
             "..", "..", "..", "..", "..", "resources", "models"
         );
+
+        // Subscribe to editor -> viewport messages for path highlighting
+        WeakReferenceMessenger.Default.Register<EditorCaretOnMotionLineMessage>(this, (r, m) =>
+        {
+            var info = m.Value;
+            if (info.HasPosition)
+            {
+                ((ViewportService)r).HighlightPathPoint(info.X, info.Y, info.Z, info.TargetName);
+            }
+        });
+
+        WeakReferenceMessenger.Default.Register<EditorCaretOffMotionLineMessage>(this, (r, _) =>
+        {
+            ((ViewportService)r).ClearPathHighlight();
+        });
     }
 
     public async Task<bool> InitializeAsync(RobotConfigData config)
@@ -273,6 +417,12 @@ public class ViewportService : IViewportService
     {
         if (_robot == null) return;
 
+        // Store C++ Core TCP pose (authoritative for IK)
+        if (tcpPose != null && tcpPose.Length >= 6)
+        {
+            _coreTcpPose = tcpPose;
+        }
+
         _robot.SetAllJointAngles(anglesDegrees);
 
         // Update TCP marker position and orientation
@@ -291,6 +441,18 @@ public class ViewportService : IViewportService
             transformGroup.Children.Add(new MatrixTransform3D(rotOnly));
             transformGroup.Children.Add(new TranslateTransform3D(tcpPos.X, tcpPos.Y, tcpPos.Z));
             _tcpMarker.Transform = transformGroup;
+        }
+
+        // Update TCP gizmo position to follow TCP
+        if (_tcpGizmoVisible)
+        {
+            UpdateTcpGizmoTransform();
+        }
+
+        // Record TCP path trace point
+        if (_tcpTraceEnabled && _robot != null)
+        {
+            RecordTracePoint(_robot.TcpPosition);
         }
 
         ModelUpdated?.Invoke(this, EventArgs.Empty);
@@ -1091,5 +1253,578 @@ public class ViewportService : IViewportService
         }
 
         return group;
+    }
+
+    // ========================================================================
+    // TCP Gizmo (3D Interactive Jogging)
+    // ========================================================================
+
+    public ModelVisual3D CreateTcpGizmo()
+    {
+        _tcpGizmoVisual = new ModelVisual3D();
+        var group = new Model3DGroup();
+        _gizmoAxisMap.Clear();
+
+        double arrowLength = 150;
+        double arrowRadius = 4;
+        double coneRadius = 10;
+        double coneLength = 25;
+        double ringRadius = 120;
+        double ringTubeRadius = 4;
+
+        // Translation arrows (thicker than TCP marker)
+        _gizmoArrowX = CreateGizmoArrow(new Point3D(0, 0, 0), new Vector3D(1, 0, 0), arrowLength, arrowRadius, coneRadius, coneLength, Colors.Red);
+        _gizmoArrowY = CreateGizmoArrow(new Point3D(0, 0, 0), new Vector3D(0, 1, 0), arrowLength, arrowRadius, coneRadius, coneLength, Colors.LimeGreen);
+        _gizmoArrowZ = CreateGizmoArrow(new Point3D(0, 0, 0), new Vector3D(0, 0, 1), arrowLength, arrowRadius, coneRadius, coneLength, Colors.DodgerBlue);
+
+        group.Children.Add(_gizmoArrowX);
+        group.Children.Add(_gizmoArrowY);
+        group.Children.Add(_gizmoArrowZ);
+
+        _gizmoAxisMap[_gizmoArrowX] = "tx";
+        _gizmoAxisMap[_gizmoArrowY] = "ty";
+        _gizmoAxisMap[_gizmoArrowZ] = "tz";
+
+        // Rotation rings (torus around each axis)
+        _gizmoRingX = CreateGizmoRing(new Vector3D(1, 0, 0), ringRadius, ringTubeRadius, Colors.Red);
+        _gizmoRingY = CreateGizmoRing(new Vector3D(0, 1, 0), ringRadius, ringTubeRadius, Colors.LimeGreen);
+        _gizmoRingZ = CreateGizmoRing(new Vector3D(0, 0, 1), ringRadius, ringTubeRadius, Colors.DodgerBlue);
+
+        group.Children.Add(_gizmoRingX);
+        group.Children.Add(_gizmoRingY);
+        group.Children.Add(_gizmoRingZ);
+
+        _gizmoAxisMap[_gizmoRingX] = "rx";
+        _gizmoAxisMap[_gizmoRingY] = "ry";
+        _gizmoAxisMap[_gizmoRingZ] = "rz";
+
+        // Plane drag squares (small quads between axis pairs)
+        double planeOffset = 40; // distance from origin along each axis
+        double planeSize = 30;   // size of the square
+
+        _gizmoPlaneXY = CreateGizmoPlaneSquare(
+            new Vector3D(1, 0, 0), new Vector3D(0, 1, 0),
+            planeOffset, planeSize, Color.FromArgb(120, 255, 255, 0)); // Yellow semi-transparent
+        _gizmoPlaneXZ = CreateGizmoPlaneSquare(
+            new Vector3D(1, 0, 0), new Vector3D(0, 0, 1),
+            planeOffset, planeSize, Color.FromArgb(120, 255, 0, 255)); // Magenta semi-transparent
+        _gizmoPlaneYZ = CreateGizmoPlaneSquare(
+            new Vector3D(0, 1, 0), new Vector3D(0, 0, 1),
+            planeOffset, planeSize, Color.FromArgb(120, 0, 255, 255)); // Cyan semi-transparent
+
+        group.Children.Add(_gizmoPlaneXY);
+        group.Children.Add(_gizmoPlaneXZ);
+        group.Children.Add(_gizmoPlaneYZ);
+
+        _gizmoAxisMap[_gizmoPlaneXY] = "txy";
+        _gizmoAxisMap[_gizmoPlaneXZ] = "txz";
+        _gizmoAxisMap[_gizmoPlaneYZ] = "tyz";
+
+        // Center sphere for 3D free-drag (all XYZ simultaneously)
+        var sphereBuilder = new MeshBuilder();
+        sphereBuilder.AddSphere(new Point3D(0, 0, 0), 12, 16, 16);
+        var sphereColor = Color.FromArgb(200, 255, 255, 255); // White semi-transparent
+        var sphereMat = new DiffuseMaterial(new SolidColorBrush(sphereColor));
+        _gizmoCenterSphere = new GeometryModel3D(sphereBuilder.ToMesh(), sphereMat) { BackMaterial = sphereMat };
+        group.Children.Add(_gizmoCenterSphere);
+        _gizmoAxisMap[_gizmoCenterSphere] = "txyz";
+
+        _tcpGizmoVisual.Content = group;
+        _tcpGizmoVisible = false;
+        _tcpGizmoVisual.SetValue(ModelVisual3D.TransformProperty, Transform3D.Identity);
+
+        return _tcpGizmoVisual;
+    }
+
+    private static GeometryModel3D CreateGizmoArrow(Point3D origin, Vector3D direction, double length, double radius, double coneRadius, double coneLength, Color color)
+    {
+        var builder = new MeshBuilder();
+        var end = origin + direction * length;
+        builder.AddCylinder(origin, end, radius, 8);
+        builder.AddCone(end, direction, coneRadius, 0, coneLength, false, true, 12);
+
+        var material = new DiffuseMaterial(new SolidColorBrush(color));
+        return new GeometryModel3D(builder.ToMesh(), material) { BackMaterial = material };
+    }
+
+    private static GeometryModel3D CreateGizmoRing(Vector3D axis, double radius, double tubeRadius, Color color)
+    {
+        var builder = new MeshBuilder();
+
+        // Build torus as segments
+        int segments = 36;
+        int tubeSegments = 12;
+
+        // Determine two perpendicular vectors to the axis
+        Vector3D u, v;
+        if (Math.Abs(axis.Z) > 0.9)
+        {
+            u = Vector3D.CrossProduct(axis, new Vector3D(1, 0, 0));
+        }
+        else
+        {
+            u = Vector3D.CrossProduct(axis, new Vector3D(0, 0, 1));
+        }
+        u.Normalize();
+        v = Vector3D.CrossProduct(axis, u);
+        v.Normalize();
+
+        var positions = new List<Point3D>();
+        var indices = new List<int>();
+
+        for (int i = 0; i < segments; i++)
+        {
+            double theta = 2 * Math.PI * i / segments;
+            // Center of tube cross-section on the ring
+            var ringCenter = new Point3D(
+                radius * (u.X * Math.Cos(theta) + v.X * Math.Sin(theta)),
+                radius * (u.Y * Math.Cos(theta) + v.Y * Math.Sin(theta)),
+                radius * (u.Z * Math.Cos(theta) + v.Z * Math.Sin(theta)));
+
+            // Radial direction from ring center
+            var radial = new Vector3D(ringCenter.X, ringCenter.Y, ringCenter.Z);
+            radial.Normalize();
+
+            for (int j = 0; j < tubeSegments; j++)
+            {
+                double phi = 2 * Math.PI * j / tubeSegments;
+                var tubePoint = ringCenter +
+                    tubeRadius * Math.Cos(phi) * radial +
+                    tubeRadius * Math.Sin(phi) * axis;
+                positions.Add(tubePoint);
+            }
+        }
+
+        // Build triangle indices
+        for (int i = 0; i < segments; i++)
+        {
+            int nextI = (i + 1) % segments;
+            for (int j = 0; j < tubeSegments; j++)
+            {
+                int nextJ = (j + 1) % tubeSegments;
+                int a = i * tubeSegments + j;
+                int b = nextI * tubeSegments + j;
+                int c = nextI * tubeSegments + nextJ;
+                int d = i * tubeSegments + nextJ;
+                indices.Add(a); indices.Add(b); indices.Add(c);
+                indices.Add(a); indices.Add(c); indices.Add(d);
+            }
+        }
+
+        var mesh = new MeshGeometry3D();
+        foreach (var p in positions) mesh.Positions.Add(p);
+        foreach (var idx in indices) mesh.TriangleIndices.Add(idx);
+
+        var material = new DiffuseMaterial(new SolidColorBrush(Color.FromArgb(180, color.R, color.G, color.B)));
+        return new GeometryModel3D(mesh, material) { BackMaterial = material };
+    }
+
+    private static GeometryModel3D CreateGizmoPlaneSquare(Vector3D axis1, Vector3D axis2, double offset, double size, Color color)
+    {
+        // Create a small quad between two axes at 'offset' distance from origin
+        var mesh = new MeshGeometry3D();
+        var p0 = new Point3D(0, 0, 0) + axis1 * offset + axis2 * offset;
+        var p1 = p0 + axis1 * size;
+        var p2 = p0 + axis1 * size + axis2 * size;
+        var p3 = p0 + axis2 * size;
+
+        mesh.Positions.Add(p0);
+        mesh.Positions.Add(p1);
+        mesh.Positions.Add(p2);
+        mesh.Positions.Add(p3);
+
+        // Two triangles for quad
+        mesh.TriangleIndices.Add(0); mesh.TriangleIndices.Add(1); mesh.TriangleIndices.Add(2);
+        mesh.TriangleIndices.Add(0); mesh.TriangleIndices.Add(2); mesh.TriangleIndices.Add(3);
+
+        var material = new DiffuseMaterial(new SolidColorBrush(color));
+        return new GeometryModel3D(mesh, material) { BackMaterial = material };
+    }
+
+    public void UpdateTcpGizmoTransform()
+    {
+        if (_tcpGizmoVisual == null || _robot == null) return;
+
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            var tcpPos = _robot.TcpPosition;
+
+            var transformGroup = new Transform3DGroup();
+
+            if (_gizmoFrame == GizmoFrame.Tool)
+            {
+                // Tool mode: rotate gizmo by TCP orientation (rotation only, no translation from matrix)
+                var ori = _robot.TcpOrientation;
+                var rotMatrix = new Matrix3D(
+                    ori.M11, ori.M12, ori.M13, 0,
+                    ori.M21, ori.M22, ori.M23, 0,
+                    ori.M31, ori.M32, ori.M33, 0,
+                    0, 0, 0, 1);
+                transformGroup.Children.Add(new MatrixTransform3D(rotMatrix));
+            }
+
+            // Position at TCP (applied after rotation)
+            transformGroup.Children.Add(new TranslateTransform3D(tcpPos.X, tcpPos.Y, tcpPos.Z));
+
+            _tcpGizmoVisual.Transform = transformGroup;
+        });
+    }
+
+    public void ShowTcpGizmo(bool show)
+    {
+        _tcpGizmoVisible = show;
+        if (_tcpGizmoVisual != null)
+        {
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            {
+                if (show)
+                {
+                    UpdateTcpGizmoTransform();
+                    // Make visible by setting non-empty content
+                    if (_tcpGizmoVisual.Content is Model3DGroup g)
+                    {
+                        foreach (var child in g.Children)
+                        {
+                            if (child is GeometryModel3D gm)
+                                gm.SetValue(GeometryModel3D.MaterialProperty, gm.Material);
+                        }
+                    }
+                }
+                else
+                {
+                    // Hide by moving far away
+                    _tcpGizmoVisual.Transform = new TranslateTransform3D(0, 0, -99999);
+                }
+            });
+        }
+    }
+
+    public string? HitTestGizmo(Visual3D hitVisual, GeometryModel3D? hitModel)
+    {
+        if (!_tcpGizmoVisible || hitModel == null) return null;
+
+        if (_gizmoAxisMap.TryGetValue(hitModel, out var axis))
+        {
+            return axis;
+        }
+
+        return null;
+    }
+
+    public double[]? GetCurrentTcpPose()
+    {
+        // Prefer C++ Core TCP pose (matches IK solver exactly)
+        if (_coreTcpPose != null)
+            return _coreTcpPose;
+
+        // Fallback to C# FK
+        if (_robot == null) return null;
+        return _robot.GetTcpPose();
+    }
+
+    public void SetGizmoFrame(GizmoFrame frame)
+    {
+        _gizmoFrame = frame;
+        if (_tcpGizmoVisible)
+        {
+            UpdateTcpGizmoTransform();
+        }
+    }
+
+    public Matrix3D GetGizmoOrientation()
+    {
+        if (_gizmoFrame == GizmoFrame.Tool && _robot != null)
+        {
+            // Return rotation-only part of TcpOrientation
+            var ori = _robot.TcpOrientation;
+            return new Matrix3D(
+                ori.M11, ori.M12, ori.M13, 0,
+                ori.M21, ori.M22, ori.M23, 0,
+                ori.M31, ori.M32, ori.M33, 0,
+                0, 0, 0, 1);
+        }
+        return Matrix3D.Identity;
+    }
+
+    // ========================================================================
+    // Ghost Robot (3D Jogging Preview)
+    // ========================================================================
+
+    public ModelVisual3D? CreateGhostRobot()
+    {
+        if (_robot == null) return null;
+
+        _ghostModelGroup = _robot.CreateGhostModel(Colors.Yellow, 100);
+        _ghostVisual = new ModelVisual3D();
+        _ghostVisible = false;
+
+        // Hidden initially: Content is null (nothing to render)
+
+        return _ghostVisual;
+    }
+
+    public void UpdateGhostJoints(double[] jointsDegrees)
+    {
+        if (_ghostModelGroup == null || _robot == null || !_ghostVisible) return;
+
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            _robot.UpdateGhostFK(_ghostModelGroup, jointsDegrees);
+        });
+    }
+
+    public void ShowGhost(bool show)
+    {
+        _ghostVisible = show;
+        if (_ghostVisual == null) return;
+
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            if (show)
+            {
+                // Show: set Content and update FK to current robot pose
+                _ghostVisual.Content = _ghostModelGroup;
+                _ghostVisual.Transform = Transform3D.Identity;
+                if (_robot != null && _ghostModelGroup != null)
+                {
+                    _robot.UpdateGhostFK(_ghostModelGroup, _robot.JointAnglesDegrees);
+                }
+            }
+            else
+            {
+                // Hide: remove Content entirely (no geometry = nothing rendered)
+                _ghostVisual.Content = null;
+            }
+        });
+    }
+
+    public void SetGhostReachable(bool reachable)
+    {
+        if (_ghostModelGroup == null) return;
+
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            var color = reachable
+                ? Color.FromArgb(100, 0, 255, 100)    // semi-transparent green
+                : Color.FromArgb(100, 255, 50, 50);   // semi-transparent red
+            var material = new DiffuseMaterial(new SolidColorBrush(color));
+
+            foreach (var child in _ghostModelGroup.Children)
+            {
+                if (child is GeometryModel3D geo && geo.Geometry != null)
+                {
+                    geo.Material = material;
+                    geo.BackMaterial = material;
+                }
+            }
+        });
+    }
+
+    // ========================================================================
+    // Path Highlight (Editor <-> Viewport Sync)
+    // ========================================================================
+
+    // ========================================================================
+    // TCP Path Trace (3D trail visualization)
+    // ========================================================================
+
+    private static Color GetMotionTypeColor(string motionType)
+    {
+        return motionType.ToUpperInvariant() switch
+        {
+            "PTP" or "MOVEJ" or "MOVJ" => Color.FromRgb(60, 140, 255),    // Blue - joint move
+            "LIN" or "MOVEL" or "MOVL" => Color.FromRgb(80, 255, 80),     // Green - linear
+            "CIRC" or "MOVEC" or "MOVC" => Color.FromRgb(255, 100, 50),   // Orange-red - circular
+            _ => Color.FromRgb(200, 200, 200)                              // Gray - unknown
+        };
+    }
+
+    private LinesVisual3D GetOrCreateTraceLine(string motionType)
+    {
+        if (_traceLines.TryGetValue(motionType, out var entry))
+        {
+            return entry.visual;
+        }
+
+        var line = new LinesVisual3D
+        {
+            Color = GetMotionTypeColor(motionType),
+            Thickness = 2.0
+        };
+        _traceLines[motionType] = (line, 0);
+        _tcpTraceContainer.Children.Add(line);
+        return line;
+    }
+
+    private void RecordTracePoint(Point3D newPoint)
+    {
+        if (_traceLastPoint.HasValue)
+        {
+            var dx = newPoint.X - _traceLastPoint.Value.X;
+            var dy = newPoint.Y - _traceLastPoint.Value.Y;
+            var dz = newPoint.Z - _traceLastPoint.Value.Z;
+            double dist = Math.Sqrt(dx * dx + dy * dy + dz * dz);
+
+            if (dist < MinTraceDistance) return;
+
+            var line = GetOrCreateTraceLine(_traceMotionType);
+            var points = line.Points;
+
+            // LinesVisual3D uses point pairs: [start, end, start, end, ...]
+            points.Add(_traceLastPoint.Value);
+            points.Add(newPoint);
+
+            // Update segment count
+            if (_traceLines.TryGetValue(_traceMotionType, out var entry))
+            {
+                _traceLines[_traceMotionType] = (entry.visual, entry.count + 1);
+            }
+
+            // Evict oldest segments across all lines if total exceeds limit
+            int totalSegments = 0;
+            foreach (var kvp in _traceLines) totalSegments += kvp.Value.count;
+
+            if (totalSegments > MaxTraceSegments)
+            {
+                // Remove from the line with the most segments
+                string? maxKey = null;
+                int maxCount = 0;
+                foreach (var kvp in _traceLines)
+                {
+                    if (kvp.Value.count > maxCount)
+                    {
+                        maxCount = kvp.Value.count;
+                        maxKey = kvp.Key;
+                    }
+                }
+                if (maxKey != null && _traceLines[maxKey].visual.Points.Count >= 2)
+                {
+                    _traceLines[maxKey].visual.Points.RemoveAt(0);
+                    _traceLines[maxKey].visual.Points.RemoveAt(0);
+                    _traceLines[maxKey] = (_traceLines[maxKey].visual, _traceLines[maxKey].count - 1);
+                }
+            }
+        }
+
+        _traceLastPoint = newPoint;
+    }
+
+    public void SetTcpTraceEnabled(bool enabled)
+    {
+        _tcpTraceEnabled = enabled;
+        if (enabled)
+        {
+            // Capture current TCP position as starting point
+            if (_robot != null)
+            {
+                _traceLastPoint = _robot.TcpPosition;
+            }
+            Log.Information("[ViewportService] TCP trace ENABLED");
+        }
+        else
+        {
+            _traceLastPoint = null;
+            Log.Information("[ViewportService] TCP trace DISABLED");
+        }
+    }
+
+    public void ClearTcpTrace()
+    {
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            foreach (var kvp in _traceLines)
+            {
+                kvp.Value.visual.Points.Clear();
+            }
+            _traceLines.Clear();
+            _tcpTraceContainer.Children.Clear();
+            _traceLastPoint = null;
+        });
+        Log.Information("[ViewportService] TCP trace cleared");
+    }
+
+    public void SetTraceMotionType(string motionType)
+    {
+        _traceMotionType = motionType;
+    }
+
+    public void HighlightPathPoint(double x, double y, double z, string label = "")
+    {
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            // Create or reuse highlight group
+            if (_pathHighlightGroup == null)
+            {
+                _pathHighlightGroup = new Model3DGroup();
+                _pathHighlightVisual = new ModelVisual3D { Content = _pathHighlightGroup };
+            }
+
+            _pathHighlightGroup.Children.Clear();
+
+            // Orange sphere at the target point
+            var sphereMesh = new MeshGeometry3D();
+            double radius = 8.0;
+            int segments = 12;
+            var center = new Point3D(x, y, z);
+
+            // Generate UV sphere
+            for (int lat = 0; lat <= segments; lat++)
+            {
+                double theta = lat * Math.PI / segments;
+                double sinTheta = Math.Sin(theta);
+                double cosTheta = Math.Cos(theta);
+
+                for (int lon = 0; lon <= segments; lon++)
+                {
+                    double phi = lon * 2 * Math.PI / segments;
+                    double sinPhi = Math.Sin(phi);
+                    double cosPhi = Math.Cos(phi);
+
+                    double px = center.X + radius * sinTheta * cosPhi;
+                    double py = center.Y + radius * sinTheta * sinPhi;
+                    double pz = center.Z + radius * cosTheta;
+
+                    sphereMesh.Positions.Add(new Point3D(px, py, pz));
+                    sphereMesh.Normals.Add(new Vector3D(sinTheta * cosPhi, sinTheta * sinPhi, cosTheta));
+
+                    if (lat < segments && lon < segments)
+                    {
+                        int current = lat * (segments + 1) + lon;
+                        int next = current + segments + 1;
+
+                        sphereMesh.TriangleIndices.Add(current);
+                        sphereMesh.TriangleIndices.Add(next);
+                        sphereMesh.TriangleIndices.Add(current + 1);
+
+                        sphereMesh.TriangleIndices.Add(current + 1);
+                        sphereMesh.TriangleIndices.Add(next);
+                        sphereMesh.TriangleIndices.Add(next + 1);
+                    }
+                }
+            }
+
+            var orangeMaterial = new DiffuseMaterial(new SolidColorBrush(Color.FromArgb(200, 255, 165, 0)));
+            var sphereModel = new GeometryModel3D(sphereMesh, orangeMaterial)
+            {
+                BackMaterial = orangeMaterial
+            };
+
+            _pathHighlightGroup.Children.Add(sphereModel);
+
+            // Add emissive glow
+            var glowMaterial = new EmissiveMaterial(new SolidColorBrush(Color.FromArgb(80, 255, 165, 0)));
+            var glowModel = new GeometryModel3D(sphereMesh, glowMaterial);
+            _pathHighlightGroup.Children.Add(glowModel);
+
+            Log.Debug("Path highlight at ({X:F1}, {Y:F1}, {Z:F1}) {Label}", x, y, z, label);
+        });
+    }
+
+    public void ClearPathHighlight()
+    {
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            _pathHighlightGroup?.Children.Clear();
+        });
     }
 }

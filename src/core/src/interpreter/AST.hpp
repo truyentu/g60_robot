@@ -44,6 +44,8 @@ using ExprPtr = std::shared_ptr<Expression>;
 
 struct ProgramStmt;
 struct DeclareStmt;
+struct ConstDeclStmt;
+struct FunctionCallStmt;
 struct AssignStmt;
 struct SystemAssignStmt;
 struct MotionStmt;
@@ -56,6 +58,8 @@ struct WhileStmt;
 using Statement = std::variant<
     ProgramStmt,
     DeclareStmt,
+    ConstDeclStmt,
+    FunctionCallStmt,
     AssignStmt,
     SystemAssignStmt,
     MotionStmt,
@@ -108,6 +112,7 @@ struct PointExpr {
 
 struct ProgramStmt {
     std::string name;
+    std::vector<StmtPtr> constDecls;  // Top-level CONST before DEF
     std::vector<StmtPtr> body;
 };
 
@@ -115,6 +120,19 @@ struct DeclareStmt {
     std::string type;      // REAL, INT, BOOL
     std::string name;
     ExprPtr initializer;   // Optional
+};
+
+struct ConstDeclStmt {
+    std::string type;      // "robtarget"
+    std::string name;      // "p1"
+    std::string rawValue;  // "[[500,0,800],[1,0,0,0],[0,0,0,0],[9E9,...]]"
+    int sourceLine = 0;
+};
+
+struct FunctionCallStmt {
+    std::string name;       // "ArcStart", "ArcEnd"
+    std::vector<std::pair<std::string, ExprPtr>> args;  // named args (key := value)
+    int sourceLine = 0;
 };
 
 struct AssignStmt {
@@ -129,15 +147,20 @@ struct SystemAssignStmt {
 };
 
 struct MotionStmt {
-    std::string type;      // PTP, LIN, CIRC
+    std::string type;      // PTP, LIN, CIRC, MoveJ, MoveL, MoveC
     ExprPtr target;        // Point expression
-    ExprPtr auxPoint;      // For CIRC
+    ExprPtr auxPoint;      // For CIRC/MoveC
 
-    // Optional parameters
+    // KRL-style parameters
     double velocity = 100;
     std::string velocityUnit = "percent";  // percent, mm/s
     double acceleration = 100;
     bool continuous = false;
+
+    // RAPID-style parameters (comma-separated: target, speed, zone, tool)
+    std::string speedName;    // "v100", "vmax"
+    std::string zoneName;     // "fine", "z50"
+    std::string toolName;     // "tool0"
 
     int sourceLine = 0;    // For debugging
 };

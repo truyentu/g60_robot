@@ -963,6 +963,31 @@ if(WIN32)
     )
 endif()
 
+# Tool Jog Z-Drift diagnostic
+add_executable(test_tool_jog_zdrift
+    tests/test_tool_jog_zdrift.cpp
+    src/kinematics/UrdfForwardKinematics.cpp
+    src/tool/ToolTypes.cpp
+    src/logging/Logger.cpp
+)
+
+target_include_directories(test_tool_jog_zdrift
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_tool_jog_zdrift
+    PRIVATE
+        Eigen3::Eigen
+        spdlog::spdlog
+)
+
+if(WIN32)
+    target_compile_definitions(test_tool_jog_zdrift PRIVATE NOMINMAX)
+    target_compile_options(test_tool_jog_zdrift PRIVATE /utf-8)
+endif()
+
 # ============================================================================
 # Post-Build: Copy Config Files
 # ============================================================================

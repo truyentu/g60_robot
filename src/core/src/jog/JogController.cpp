@@ -61,8 +61,6 @@ void JogController::setToolTransform(const Eigen::Matrix4d& T_tool) {
     m_toolInvTransform.block<3,1>(0,3) = -R.transpose() * t;
 
     m_hasToolOffset = (t.norm() > 1e-9 || !R.isIdentity(1e-9));
-
-    LOG_INFO("JogController: Tool transform updated, hasOffset={}", m_hasToolOffset);
 }
 
 void JogController::setJointLimits(int joint, double minDeg, double maxDeg) {
@@ -236,6 +234,7 @@ void JogController::transformDeltaToWorld(int frame, int axis, double delta,
             kinematics::Vector3d delta_tool = kinematics::Vector3d::Zero();
             delta_tool[axis] = delta;
             kinematics::Vector3d delta_world = R_tcp * delta_tool;
+
             targetPose.position += delta_world;
         } else {
             kinematics::Vector3d rot_axis_tool = kinematics::Vector3d::Zero();
@@ -332,10 +331,10 @@ void JogController::updateCartesianVelocityStreaming(double dt) {
         jointRad[i] = positions[i] * M_PI / 180.0;
     }
 
-    // FK returns FLANGE pose (no ToolData TCP)
+    // FK returns last-link pose (no flange offset, no tool TCP)
     auto flangePose = m_urdfFk->compute(jointRad);
 
-    // Compute TRUE TCP pose = T_flange × T_tool (Phase 11)
+    // Compute TRUE TCP pose = T_lastLink × T_composed (T_flangeOffset × T_toolTcp)
     kinematics::TCPPose currentTcpPose = flangePose;
     if (m_hasToolOffset) {
         Eigen::Matrix4d T_flange = flangePose.toTransform();
@@ -448,10 +447,10 @@ std::string JogController::jogCartesianStep(int axis, int direction, double incr
         jointRad[i] = positions[i] * M_PI / 180.0;
     }
 
-    // FK returns FLANGE pose
+    // FK returns last-link pose (no flange offset, no tool TCP)
     auto flangePose = m_urdfFk->compute(jointRad);
 
-    // Compute TRUE TCP pose = T_flange × T_tool (Phase 11)
+    // Compute TRUE TCP pose = T_lastLink × T_composed (T_flangeOffset × T_toolTcp)
     kinematics::TCPPose tcpPose = flangePose;
     if (m_hasToolOffset) {
         Eigen::Matrix4d T_flange = flangePose.toTransform();
@@ -541,10 +540,10 @@ std::array<double, 6> JogController::getTcpPose() const {
         jointRad[i] = positions[i] * M_PI / 180.0;
     }
 
-    // FK returns flange pose
+    // FK returns last-link pose (no flange offset, no tool TCP)
     auto flangePose = m_urdfFk->compute(jointRad);
 
-    // Apply T_tool for TRUE TCP (Phase 11)
+    // Apply composed transform (T_flangeOffset × T_toolTcp)
     kinematics::TCPPose pose = flangePose;
     if (m_hasToolOffset) {
         Eigen::Matrix4d T_flange = flangePose.toTransform();
@@ -562,6 +561,61 @@ std::array<double, 6> JogController::getTcpPose() const {
     for (int i = 3; i < 6; i++) {
         result[i] = result[i] * 180.0 / M_PI;
     }
+    return result;
+}
+
+std::optional<kinematics::IKSolution> JogController::computeIK(
+    const std::array<double, 6>& targetPose,
+    const std::array<double, 6>& currentJoints) const
+{
+    if (!m_kdlKin || !m_kdlKin->isInitialized()) {
+        LOG_WARN("JogController::computeIK: KDL kinematics not initialized");
+        return std::nullopt;
+    }
+
+    // Convert target pose [x,y,z,rx,ry,rz] (mm/deg) to TCPPose
+    kinematics::Vector3d position(targetPose[0], targetPose[1], targetPose[2]);
+    double rx = targetPose[3] * M_PI / 180.0;
+    double ry = targetPose[4] * M_PI / 180.0;
+    double rz = targetPose[5] * M_PI / 180.0;
+
+    kinematics::Matrix3d rotation;
+    rotation = Eigen::AngleAxisd(rz, Eigen::Vector3d::UnitZ())
+             * Eigen::AngleAxisd(ry, Eigen::Vector3d::UnitY())
+             * Eigen::AngleAxisd(rx, Eigen::Vector3d::UnitX());
+
+    kinematics::TCPPose tcpTarget;
+    tcpTarget.position = position;
+    tcpTarget.rotation = rotation;
+    tcpTarget.rpy = kinematics::Vector3d(rx, ry, rz);
+
+    // If tool offset exists, back-calculate flange target
+    kinematics::TCPPose flangeTarget = tcpTarget;
+    if (m_hasToolOffset) {
+        Eigen::Matrix4d T_tcp_desired = tcpTarget.toTransform();
+        Eigen::Matrix4d T_flange_desired = T_tcp_desired * m_toolInvTransform;
+        flangeTarget = kinematics::TCPPose::fromTransform(T_flange_desired);
+    }
+
+    // Convert current joints from degrees to radians
+    kinematics::JointAngles jointRad;
+    for (int i = 0; i < 6; i++) {
+        jointRad[i] = currentJoints[i] * M_PI / 180.0;
+    }
+
+    // Compute IK via KDL
+    auto result = m_kdlKin->computeIK(flangeTarget, jointRad);
+    if (!result.has_value()) {
+        // Fallback to DH IK if available
+        if (m_ik) {
+            auto dhResult = m_ik->compute(flangeTarget, jointRad);
+            if (dhResult.has_value()) {
+                return dhResult;
+            }
+        }
+        return std::nullopt;
+    }
+
     return result;
 }
 

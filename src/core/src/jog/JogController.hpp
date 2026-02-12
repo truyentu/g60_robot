@@ -9,6 +9,7 @@
 #include <Eigen/Dense>
 #include <memory>
 #include <array>
+#include <optional>
 
 namespace robot_controller {
 namespace jog {
@@ -49,6 +50,14 @@ public:
 
     // Get TCP pose from FK (returns [x,y,z,rx,ry,rz])
     std::array<double, 6> getTcpPose() const;
+
+    // Compute IK for a target pose (for 3D gizmo jogging)
+    // targetPose: [x,y,z,rx,ry,rz] in mm/degrees
+    // currentJoints: [j1..j6] in degrees
+    // Returns: IKSolution if successful, nullopt if failed
+    std::optional<kinematics::IKSolution> computeIK(
+        const std::array<double, 6>& targetPose,
+        const std::array<double, 6>& currentJoints) const;
 
     void update(double dt);
     void emergencyStop();

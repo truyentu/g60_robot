@@ -872,6 +872,89 @@ public class RobotModel3D
     /// Get the tool geometry model (for hit-test filtering)
     /// </summary>
     public GeometryModel3D? ToolGeometry => _toolGeometry;
+
+    /// <summary>
+    /// Create a ghost model (semi-transparent clone sharing MeshGeometry3D from real links).
+    /// Returns Model3DGroup with one GeometryModel3D per link, ordered same as _links.
+    /// </summary>
+    public Model3DGroup CreateGhostModel(Color ghostColor, byte alpha = 100)
+    {
+        var group = new Model3DGroup();
+        var material = new DiffuseMaterial(new SolidColorBrush(Color.FromArgb(alpha, ghostColor.R, ghostColor.G, ghostColor.B)));
+
+        foreach (var link in _links)
+        {
+            if (link.Geometry?.Geometry is MeshGeometry3D mesh)
+            {
+                var ghostGeo = new GeometryModel3D(mesh, material) { BackMaterial = material };
+                ghostGeo.Transform = link.Geometry.Transform; // copy initial transform
+                group.Children.Add(ghostGeo);
+            }
+            else
+            {
+                // Placeholder: add empty GeometryModel3D to keep index alignment
+                group.Children.Add(new GeometryModel3D());
+            }
+        }
+
+        return group;
+    }
+
+    /// <summary>
+    /// Update ghost model transforms using given joint angles (degrees).
+    /// Ghost Model3DGroup must have same count as _links (from CreateGhostModel).
+    /// </summary>
+    public void UpdateGhostFK(Model3DGroup ghostGroup, double[] jointsDegrees)
+    {
+        if (ghostGroup.Children.Count != _links.Count || jointsDegrees.Length < 6) return;
+
+        const double SCALE_M_TO_MM = 1000.0;
+        double[] ghostAnglesRad = new double[6];
+        for (int i = 0; i < 6; i++)
+            ghostAnglesRad[i] = jointsDegrees[i] * Math.PI / 180.0;
+
+        Matrix3D parentTransform = Matrix3D.Identity;
+
+        for (int i = 0; i < _links.Count; i++)
+        {
+            var link = _links[i];
+            var ghostGeo = ghostGroup.Children[i] as GeometryModel3D;
+            if (ghostGeo == null) continue;
+
+            if (link.JointIndex == 0)
+            {
+                // Base link - just apply scale
+                ghostGeo.Transform = new ScaleTransform3D(SCALE_M_TO_MM, SCALE_M_TO_MM, SCALE_M_TO_MM);
+                parentTransform = Matrix3D.Identity;
+            }
+            else
+            {
+                Matrix3D jointTransform;
+                if (link.OriginXyz != null)
+                {
+                    jointTransform = CreateTransformFromURDF(
+                        link.OriginXyz,
+                        link.OriginRpy ?? new double[] { 0, 0, 0 },
+                        link.Axis ?? new double[] { 0, 0, 1 },
+                        ghostAnglesRad[link.JointIndex - 1]);
+                }
+                else
+                {
+                    jointTransform = link.CalculateDHTransform(ghostAnglesRad[link.JointIndex - 1]);
+                }
+
+                var worldTransform = Matrix3D.Multiply(jointTransform, parentTransform);
+
+                var scaleTransform = new ScaleTransform3D(SCALE_M_TO_MM, SCALE_M_TO_MM, SCALE_M_TO_MM);
+                var transformGroup = new Transform3DGroup();
+                transformGroup.Children.Add(scaleTransform);
+                transformGroup.Children.Add(new MatrixTransform3D(worldTransform));
+                ghostGeo.Transform = transformGroup;
+
+                parentTransform = worldTransform;
+            }
+        }
+    }
 }
 
 /// <summary>

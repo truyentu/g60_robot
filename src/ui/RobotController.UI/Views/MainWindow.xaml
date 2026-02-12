@@ -67,6 +67,9 @@
                 <MenuItem Header="Show _Grid" IsCheckable="True" IsChecked="{Binding ShowGrid}"/>
                 <MenuItem Header="Show _Axes" IsCheckable="True" IsChecked="{Binding ShowAxes}"/>
                 <MenuItem Header="Show _TCP" IsCheckable="True" IsChecked="{Binding ShowTcp}"/>
+                <Separator/>
+                <MenuItem Header="Show TCP _Trace" IsCheckable="True" IsChecked="{Binding ShowTcpTrace}"/>
+                <MenuItem Header="Clear TCP Trace" Click="MenuItem_ClearTcpTrace_Click"/>
             </MenuItem>
             <MenuItem Header="_Help">
                 <MenuItem Header="_About" Click="MenuItem_About_Click"/>
@@ -130,8 +133,8 @@
                                 </Style.Triggers>
                             </Style>
                         </ListBox.ItemContainerStyle>
-                        <ListBoxItem Content="Manual Jog"/>
-                        <ListBoxItem Content="Program"/>
+                        <ListBoxItem Content="Teach &amp; Program"/>
+                        <ListBoxItem Content="Program" Visibility="Collapsed"/>
                         <ListBoxItem Content="I/O"/>
                         <ListBoxItem Content="Configuration"/>
                         <ListBoxItem Content="Diagnostics"/>
@@ -149,14 +152,23 @@
 
             <!-- 3D Viewport + Page Content -->
             <Grid Grid.Column="2">
-                <!-- 3D Viewport (always visible in background) -->
-                <Border Background="#1A1A1A">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="3*"/>   <!-- Viewport -->
+                    <RowDefinition Height="Auto"/> <!-- Splitter -->
+                    <RowDefinition Height="2*"/>   <!-- Editor / Pages -->
+                </Grid.RowDefinitions>
+
+                <!-- 3D Viewport (Row 0 - always visible when index=0) -->
+                <Border Grid.Row="0" Background="#1A1A1A">
                     <helix:HelixViewport3D x:Name="Viewport3D"
                                            Background="#1E1E1E"
                                            ShowCoordinateSystem="True"
                                            CoordinateSystemLabelForeground="White"
                                            ZoomExtentsWhenLoaded="True"
                                            CameraRotationMode="Turntable"
+                                           RotateAroundMouseDownPoint="True"
+                                           ZoomAroundMouseDownPoint="True"
+                                           ZoomSensitivity="0.5"
                                            MouseLeftButtonDown="Viewport3D_MouseLeftButtonDown"
                                            MouseMove="Viewport3D_MouseMove"
                                            MouseLeftButtonUp="Viewport3D_MouseLeftButtonUp"
@@ -207,6 +219,9 @@
                         <!-- TCP Marker Container -->
                         <ModelVisual3D x:Name="TcpMarkerVisual"/>
 
+                        <!-- TCP Path Trace Container -->
+                        <ModelVisual3D x:Name="TcpTraceVisual"/>
+
                         <!-- Scene Objects Container (individual ModelVisual3D per object) -->
                         <ModelVisual3D x:Name="SceneObjectsVisual"/>
 
@@ -215,11 +230,17 @@
                         <!-- Base Frame Axes Container -->
                         <ModelVisual3D x:Name="BaseFrameAxesVisual"/>
 
+                        <!-- TCP Gizmo (3D Interactive Jogging) -->
+                        <ModelVisual3D x:Name="TcpGizmoVisual"/>
+
+                        <!-- Ghost Robot (3D Jogging Preview) -->
+                        <ModelVisual3D x:Name="GhostRobotVisual"/>
+
                     </helix:HelixViewport3D>
                 </Border>
 
                 <!-- TCP Pick Mode Banner (overlay on viewport) -->
-                <Border x:Name="TcpPickBanner" VerticalAlignment="Top" HorizontalAlignment="Stretch"
+                <Border Grid.Row="0" x:Name="TcpPickBanner" VerticalAlignment="Top" HorizontalAlignment="Stretch"
                         Background="#CC2196F3" Padding="15,10" Margin="20,10,20,0"
                         CornerRadius="6" Visibility="Collapsed">
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
@@ -233,15 +254,104 @@
                     </StackPanel>
                 </Border>
 
-                <!-- Page Content Overlay -->
-                <Border x:Name="PageContentOverlay" Background="#1E1E1E">
+                <!-- E-STOP Button Overlay (viewport area only, Row 0) -->
+                <Button Grid.Row="0"
+                        Width="100" Height="100"
+                        HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                        Margin="0,0,20,20"
+                        Command="{Binding TriggerEStopCommand}"
+                        Cursor="Hand"
+                        Panel.ZIndex="10">
+                    <Button.Style>
+                        <Style TargetType="Button">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SelectedNavIndex}" Value="0">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Grid>
+                                <!-- Shadow -->
+                                <Ellipse Fill="#40000000" Margin="4,4,-4,-4"/>
+
+                                <!-- Button Body -->
+                                <Ellipse x:Name="ButtonBody" Fill="{Binding EStopButtonColor}">
+                                    <Ellipse.Effect>
+                                        <DropShadowEffect Color="Black" BlurRadius="10" ShadowDepth="3"/>
+                                    </Ellipse.Effect>
+                                </Ellipse>
+
+                                <!-- Inner Ring -->
+                                <Ellipse Stroke="#80000000" StrokeThickness="4" Margin="8"/>
+
+                                <!-- Highlight -->
+                                <Ellipse Margin="12">
+                                    <Ellipse.Fill>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                            <GradientStop Color="#40FFFFFF" Offset="0"/>
+                                            <GradientStop Color="Transparent" Offset="0.5"/>
+                                        </LinearGradientBrush>
+                                    </Ellipse.Fill>
+                                </Ellipse>
+
+                                <!-- Text -->
+                                <TextBlock Text="{Binding EStopButtonText}"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                           FontWeight="Bold" FontSize="11" Foreground="White"
+                                           TextAlignment="Center" TextWrapping="Wrap" Width="70"/>
+                            </Grid>
+
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="ButtonBody" Property="Fill" Value="#FF6666"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="ButtonBody" Property="Fill" Value="#CC0000"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+
+                <!-- GridSplitter between viewport and editor (only visible on Teach & Program page) -->
+                <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch"
+                              Background="#007ACC" Cursor="SizeNS">
+                    <GridSplitter.Style>
+                        <Style TargetType="GridSplitter">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SelectedNavIndex}" Value="0">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </GridSplitter.Style>
+                </GridSplitter>
+
+                <!-- Program Editor (Row 2 - only visible on Teach & Program page, index=0) -->
+                <pages:ProgramView Grid.Row="2">
+                    <pages:ProgramView.Style>
+                        <Style TargetType="pages:ProgramView">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding DataContext.SelectedNavIndex, RelativeSource={RelativeSource AncestorType=Window}}" Value="0">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </pages:ProgramView.Style>
+                </pages:ProgramView>
+
+                <!-- Page Content Overlay (covers all 3 rows for non-Teach pages) -->
+                <Border x:Name="PageContentOverlay" Grid.Row="0" Grid.RowSpan="3" Background="#1E1E1E">
                     <Border.Style>
                         <Style TargetType="Border">
                             <Setter Property="Visibility" Value="Collapsed"/>
                             <Style.Triggers>
-                                <DataTrigger Binding="{Binding SelectedNavIndex}" Value="1">
-                                    <Setter Property="Visibility" Value="Visible"/>
-                                </DataTrigger>
                                 <DataTrigger Binding="{Binding SelectedNavIndex}" Value="2">
                                     <Setter Property="Visibility" Value="Visible"/>
                                 </DataTrigger>
@@ -260,25 +370,14 @@
                                 <DataTrigger Binding="{Binding SelectedNavIndex}" Value="7">
                                     <Setter Property="Visibility" Value="Visible"/>
                                 </DataTrigger>
+                                <DataTrigger Binding="{Binding SelectedNavIndex}" Value="8">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
                             </Style.Triggers>
                         </Style>
                     </Border.Style>
 
                     <Grid>
-                        <!-- Program View (Index 1) -->
-                        <pages:ProgramView DataContext="{Binding ProgramViewModel}">
-                            <pages:ProgramView.Style>
-                                <Style TargetType="pages:ProgramView">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding DataContext.SelectedNavIndex, RelativeSource={RelativeSource AncestorType=Window}}" Value="1">
-                                            <Setter Property="Visibility" Value="Visible"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </pages:ProgramView.Style>
-                        </pages:ProgramView>
-
                         <!-- I/O View (Index 2) -->
                         <pages:IOView DataContext="{Binding IoViewModel}">
                             <pages:IOView.Style>
@@ -560,6 +659,112 @@
 
                         <controls:JogPanel DataContext="{Binding MotionControl}"
                                            Margin="0,0,0,15"/>
+
+                        <!-- 3D Jog Controls (only visible on Manual Jog page) -->
+                        <Border Background="#333333" CornerRadius="3" Padding="10" Margin="0,0,0,15">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SelectedNavIndex}" Value="0">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <StackPanel>
+                                <TextBlock Text="3D JOG MODE" FontWeight="Bold" Margin="0,0,0,8"
+                                           Foreground="{StaticResource ForegroundBrush}"/>
+
+                                <!-- Enable toggle -->
+                                <CheckBox Content="Enable 3D Gizmo"
+                                          IsChecked="{Binding Is3DJogEnabled}"
+                                          Foreground="{StaticResource ForegroundBrush}" Margin="0,0,0,8"/>
+
+                                <!-- Frame selector -->
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8"
+                                            IsEnabled="{Binding Is3DJogEnabled}">
+                                    <TextBlock Text="Frame:" Foreground="Gray" VerticalAlignment="Center"
+                                               Margin="0,0,8,0"/>
+                                    <RadioButton Content="World" GroupName="GizmoFrame"
+                                                 IsChecked="{Binding IsGizmoWorldFrame}"
+                                                 Foreground="{StaticResource ForegroundBrush}" Margin="0,0,12,0"/>
+                                    <RadioButton Content="Tool" GroupName="GizmoFrame"
+                                                 IsChecked="{Binding IsGizmoWorldFrame, Converter={StaticResource InverseBool}}"
+                                                 Foreground="{StaticResource ForegroundBrush}"/>
+                                </StackPanel>
+
+                                <!-- Live mode -->
+                                <CheckBox Content="Live Mode (move during drag)"
+                                          IsChecked="{Binding Is3DJogLiveMode}"
+                                          IsEnabled="{Binding Is3DJogEnabled}"
+                                          Foreground="{StaticResource ForegroundBrush}" Margin="0,0,0,8"/>
+
+                                <!-- Drag status -->
+                                <TextBlock Text="{Binding GizmoDragStatus}"
+                                           Foreground="#00FF88" FontSize="12" FontWeight="Bold"
+                                           Visibility="{Binding GizmoDragStatus, Converter={StaticResource StringToVisibilityConverter}}"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Teach & Insert Section (only visible on Teach & Program page) -->
+                        <Border Background="#333333" CornerRadius="3" Padding="10" Margin="0,0,0,15">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SelectedNavIndex}" Value="0">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <StackPanel>
+                                <TextBlock Text="TEACH &amp; INSERT" FontWeight="Bold" Margin="0,0,0,8"
+                                           Foreground="{StaticResource ForegroundBrush}" FontSize="11"/>
+
+                                <!-- Motion Type -->
+                                <TextBlock Text="Motion Type" Foreground="Gray" FontSize="10" Margin="0,0,0,4"/>
+                                <ComboBox ItemsSource="{Binding ProgramEditor.AvailableMotionTypes}"
+                                          SelectedItem="{Binding ProgramEditor.TeachMotionType}"
+                                          Margin="0,0,0,8" FontSize="12"/>
+
+                                <!-- Speed -->
+                                <TextBlock Text="Speed" Foreground="Gray" FontSize="10" Margin="0,0,0,4"/>
+                                <ComboBox ItemsSource="{Binding ProgramEditor.AvailableSpeeds}"
+                                          SelectedItem="{Binding ProgramEditor.TeachSpeed}"
+                                          Margin="0,0,0,8" FontSize="12"/>
+
+                                <!-- Zone -->
+                                <TextBlock Text="Zone" Foreground="Gray" FontSize="10" Margin="0,0,0,4"/>
+                                <ComboBox ItemsSource="{Binding ProgramEditor.AvailableZones}"
+                                          SelectedItem="{Binding ProgramEditor.TeachZone}"
+                                          Margin="0,0,0,8" FontSize="12"/>
+
+                                <!-- Tool -->
+                                <TextBlock Text="Tool" Foreground="Gray" FontSize="10" Margin="0,0,0,4"/>
+                                <ComboBox ItemsSource="{Binding ProgramEditor.AvailableTools}"
+                                          SelectedItem="{Binding ProgramEditor.TeachTool}"
+                                          Margin="0,0,0,10" FontSize="12"/>
+
+                                <!-- Teach Button -->
+                                <Button Content="TEACH &amp; INSERT"
+                                        Command="{Binding ProgramEditor.TeachAndInsertCommand}"
+                                        Padding="10,10" FontWeight="Bold" FontSize="13"
+                                        Background="#4CAF50" Foreground="White"
+                                        BorderThickness="0" Cursor="Hand">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Background="{TemplateBinding Background}"
+                                                    CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+                            </StackPanel>
+                        </Border>
+
                     </StackPanel>
                 </ScrollViewer>
             </Border>
@@ -614,68 +819,6 @@
                 <TextBlock Grid.Column="4" Text="Robot Controller v1.0.0" Foreground="Gray" HorizontalAlignment="Right"/>
             </Grid>
         </Border>
-
-        <!-- E-STOP Button Overlay (only visible on Manual Jog page) -->
-        <Button Grid.Row="2"
-                Width="100" Height="100"
-                HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                Margin="0,0,280,20"
-                Command="{Binding TriggerEStopCommand}"
-                Cursor="Hand">
-            <Button.Style>
-                <Style TargetType="Button">
-                    <Setter Property="Visibility" Value="Collapsed"/>
-                    <Style.Triggers>
-                        <DataTrigger Binding="{Binding SelectedNavIndex}" Value="0">
-                            <Setter Property="Visibility" Value="Visible"/>
-                        </DataTrigger>
-                    </Style.Triggers>
-                </Style>
-            </Button.Style>
-            <Button.Template>
-                <ControlTemplate TargetType="Button">
-                    <Grid>
-                        <!-- Shadow -->
-                        <Ellipse Fill="#40000000" Margin="4,4,-4,-4"/>
-
-                        <!-- Button Body -->
-                        <Ellipse x:Name="ButtonBody" Fill="{Binding EStopButtonColor}">
-                            <Ellipse.Effect>
-                                <DropShadowEffect Color="Black" BlurRadius="10" ShadowDepth="3"/>
-                            </Ellipse.Effect>
-                        </Ellipse>
-
-                        <!-- Inner Ring -->
-                        <Ellipse Stroke="#80000000" StrokeThickness="4" Margin="8"/>
-
-                        <!-- Highlight -->
-                        <Ellipse Margin="12">
-                            <Ellipse.Fill>
-                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                    <GradientStop Color="#40FFFFFF" Offset="0"/>
-                                    <GradientStop Color="Transparent" Offset="0.5"/>
-                                </LinearGradientBrush>
-                            </Ellipse.Fill>
-                        </Ellipse>
-
-                        <!-- Text -->
-                        <TextBlock Text="{Binding EStopButtonText}"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center"
-                                   FontWeight="Bold" FontSize="11" Foreground="White"
-                                   TextAlignment="Center" TextWrapping="Wrap" Width="70"/>
-                    </Grid>
-
-                    <ControlTemplate.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="ButtonBody" Property="Fill" Value="#FF6666"/>
-                        </Trigger>
-                        <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="ButtonBody" Property="Fill" Value="#CC0000"/>
-                        </Trigger>
-                    </ControlTemplate.Triggers>
-                </ControlTemplate>
-            </Button.Template>
-        </Button>
 
         <!-- E-STOP Reset Confirmation Dialog -->
         <Border Grid.Row="0" Grid.RowSpan="4"

@@ -17,6 +17,8 @@ const std::unordered_map<std::string, TokenType> Lexer::s_keywords = {
     {"DEF", TokenType::DEF},
     {"END", TokenType::END},
     {"DECL", TokenType::DECL},
+    {"CONST", TokenType::CONST},
+    {"ROBTARGET", TokenType::ROBTARGET},
     {"REAL", TokenType::REAL},
     {"INT", TokenType::INT},
     {"BOOL", TokenType::BOOL},
@@ -36,6 +38,9 @@ const std::unordered_map<std::string, TokenType> Lexer::s_keywords = {
     {"PTP", TokenType::PTP},
     {"LIN", TokenType::LIN},
     {"CIRC", TokenType::CIRC},
+    {"MOVEJ", TokenType::MOVEJ},
+    {"MOVEL", TokenType::MOVEL},
+    {"MOVEC", TokenType::MOVEC},
     {"VEL", TokenType::VEL},
     {"ACC", TokenType::ACC},
     {"CONT", TokenType::CONT},
@@ -108,7 +113,9 @@ void Lexer::scanToken() {
         case '[': addToken(TokenType::LBRACKET); break;
         case ']': addToken(TokenType::RBRACKET); break;
         case ',': addToken(TokenType::COMMA); break;
-        case ':': addToken(TokenType::COLON); break;
+        case ':':
+            addToken(match('=') ? TokenType::COLONASSIGN : TokenType::COLON);
+            break;
         case '+': addToken(TokenType::PLUS); break;
         case '-': addToken(TokenType::MINUS); break;
         case '*': addToken(TokenType::STAR); break;
@@ -131,6 +138,10 @@ void Lexer::scanToken() {
             break;
 
         case ';':
+            addToken(TokenType::SEMICOLON);
+            break;
+
+        case '!':
             scanComment();
             break;
 
@@ -169,15 +180,22 @@ void Lexer::scanNumber() {
     if (peek() == '.' && std::isdigit(peekNext())) {
         advance();  // consume '.'
         while (std::isdigit(peek())) advance();
-
-        std::string lexeme = m_source.substr(m_start, m_current - m_start);
-        double value = std::stod(lexeme);
-        addToken(TokenType::NUMBER, value);
-    } else {
-        std::string lexeme = m_source.substr(m_start, m_current - m_start);
-        int value = std::stoi(lexeme);
-        addToken(TokenType::NUMBER, static_cast<double>(value));
     }
+
+    // Look for scientific notation (e.g., 9E9, 1.5e-3)
+    if (peek() == 'E' || peek() == 'e') {
+        advance();  // consume 'E'/'e'
+        if (peek() == '+' || peek() == '-') advance();  // optional sign
+        if (!std::isdigit(peek())) {
+            error("Expected digit after exponent");
+            return;
+        }
+        while (std::isdigit(peek())) advance();
+    }
+
+    std::string lexeme = m_source.substr(m_start, m_current - m_start);
+    double value = std::stod(lexeme);
+    addToken(TokenType::NUMBER, value);
 }
 
 void Lexer::scanString() {

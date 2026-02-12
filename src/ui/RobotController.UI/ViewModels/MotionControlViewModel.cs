@@ -295,26 +295,18 @@ public partial class MotionControlViewModel : ObservableObject
     }
 
     // ========================================================================
-    // Commands - Homing
+    // Commands - Go Home (KUKA $H_POS - PTP move to park position)
     // ========================================================================
 
     [RelayCommand]
-    private async Task HomeAllAsync()
+    private async Task GoHomeAsync()
     {
         if (!IsConnected) return;
 
-        MachineState = "Homing...";
-        MachineStateColor = "#AAAA00";
+        MachineState = "Going Home...";
+        MachineStateColor = "#0078D7";
 
-        await _ipcClient.SendCommandAsync("home_all", new { });
-    }
-
-    [RelayCommand]
-    private async Task HomeAxisAsync(int axis)
-    {
-        if (!IsConnected || axis < 0 || axis >= 6) return;
-
-        await _ipcClient.SendCommandAsync("home_axis", new { Axis = axis });
+        await _ipcClient.SendCommandAsync("go_home", new { });
     }
 
     // ========================================================================
@@ -471,8 +463,8 @@ public partial class MotionControlViewModel : ObservableObject
                 MachineStateColor = "#00AAFF";
                 break;
             case "HOMING":
-                MachineState = "Homing";
-                MachineStateColor = "#AAAA00";
+                MachineState = "Going Home...";
+                MachineStateColor = "#0078D7";
                 break;
             case "ALARM":
                 MachineState = "ALARM";

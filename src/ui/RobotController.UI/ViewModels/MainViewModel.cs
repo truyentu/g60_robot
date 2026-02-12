@@ -25,6 +25,32 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private bool _disposed;
     private bool _robotInitialized;
 
+    /// <summary>Get IPC client for direct access (used by MainWindow for gizmo IK calls)</summary>
+    public IIpcClientService GetIpcClient() => _ipcClient;
+
+    // 3D Jog Mode
+    [ObservableProperty]
+    private bool _is3DJogEnabled;
+
+    [ObservableProperty]
+    private bool _isGizmoWorldFrame = true;
+
+    [ObservableProperty]
+    private bool _is3DJogLiveMode;
+
+    [ObservableProperty]
+    private string _gizmoDragStatus = "";
+
+    partial void OnIs3DJogEnabledChanged(bool value)
+    {
+        _viewportService.ShowTcpGizmo(value && SelectedNavIndex == 0);
+    }
+
+    partial void OnIsGizmoWorldFrameChanged(bool value)
+    {
+        _viewportService.SetGizmoFrame(value ? GizmoFrame.World : GizmoFrame.Tool);
+    }
+
     // Motion Control
     [ObservableProperty]
     private MotionControlViewModel? _motionControl;
@@ -114,6 +140,14 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private bool _showTcp = true;
+
+    [ObservableProperty]
+    private bool _showTcpTrace;
+
+    partial void OnShowTcpTraceChanged(bool value)
+    {
+        _viewportService.SetTcpTraceEnabled(value);
+    }
 
     // Page ViewModels
     [ObservableProperty]
@@ -220,7 +254,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         Override = new OverrideViewModel(_ipcClient);
         StationSetup = new StationSetupViewModel(_viewportService, _ipcClient);
         PositionDisplay = new PositionDisplayViewModel(_ipcClient);
-        ProgramEditor = new ProgramEditorViewModel(_ipcClient);
+        ProgramEditor = new ProgramEditorViewModel(_ipcClient, _viewportService);
 
         // Subscribe to tool change for viewport update
         _ipcClient.ToolChanged += OnToolChangedForViewport;

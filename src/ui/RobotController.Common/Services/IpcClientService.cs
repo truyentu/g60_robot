@@ -967,6 +967,44 @@ public class IpcClientService : IIpcClientService
     }
 
     // ========================================================================
+    // Kinematics (3D Jogging)
+    // ========================================================================
+
+    public async Task<ComputeIKResponse?> ComputeIKAsync(double[] targetPose, double[] currentJoints, bool apply = false, CancellationToken cancellationToken = default)
+    {
+        var payload = new ComputeIKRequest
+        {
+            TargetPose = targetPose,
+            CurrentJoints = currentJoints,
+            Apply = apply
+        };
+        var request = IpcMessage.Create(MessageTypes.COMPUTE_IK, JsonSerializer.SerializeToElement(payload, IpcMessage.CamelCaseOptions));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<ComputeIKResponse>(IpcMessage.CamelCaseOptions);
+        }
+
+        return null;
+    }
+
+    public async Task<bool> SetJointsAsync(double[] jointsDegrees, CancellationToken cancellationToken = default)
+    {
+        var payload = new { joints = jointsDegrees };
+        var request = IpcMessage.Create(MessageTypes.SET_JOINTS, JsonSerializer.SerializeToElement(payload, IpcMessage.CamelCaseOptions));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            var result = response.Payload.Deserialize<JsonElement>(IpcMessage.CamelCaseOptions);
+            return result.TryGetProperty("success", out var s) && s.GetBoolean();
+        }
+
+        return false;
+    }
+
+    // ========================================================================
     // Firmware Control
     // ========================================================================
 

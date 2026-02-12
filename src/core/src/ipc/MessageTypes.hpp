@@ -117,6 +117,10 @@ enum class MessageType {
     JOG_MOVE,
     JOG_STEP,
 
+    // Kinematics (3D Jogging)
+    COMPUTE_IK,
+    SET_JOINTS,
+
     // Firmware Control
     FIRMWARE_CONNECT,
     FIRMWARE_DISCONNECT,
@@ -215,6 +219,8 @@ inline std::string messageTypeToString(MessageType type) {
         case MessageType::JOG_STOP:           return "JOG_STOP";
         case MessageType::JOG_MOVE:           return "JOG_MOVE";
         case MessageType::JOG_STEP:           return "JOG_STEP";
+        case MessageType::COMPUTE_IK:         return "COMPUTE_IK";
+        case MessageType::SET_JOINTS:         return "SET_JOINTS";
         case MessageType::FIRMWARE_CONNECT:   return "FIRMWARE_CONNECT";
         case MessageType::FIRMWARE_DISCONNECT: return "FIRMWARE_DISCONNECT";
         case MessageType::FIRMWARE_GET_MODE:  return "FIRMWARE_GET_MODE";
@@ -306,6 +312,8 @@ inline MessageType stringToMessageType(const std::string& str) {
     if (str == "JOG_STOP")           return MessageType::JOG_STOP;
     if (str == "JOG_MOVE")           return MessageType::JOG_MOVE;
     if (str == "JOG_STEP")           return MessageType::JOG_STEP;
+    if (str == "COMPUTE_IK")         return MessageType::COMPUTE_IK;
+    if (str == "SET_JOINTS")         return MessageType::SET_JOINTS;
     if (str == "FIRMWARE_CONNECT")   return MessageType::FIRMWARE_CONNECT;
     if (str == "FIRMWARE_DISCONNECT") return MessageType::FIRMWARE_DISCONNECT;
     if (str == "FIRMWARE_GET_MODE")  return MessageType::FIRMWARE_GET_MODE;

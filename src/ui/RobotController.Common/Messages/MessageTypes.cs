@@ -108,6 +108,10 @@ public static class MessageTypes
     public const string JOG_MOVE = "JOG_MOVE";
     public const string JOG_STEP = "JOG_STEP";
 
+    // Kinematics (3D Jogging)
+    public const string COMPUTE_IK = "COMPUTE_IK";
+    public const string SET_JOINTS = "SET_JOINTS";
+
     // Firmware Control
     public const string FIRMWARE_CONNECT = "FIRMWARE_CONNECT";
     public const string FIRMWARE_DISCONNECT = "FIRMWARE_DISCONNECT";

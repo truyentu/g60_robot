@@ -22,6 +22,8 @@ enum class TokenType {
     // Keywords
     DEF, END,
     DECL, REAL, INT, BOOL,
+    CONST,                  // CONST robtarget ...
+    ROBTARGET,              // data type keyword
     IF, THEN, ELSE, ENDIF,
     LOOP, ENDLOOP,
     WHILE, ENDWHILE,
@@ -30,6 +32,7 @@ enum class TokenType {
 
     // Motion
     PTP, LIN, CIRC,
+    MOVEJ, MOVEL, MOVEC,    // ABB RAPID motion keywords
     VEL, ACC, CONT,
     HOME,
 
@@ -38,6 +41,7 @@ enum class TokenType {
     EQUAL, NOT_EQUAL,
     LESS, GREATER, LESS_EQ, GREATER_EQ,
     ASSIGN,         // =
+    COLONASSIGN,    // :=
     AND, OR, NOT,
 
     // Punctuation
@@ -45,6 +49,7 @@ enum class TokenType {
     LBRACE, RBRACE,
     LBRACKET, RBRACKET,
     COMMA, COLON,
+    SEMICOLON,      // ; (statement terminator in RAPID)
     PERCENT,
     DOLLAR,         // $
 
@@ -74,6 +79,8 @@ inline std::string tokenTypeToString(TokenType type) {
         case TokenType::REAL: return "REAL";
         case TokenType::INT: return "INT";
         case TokenType::BOOL: return "BOOL";
+        case TokenType::CONST: return "CONST";
+        case TokenType::ROBTARGET: return "ROBTARGET";
         case TokenType::IF: return "IF";
         case TokenType::THEN: return "THEN";
         case TokenType::ELSE: return "ELSE";
@@ -90,6 +97,9 @@ inline std::string tokenTypeToString(TokenType type) {
         case TokenType::PTP: return "PTP";
         case TokenType::LIN: return "LIN";
         case TokenType::CIRC: return "CIRC";
+        case TokenType::MOVEJ: return "MOVEJ";
+        case TokenType::MOVEL: return "MOVEL";
+        case TokenType::MOVEC: return "MOVEC";
         case TokenType::VEL: return "VEL";
         case TokenType::ACC: return "ACC";
         case TokenType::CONT: return "CONT";
@@ -105,6 +115,7 @@ inline std::string tokenTypeToString(TokenType type) {
         case TokenType::LESS_EQ: return "LESS_EQ";
         case TokenType::GREATER_EQ: return "GREATER_EQ";
         case TokenType::ASSIGN: return "ASSIGN";
+        case TokenType::COLONASSIGN: return "COLONASSIGN";
         case TokenType::AND: return "AND";
         case TokenType::OR: return "OR";
         case TokenType::NOT: return "NOT";
@@ -116,6 +127,7 @@ inline std::string tokenTypeToString(TokenType type) {
         case TokenType::RBRACKET: return "RBRACKET";
         case TokenType::COMMA: return "COMMA";
         case TokenType::COLON: return "COLON";
+        case TokenType::SEMICOLON: return "SEMICOLON";
         case TokenType::PERCENT: return "PERCENT";
         case TokenType::DOLLAR: return "DOLLAR";
         case TokenType::NEWLINE: return "NEWLINE";

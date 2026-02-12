@@ -46,13 +46,17 @@ private:
     ProgramStmt parseProgram();
     StmtPtr parseStatement();
     StmtPtr parseDeclaration();
+    StmtPtr parseConstDeclaration();
+    StmtPtr parseFunctionCall(const std::string& name);
     StmtPtr parseAssignment(const std::string& name);
     StmtPtr parseSystemAssignment();
     StmtPtr parseMotion(TokenType motionType);
+    StmtPtr parseRapidMotion(TokenType motionType);
     StmtPtr parseWait();
     StmtPtr parseIf();
     StmtPtr parseLoop();
     StmtPtr parseWhile();
+    void consumeOptionalSemicolon();
 
     ExprPtr parseExpression();
     ExprPtr parseOr();

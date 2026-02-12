@@ -147,6 +147,7 @@ private:
     std::shared_ptr<firmware::IFirmwareDriver> m_realDriver;
     bool m_isSimMode{true};
     std::optional<config::RobotPackage> m_activePackage;
+    Eigen::Matrix4d m_flangeTransform = Eigen::Matrix4d::Identity(); // T_flangeOffset from package
     std::unique_ptr<interpreter::Executor> m_programExecutor;
     std::unique_ptr<tool::ToolManager> m_toolManager;
 

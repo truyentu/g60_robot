@@ -41,6 +41,24 @@ inline std::string executionStateToString(ExecutionState state) {
     }
 }
 
+/**
+ * Snapshot of executor state before executing a statement.
+ * Used by the undo stack for BWD (backward step) support.
+ */
+struct ExecutionSnapshot {
+    size_t pc = 0;
+    int sourceLine = 0;
+
+    // State before execution (restored on BWD)
+    std::unordered_map<std::string, double> variables;
+    std::array<bool, 128> outputs{};
+
+    // Motion reversal info
+    bool wasMotion = false;
+    std::string motionType;
+    std::vector<double> prevPosition;  // Robot TCP before this motion
+};
+
 class Executor {
 public:
     using MotionCallback = std::function<void(const MotionStmt&)>;
@@ -62,10 +80,23 @@ public:
     void stop();
     void reset();
 
+    // Block Selection (KUKA-style Satzanwahl)
+    void blockSelect(int sourceLine);
+    void executeLine(int sourceLine);
+    void executeRange(int fromLine, int toLine);
+    void runFromLine(int sourceLine);
+    void backward();
+
     // State
     ExecutionState getState() const { return m_state.load(); }
     int getCurrentLine() const { return m_currentLine; }
+    size_t getCurrentPC() const { return m_pc; }
     std::string getProgramName() const { return m_program.name; }
+    bool canBackward() const;
+    int getSourceLineForPC(size_t pc) const;
+
+    // Position tracking (called after motion completes to keep undo accurate)
+    void updateCurrentPosition(const std::vector<double>& pos);
 
     // Callbacks
     void setMotionCallback(MotionCallback cb) { m_motionCallback = cb; }
@@ -112,6 +143,12 @@ private:
     std::array<bool, 128> m_inputs{};
     std::array<bool, 128> m_outputs{};
 
+    // Block Selection / Undo
+    std::vector<ExecutionSnapshot> m_undoStack;
+    static constexpr size_t MAX_UNDO_SIZE = 1000;
+    std::unordered_map<int, size_t> m_lineToPC;  // sourceLine → body index
+    std::vector<double> m_currentPosition;        // Current robot TCP for undo
+
     // Callbacks
     MotionCallback m_motionCallback;
     LineCallback m_lineCallback;
@@ -126,6 +163,9 @@ private:
 
     void checkPauseOrStop();
     void setError(const std::string& msg);
+    std::vector<double> parseRobtargetValues(const std::string& raw);
+    void pushUndoSnapshot(const StmtPtr& stmt);
+    static int getSourceLine(const StmtPtr& stmt);
 };
 
 } // namespace interpreter

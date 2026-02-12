@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:avalon="http://icsharpcode.net/sharpdevelop/avalonedit"
+             xmlns:editor="clr-namespace:RobotController.UI.Editor"
              mc:Ignorable="d"
              d:DesignHeight="600" d:DesignWidth="900">
 
@@ -23,6 +24,19 @@
         <!-- Toolbar -->
         <Border Grid.Row="0" Grid.ColumnSpan="2" Background="#2D2D30" Padding="8">
             <StackPanel Orientation="Horizontal">
+                <Button Content="Open" Command="{Binding OpenFileCommand}"
+                        Margin="2" Padding="12,6"
+                        Background="#0E639C" Foreground="White"
+                        BorderThickness="0" Cursor="Hand"
+                        ToolTip="Open RPL program file"/>
+                <Button Content="Save" Command="{Binding SaveFileCommand}"
+                        Margin="2" Padding="12,6"
+                        Background="#0E639C" Foreground="White"
+                        BorderThickness="0" Cursor="Hand"
+                        ToolTip="Save program file"/>
+
+                <Separator Margin="15,0" Width="1" Background="#555555"/>
+
                 <Button Content="Run" Command="{Binding RunProgramCommand}"
                         Margin="2" Padding="12,6"
                         Background="#4CAF50" Foreground="White"
@@ -46,6 +60,15 @@
 
                 <Separator Margin="15,0" Width="1" Background="#555555"/>
 
+                <!-- Touch-Up: Modify Position Button -->
+                <Button Content="Modify Pos" Command="{Binding ModifyPositionCommand}"
+                        Margin="2" Padding="12,6"
+                        Background="#9C27B0" Foreground="White"
+                        BorderThickness="0" Cursor="Hand"
+                        ToolTip="Update selected target with current robot position (Touch-Up)"/>
+
+                <Separator Margin="15,0" Width="1" Background="#555555"/>
+
                 <TextBlock Text="Override:" VerticalAlignment="Center" Foreground="#AAAAAA" Margin="0,0,8,0"/>
                 <Slider Minimum="1" Maximum="100" Value="{Binding OverridePercent}"
                         Width="120" VerticalAlignment="Center"/>
@@ -56,29 +79,113 @@
 
         <!-- Code Editor -->
         <Border Grid.Row="1" Grid.Column="0" Background="#1E1E1E" BorderThickness="0">
-            <avalon:TextEditor x:Name="CodeEditor"
+            <Grid>
+                <avalon:TextEditor x:Name="CodeEditor"
+                                   FontFamily="Consolas"
+                                   FontSize="14"
+                                   ShowLineNumbers="True"
+                                   Background="#1E1E1E"
+                                   Foreground="#D4D4D4"
+                                   LineNumbersForeground="#858585"
+                                   HorizontalScrollBarVisibility="Auto"
+                                   VerticalScrollBarVisibility="Auto"/>
+
+                <!-- KUKA-Style Inline Command Editor Popup -->
+                <Popup x:Name="InlineFormPopup"
+                       PlacementTarget="{Binding ElementName=CodeEditor}"
+                       Placement="Relative"
+                       StaysOpen="True"
+                       AllowsTransparency="True"
+                       PopupAnimation="Fade">
+                    <editor:InlineCommandEditor x:Name="InlineEditor" Width="580"/>
+                </Popup>
+
+                <!-- Task C: Floating Touch-Up Button (appears on motion lines) -->
+                <Popup x:Name="TouchUpButtonPopup"
+                       PlacementTarget="{Binding ElementName=CodeEditor}"
+                       Placement="Relative"
+                       StaysOpen="True"
+                       AllowsTransparency="True"
+                       PopupAnimation="None">
+                    <Button x:Name="FloatingTouchUpBtn"
+                            Content="&#xE7C8;"
+                            FontFamily="Segoe MDL2 Assets"
+                            FontSize="14"
+                            Width="28" Height="28"
+                            Background="#9C27B0" Foreground="White"
+                            BorderThickness="0" Cursor="Hand"
+                            ToolTip="Touch-Up: Update position with current robot TCP"
+                            Command="{Binding ModifyPositionCommand}">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}"
+                                        CornerRadius="14"
+                                        Padding="4">
+                                    <Border.Effect>
+                                        <DropShadowEffect Color="Black" BlurRadius="6" ShadowDepth="1" Opacity="0.4"/>
+                                    </Border.Effect>
+                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                </Popup>
+
+                <!-- Toast Notification Overlay -->
+                <Border x:Name="ToastOverlay"
+                        VerticalAlignment="Top" HorizontalAlignment="Right"
+                        Margin="0,10,20,0"
+                        CornerRadius="6"
+                        Padding="14,8"
+                        MaxWidth="400"
+                        Visibility="{Binding IsToastVisible, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Background" Value="#2E7D32"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding ToastType}" Value="error">
+                                    <Setter Property="Background" Value="#C62828"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <Border.Effect>
+                        <DropShadowEffect Color="Black" BlurRadius="12" ShadowDepth="3" Opacity="0.5"/>
+                    </Border.Effect>
+                    <TextBlock Text="{Binding ToastMessage}"
+                               Foreground="White" FontSize="12"
                                FontFamily="Consolas"
-                               FontSize="14"
-                               ShowLineNumbers="True"
-                               Background="#1E1E1E"
-                               Foreground="#D4D4D4"
-                               LineNumbersForeground="#858585"
-                               HorizontalScrollBarVisibility="Auto"
-                               VerticalScrollBarVisibility="Auto"/>
+                               TextWrapping="Wrap"/>
+                </Border>
+            </Grid>
         </Border>
 
-        <!-- Point Database -->
+        <!-- Point Database + Touch-Up Panel -->
         <Border Grid.Row="1" Grid.Column="1" Background="#252526">
             <DockPanel>
                 <Border DockPanel.Dock="Top" Background="#333337" Padding="10,8">
                     <TextBlock Text="POINTS" FontWeight="SemiBold" Foreground="#AAAAAA" FontSize="11"/>
                 </Border>
 
+                <!-- Touch-Up Info Panel -->
+                <Border DockPanel.Dock="Top" Background="#1B2838" Padding="8,6"
+                        Visibility="{Binding IsOnMotionLine, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}">
+                    <StackPanel>
+                        <TextBlock FontSize="10" Foreground="#AAAAAA">
+                            <Run Text="Target: "/>
+                            <Run Text="{Binding CaretTargetName}" Foreground="#CE9178" FontWeight="SemiBold"/>
+                        </TextBlock>
+                        <TextBlock Text="{Binding TouchUpStatus}" FontSize="10" Foreground="#4EC9B0"
+                                   Margin="0,2,0,0" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+
                 <StackPanel DockPanel.Dock="Bottom" Margin="8">
-                    <Button Content="Teach Point" Command="{Binding TeachPointCommand}"
+                    <Button Content="Teach &amp; Insert" Command="{Binding TeachAndInsertCommand}"
                             Padding="8,6" Margin="0,0,0,4"
-                            Background="#0E639C" Foreground="White"
-                            BorderThickness="0" Cursor="Hand"/>
+                            Background="#4CAF50" Foreground="White"
+                            BorderThickness="0" Cursor="Hand"
+                            ToolTip="Teach current position and insert code at caret"/>
                     <Button Content="Refresh" Command="{Binding RefreshPointsCommand}"
                             Padding="8,6"
                             Background="#555555" Foreground="White"
@@ -118,11 +225,17 @@
                 </TextBlock>
                 <TextBlock Foreground="White" Margin="30,0,0,0">
                     <Run Text="Line: " FontWeight="SemiBold"/>
-                    <Run Text="{Binding CurrentLine}"/>
+                    <Run Text="{Binding CaretLineNumber}"/>
                 </TextBlock>
                 <TextBlock Foreground="White" Margin="30,0,0,0">
                     <Run Text="Program: " FontWeight="SemiBold"/>
                     <Run Text="{Binding ProgramName}"/>
+                </TextBlock>
+                <!-- Show target variable name when on motion line -->
+                <TextBlock Foreground="#FFD700" Margin="30,0,0,0"
+                           Visibility="{Binding IsOnMotionLine, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}">
+                    <Run Text="Target: " FontWeight="SemiBold"/>
+                    <Run Text="{Binding CaretTargetName}"/>
                 </TextBlock>
             </StackPanel>
         </Border>

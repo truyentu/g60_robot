@@ -119,6 +119,43 @@
         <StackPanel Grid.Column="1">
             <controls:MotionControlPanel Margin="0,0,0,16"/>
             <controls:JogPanel/>
+
+            <!-- 3D Jog Controls -->
+            <Border Background="#2D2D2D" CornerRadius="8" Padding="12" Margin="0,16,0,0">
+                <StackPanel>
+                    <TextBlock Text="3D JOG MODE" FontSize="12" FontWeight="Bold"
+                               Foreground="#AAAAAA" Margin="0,0,0,8"/>
+
+                    <!-- Enable toggle -->
+                    <CheckBox Content="Enable 3D Gizmo"
+                              IsChecked="{Binding Is3DJogEnabled}"
+                              Foreground="White" Margin="0,0,0,8"/>
+
+                    <!-- Frame selector -->
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8"
+                                IsEnabled="{Binding Is3DJogEnabled}">
+                        <TextBlock Text="Frame:" Foreground="#888888" VerticalAlignment="Center"
+                                   Margin="0,0,8,0"/>
+                        <RadioButton Content="World" GroupName="GizmoFrame"
+                                     IsChecked="{Binding IsGizmoWorldFrame}"
+                                     Foreground="White" Margin="0,0,12,0"/>
+                        <RadioButton Content="Tool" GroupName="GizmoFrame"
+                                     IsChecked="{Binding IsGizmoWorldFrame, Converter={StaticResource InverseBool}}"
+                                     Foreground="White"/>
+                    </StackPanel>
+
+                    <!-- Live mode -->
+                    <CheckBox Content="Live Mode (move during drag)"
+                              IsChecked="{Binding Is3DJogLiveMode}"
+                              IsEnabled="{Binding Is3DJogEnabled}"
+                              Foreground="White" Margin="0,0,0,8"/>
+
+                    <!-- Drag status -->
+                    <TextBlock Text="{Binding GizmoDragStatus}"
+                               Foreground="#00FF88" FontSize="13" FontWeight="Bold"
+                               Visibility="{Binding GizmoDragStatus, Converter={StaticResource StringToVisibilityConverter}}"/>
+                </StackPanel>
+            </Border>
         </StackPanel>
     </Grid>
 </UserControl>

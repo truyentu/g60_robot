@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RobotController.Common", "R
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RobotController.UI", "RobotController.UI\RobotController.UI.csproj", "{BBD9326B-D1C2-4061-8FA1-6EA048FEC1AF}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RobotController.Tests", "RobotController.Tests\RobotController.Tests.csproj", "{9711801A-C5BA-44A3-9466-18D81A6F49D8}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -24,5 +26,9 @@ Global
 		{BBD9326B-D1C2-4061-8FA1-6EA048FEC1AF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BBD9326B-D1C2-4061-8FA1-6EA048FEC1AF}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BBD9326B-D1C2-4061-8FA1-6EA048FEC1AF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9711801A-C5BA-44A3-9466-18D81A6F49D8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9711801A-C5BA-44A3-9466-18D81A6F49D8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9711801A-C5BA-44A3-9466-18D81A6F49D8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9711801A-C5BA-44A3-9466-18D81A6F49D8}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

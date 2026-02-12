@@ -146,6 +146,11 @@ public interface IIpcClientService : IDisposable
 
     Task<JogMoveResponse?> JogStepAsync(JogMode mode, int axis, int direction, double increment, double speedPercent, JogFrame frame = JogFrame.World, CancellationToken cancellationToken = default);
 
+    // Kinematics (3D Jogging)
+    Task<ComputeIKResponse?> ComputeIKAsync(double[] targetPose, double[] currentJoints, bool apply = false, CancellationToken cancellationToken = default);
+
+    Task<bool> SetJointsAsync(double[] jointsDegrees, CancellationToken cancellationToken = default);
+
     // Firmware Control operations
     Task<FirmwareConnectResponse?> ConnectFirmwareAsync(string port = "", int baudRate = 115200, CancellationToken cancellationToken = default);
 
