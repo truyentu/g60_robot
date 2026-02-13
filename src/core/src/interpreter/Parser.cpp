@@ -1,8 +1,8 @@
 /**
  * @file Parser.cpp
- * @brief Parser implementation for RPL
+ * @brief Parser implementation for KRL (KUKA Robot Language)
  *
- * Part of Phase 8: Virtual Simulation (IMPL_P8_02)
+ * Strict KUKA KRL syntax based on KSS 8.x specifications.
  */
 
 #include "Parser.hpp"
@@ -70,23 +70,28 @@ void Parser::error(const std::string& message) {
 void Parser::synchronize() {
     advance();
     while (!isAtEnd()) {
-        // Synchronize at statement boundaries
         if (previous().type == TokenType::NEWLINE) return;
-        if (previous().type == TokenType::SEMICOLON) return;
         switch (peek().type) {
             case TokenType::DEF:
             case TokenType::IF:
             case TokenType::LOOP:
             case TokenType::WHILE:
+            case TokenType::FOR:
+            case TokenType::REPEAT:
+            case TokenType::SWITCH:
             case TokenType::PTP:
             case TokenType::LIN:
             case TokenType::CIRC:
-            case TokenType::MOVEJ:
-            case TokenType::MOVEL:
-            case TokenType::MOVEC:
+            case TokenType::PTP_REL:
+            case TokenType::LIN_REL:
+            case TokenType::CIRC_REL:
             case TokenType::WAIT:
             case TokenType::DECL:
             case TokenType::CONST:
+            case TokenType::HALT:
+            case TokenType::GOTO:
+            case TokenType::CONTINUE:
+            case TokenType::EXIT:
                 return;
             default:
                 advance();
@@ -98,17 +103,31 @@ void Parser::skipNewlines() {
     while (match({TokenType::NEWLINE})) {}
 }
 
+bool Parser::isKrlType() const {
+    return check(TokenType::INT) || check(TokenType::REAL) || check(TokenType::BOOL) ||
+           check(TokenType::CHAR) || check(TokenType::FRAME) || check(TokenType::POS) ||
+           check(TokenType::E6POS) || check(TokenType::E6AXIS) || check(TokenType::AXIS);
+}
+
+// ============================================================================
+// Program Structure
+// ============================================================================
+
 ProgramStmt Parser::parseProgram() {
     ProgramStmt program;
 
     skipNewlines();
 
-    // Phase 1: Parse top-level CONST declarations (before DEF)
-    while (check(TokenType::CONST) && !isAtEnd()) {
+    // Top-level declarations before DEF (CONST, DECL)
+    while ((check(TokenType::CONST) || check(TokenType::DECL)) && !isAtEnd()) {
         try {
-            auto constDecl = parseConstDeclaration();
-            if (constDecl) {
-                program.constDecls.push_back(constDecl);
+            StmtPtr decl;
+            if (check(TokenType::CONST))
+                decl = parseConstDeclaration();
+            else
+                decl = parseDeclaration();
+            if (decl) {
+                program.constDecls.push_back(decl);
             }
         } catch (const std::exception&) {
             synchronize();
@@ -116,7 +135,7 @@ ProgramStmt Parser::parseProgram() {
         skipNewlines();
     }
 
-    // Phase 2: DEF name() ... END
+    // DEF name() ... END
     consume(TokenType::DEF, "Expected 'DEF'");
     Token name = consume(TokenType::IDENTIFIER, "Expected program name");
     program.name = name.lexeme;
@@ -142,94 +161,65 @@ ProgramStmt Parser::parseProgram() {
     return program;
 }
 
+// ============================================================================
+// Statement Dispatcher
+// ============================================================================
+
 StmtPtr Parser::parseStatement() {
     skipNewlines();
 
-    // Skip standalone semicolons
-    while (match({TokenType::SEMICOLON})) {
-        skipNewlines();
-    }
+    if (check(TokenType::DECL)) return parseDeclaration();
+    if (check(TokenType::CONST)) return parseConstDeclaration();
 
-    if (check(TokenType::DECL)) {
-        return parseDeclaration();
-    }
-
-    if (check(TokenType::CONST)) {
-        auto stmt = parseConstDeclaration();
-        consumeOptionalSemicolon();
-        return stmt;
-    }
-
-    // KRL-style motion: PTP, LIN, CIRC
-    if (check(TokenType::PTP) || check(TokenType::LIN) || check(TokenType::CIRC)) {
+    // KRL motion: PTP, LIN, CIRC, PTP_REL, LIN_REL, CIRC_REL
+    if (check(TokenType::PTP) || check(TokenType::LIN) || check(TokenType::CIRC) ||
+        check(TokenType::PTP_REL) || check(TokenType::LIN_REL) || check(TokenType::CIRC_REL)) {
         TokenType type = peek().type;
         advance();
-        auto stmt = parseMotion(type);
-        consumeOptionalSemicolon();
-        return stmt;
+        return parseMotion(type);
     }
 
-    // RAPID-style motion: MoveJ, MoveL, MoveC
-    if (check(TokenType::MOVEJ) || check(TokenType::MOVEL) || check(TokenType::MOVEC)) {
-        TokenType type = peek().type;
-        advance();
-        auto stmt = parseRapidMotion(type);
-        consumeOptionalSemicolon();
-        return stmt;
-    }
+    if (check(TokenType::WAIT)) return parseWait();
+    if (check(TokenType::IF)) return parseIf();
+    if (check(TokenType::LOOP)) return parseLoop();
+    if (check(TokenType::WHILE)) return parseWhile();
+    if (check(TokenType::FOR)) return parseFor();
+    if (check(TokenType::REPEAT)) return parseRepeat();
+    if (check(TokenType::SWITCH)) return parseSwitch();
+    if (check(TokenType::GOTO)) return parseGoto();
+    if (check(TokenType::HALT)) return parseHalt();
+    if (check(TokenType::CONTINUE)) return parseContinue();
+    if (check(TokenType::EXIT)) return parseExit();
 
-    if (check(TokenType::WAIT)) {
-        auto stmt = parseWait();
-        consumeOptionalSemicolon();
-        return stmt;
-    }
-
-    if (check(TokenType::IF)) {
-        return parseIf();
-    }
-
-    if (check(TokenType::LOOP)) {
-        return parseLoop();
-    }
-
-    if (check(TokenType::WHILE)) {
-        return parseWhile();
-    }
-
-    if (check(TokenType::DOLLAR)) {
-        auto stmt = parseSystemAssignment();
-        consumeOptionalSemicolon();
-        return stmt;
-    }
+    if (check(TokenType::DOLLAR)) return parseSystemAssignment();
 
     if (check(TokenType::IDENTIFIER)) {
         Token name = advance();
-        if (check(TokenType::ASSIGN)) {
-            auto stmt = parseAssignment(name.lexeme);
-            consumeOptionalSemicolon();
-            return stmt;
-        }
-        if (check(TokenType::COLONASSIGN)) {
-            // name := expr (RAPID-style assignment)
-            advance(); // consume :=
-            AssignStmt stmt;
+
+        // Label: "name:"
+        if (check(TokenType::COLON)) {
+            advance(); // consume ':'
+            LabelStmt stmt;
             stmt.name = name.lexeme;
-            stmt.value = parseExpression();
-            consumeOptionalSemicolon();
+            stmt.sourceLine = name.line;
             return makeStmt(stmt);
         }
-        if (check(TokenType::LPAREN) || check(TokenType::SEMICOLON) || check(TokenType::NEWLINE) || isAtEnd()) {
-            // Function call: ArcStart(...); or ArcEnd;
-            auto stmt = parseFunctionCall(name.lexeme);
-            consumeOptionalSemicolon();
-            return stmt;
+
+        // Assignment: name = expr
+        if (check(TokenType::ASSIGN)) {
+            return parseAssignment(name.lexeme);
         }
-        // Could be just a point reference or something else
+
+        // Function call: name(...) or standalone name
+        if (check(TokenType::LPAREN) || check(TokenType::NEWLINE) || isAtEnd()) {
+            return parseFunctionCall(name.lexeme);
+        }
+
         error("Unexpected identifier: " + name.lexeme);
         return nullptr;
     }
 
-    if (check(TokenType::NEWLINE) || check(TokenType::SEMICOLON) || isAtEnd()) {
+    if (check(TokenType::NEWLINE) || isAtEnd()) {
         return nullptr;
     }
 
@@ -237,9 +227,9 @@ StmtPtr Parser::parseStatement() {
     return nullptr;
 }
 
-void Parser::consumeOptionalSemicolon() {
-    match({TokenType::SEMICOLON});
-}
+// ============================================================================
+// Declarations
+// ============================================================================
 
 StmtPtr Parser::parseDeclaration() {
     int line = peek().line;
@@ -247,15 +237,16 @@ StmtPtr Parser::parseDeclaration() {
 
     DeclareStmt stmt;
 
-    // Type
-    if (match({TokenType::REAL})) {
-        stmt.type = "REAL";
-    } else if (match({TokenType::INT})) {
-        stmt.type = "INT";
-    } else if (match({TokenType::BOOL})) {
-        stmt.type = "BOOL";
+    // KRL types
+    if (isKrlType()) {
+        std::string upper = peek().lexeme;
+        std::transform(upper.begin(), upper.end(), upper.begin(), ::toupper);
+        stmt.type = upper;
+        advance();
+    } else if (check(TokenType::IDENTIFIER)) {
+        stmt.type = advance().lexeme;
     } else {
-        error("Expected type (REAL, INT, BOOL)");
+        error("Expected type after DECL");
         return nullptr;
     }
 
@@ -263,12 +254,24 @@ StmtPtr Parser::parseDeclaration() {
     Token name = consume(TokenType::IDENTIFIER, "Expected variable name");
     stmt.name = name.lexeme;
 
-    // Optional initializer (= or :=)
-    if (match({TokenType::ASSIGN, TokenType::COLONASSIGN})) {
-        stmt.initializer = parseExpression();
+    // Optional array size: name[size]
+    if (match({TokenType::LBRACKET})) {
+        if (check(TokenType::NUMBER)) {
+            Token sizeTok = advance();
+            stmt.arraySize = static_cast<int>(std::get<double>(sizeTok.literal));
+        }
+        consume(TokenType::RBRACKET, "Expected ']'");
     }
 
-    consumeOptionalSemicolon();
+    // Optional initializer: = value or = {aggregate}
+    if (match({TokenType::ASSIGN})) {
+        if (check(TokenType::LBRACE)) {
+            stmt.initializer = parseAggregate();
+        } else {
+            stmt.initializer = parseExpression();
+        }
+    }
+
     return makeStmt(stmt);
 }
 
@@ -279,9 +282,12 @@ StmtPtr Parser::parseConstDeclaration() {
     ConstDeclStmt stmt;
     stmt.sourceLine = line;
 
-    // Type (robtarget, or any identifier)
-    if (match({TokenType::ROBTARGET})) {
-        stmt.type = "robtarget";
+    // Type
+    if (isKrlType()) {
+        std::string upper = peek().lexeme;
+        std::transform(upper.begin(), upper.end(), upper.begin(), ::toupper);
+        stmt.type = upper;
+        advance();
     } else if (check(TokenType::IDENTIFIER)) {
         stmt.type = advance().lexeme;
     } else {
@@ -293,14 +299,36 @@ StmtPtr Parser::parseConstDeclaration() {
     Token name = consume(TokenType::IDENTIFIER, "Expected variable name");
     stmt.name = name.lexeme;
 
-    // := value
-    if (!match({TokenType::COLONASSIGN})) {
-        consume(TokenType::ASSIGN, "Expected ':=' or '='");
+    // KRL assignment: =
+    if (!match({TokenType::ASSIGN})) {
+        error("Expected '=' in CONST declaration");
+        return nullptr;
     }
 
-    // Capture raw value using bracket counting for inline arrays [[...]]
+    // Capture raw value
     std::string rawValue;
-    if (check(TokenType::LBRACKET)) {
+    if (check(TokenType::LBRACE)) {
+        int braceDepth = 0;
+        while (!isAtEnd()) {
+            Token tok = peek();
+            if (tok.type == TokenType::LBRACE) {
+                braceDepth++;
+                rawValue += "{";
+                advance();
+            } else if (tok.type == TokenType::RBRACE) {
+                braceDepth--;
+                rawValue += "}";
+                advance();
+                if (braceDepth <= 0) break;
+            } else if (tok.type == TokenType::NEWLINE) {
+                break;
+            } else {
+                rawValue += tok.lexeme;
+                if (tok.type != TokenType::COMMA) rawValue += " ";
+                advance();
+            }
+        }
+    } else if (check(TokenType::LBRACKET)) {
         int bracketDepth = 0;
         while (!isAtEnd()) {
             Token tok = peek();
@@ -322,7 +350,7 @@ StmtPtr Parser::parseConstDeclaration() {
             } else if (tok.type == TokenType::MINUS) {
                 rawValue += "-";
                 advance();
-            } else if (tok.type == TokenType::NEWLINE || tok.type == TokenType::SEMICOLON) {
+            } else if (tok.type == TokenType::NEWLINE) {
                 break;
             } else {
                 rawValue += tok.lexeme;
@@ -330,17 +358,19 @@ StmtPtr Parser::parseConstDeclaration() {
             }
         }
     } else {
-        // Non-array value (just capture until semicolon/newline)
-        while (!check(TokenType::SEMICOLON) && !check(TokenType::NEWLINE) && !isAtEnd()) {
+        while (!check(TokenType::NEWLINE) && !isAtEnd()) {
             rawValue += peek().lexeme;
             advance();
         }
     }
 
     stmt.rawValue = rawValue;
-    consumeOptionalSemicolon();
     return makeStmt(stmt);
 }
+
+// ============================================================================
+// Statements
+// ============================================================================
 
 StmtPtr Parser::parseFunctionCall(const std::string& name) {
     int line = previous().line;
@@ -349,31 +379,10 @@ StmtPtr Parser::parseFunctionCall(const std::string& name) {
     stmt.name = name;
     stmt.sourceLine = line;
 
-    // Optional argument list
     if (match({TokenType::LPAREN})) {
-        // Parse arguments (possibly named: key:=value)
         while (!check(TokenType::RPAREN) && !isAtEnd()) {
-            std::string argName;
-            ExprPtr argValue;
-
-            if (check(TokenType::IDENTIFIER)) {
-                Token id = advance();
-                if (match({TokenType::COLONASSIGN})) {
-                    // Named argument: key := value
-                    argName = id.lexeme;
-                    argValue = parseExpression();
-                } else {
-                    // Positional argument
-                    VariableExpr ve;
-                    ve.name = id.lexeme;
-                    argValue = makeExpr(ve);
-                }
-            } else {
-                argValue = parseExpression();
-            }
-
-            stmt.args.push_back({argName, argValue});
-
+            ExprPtr argValue = parseExpression();
+            stmt.args.push_back({"", argValue});
             if (!match({TokenType::COMMA})) break;
         }
         consume(TokenType::RPAREN, "Expected ')'");
@@ -382,99 +391,20 @@ StmtPtr Parser::parseFunctionCall(const std::string& name) {
     return makeStmt(stmt);
 }
 
-StmtPtr Parser::parseRapidMotion(TokenType motionType) {
-    int line = previous().line;
-
-    MotionStmt stmt;
-    stmt.sourceLine = line;
-
-    switch (motionType) {
-        case TokenType::MOVEJ: stmt.type = "MoveJ"; break;
-        case TokenType::MOVEL: stmt.type = "MoveL"; break;
-        case TokenType::MOVEC: stmt.type = "MoveC"; break;
-        default: break;
-    }
-
-    // RAPID motion: MoveL target, speed, zone, tool;
-    // First arg: target point
-    if (check(TokenType::HOME)) {
-        advance();
-        PointExpr point;
-        point.name = "HOME";
-        stmt.target = makeExpr(point);
-    } else if (check(TokenType::IDENTIFIER)) {
-        Token name = advance();
-        PointExpr point;
-        point.name = name.lexeme;
-        stmt.target = makeExpr(point);
-    } else {
-        error("Expected point name");
+StmtPtr Parser::parseAssignment(const std::string& name) {
+    if (!match({TokenType::ASSIGN})) {
+        error("Expected '='");
         return nullptr;
     }
 
-    // For MoveC, need auxiliary point before end point
-    if (motionType == TokenType::MOVEC && check(TokenType::COMMA)) {
-        advance(); // consume comma
-        if (check(TokenType::IDENTIFIER)) {
-            Token auxName = advance();
-            PointExpr auxPoint;
-            auxPoint.name = auxName.lexeme;
-            stmt.auxPoint = makeExpr(auxPoint);
-        }
-    }
-
-    // Remaining args: speed, zone, tool (comma separated identifiers)
-    if (match({TokenType::COMMA})) {
-        // Speed (v100, vmax, etc.)
-        if (check(TokenType::IDENTIFIER) || check(TokenType::NUMBER)) {
-            Token speedTok = advance();
-            stmt.speedName = speedTok.lexeme;
-
-            // Parse speed value from name (v100 → 100, vmax → 5000)
-            std::string sn = stmt.speedName;
-            std::transform(sn.begin(), sn.end(), sn.begin(), ::tolower);
-            if (sn == "vmax") {
-                stmt.velocity = 5000;
-                stmt.velocityUnit = "mm/s";
-            } else if (sn.size() > 1 && sn[0] == 'v') {
-                try {
-                    stmt.velocity = std::stod(sn.substr(1));
-                    stmt.velocityUnit = "mm/s";
-                } catch (...) {}
-            }
-        }
-
-        if (match({TokenType::COMMA})) {
-            // Zone (fine, z50, etc.)
-            if (check(TokenType::IDENTIFIER) || check(TokenType::NUMBER)) {
-                stmt.zoneName = advance().lexeme;
-                std::string zn = stmt.zoneName;
-                std::transform(zn.begin(), zn.end(), zn.begin(), ::tolower);
-                if (zn == "fine") {
-                    stmt.continuous = false;
-                } else {
-                    stmt.continuous = true;  // fly-by zone
-                }
-            }
-
-            if (match({TokenType::COMMA})) {
-                // Tool (tool0, etc.)
-                if (check(TokenType::IDENTIFIER)) {
-                    stmt.toolName = advance().lexeme;
-                }
-            }
-        }
-    }
-
-    return makeStmt(stmt);
-}
-
-StmtPtr Parser::parseAssignment(const std::string& name) {
-    consume(TokenType::ASSIGN, "Expected '='");
-
     AssignStmt stmt;
     stmt.name = name;
-    stmt.value = parseExpression();
+
+    if (check(TokenType::LBRACE)) {
+        stmt.value = parseAggregate();
+    } else {
+        stmt.value = parseExpression();
+    }
 
     return makeStmt(stmt);
 }
@@ -488,13 +418,27 @@ StmtPtr Parser::parseSystemAssignment() {
     SystemAssignStmt stmt;
     stmt.name = varName.lexeme;
 
-    // Index
-    consume(TokenType::LBRACKET, "Expected '['");
-    stmt.index = parseExpression();
-    consume(TokenType::RBRACKET, "Expected ']'");
+    // Handle dotted notation: $VEL.CP, $APO.CDIS, $APO.CPTP
+    if (match({TokenType::DOT})) {
+        Token subField = consume(TokenType::IDENTIFIER, "Expected sub-field after '.'");
+        stmt.subField = subField.lexeme;
+    }
 
-    consume(TokenType::ASSIGN, "Expected '='");
-    stmt.value = parseExpression();
+    // Optional index: $OUT[1], $VEL_AXIS[1]
+    if (match({TokenType::LBRACKET})) {
+        stmt.index = parseExpression();
+        consume(TokenType::RBRACKET, "Expected ']'");
+    }
+
+    if (!match({TokenType::ASSIGN})) {
+        error("Expected '='");
+        return nullptr;
+    }
+    if (check(TokenType::LBRACE)) {
+        stmt.value = parseAggregate();
+    } else {
+        stmt.value = parseExpression();
+    }
 
     return makeStmt(stmt);
 }
@@ -509,58 +453,52 @@ StmtPtr Parser::parseMotion(TokenType motionType) {
         case TokenType::PTP: stmt.type = "PTP"; break;
         case TokenType::LIN: stmt.type = "LIN"; break;
         case TokenType::CIRC: stmt.type = "CIRC"; break;
+        case TokenType::PTP_REL: stmt.type = "PTP_REL"; break;
+        case TokenType::LIN_REL: stmt.type = "LIN_REL"; break;
+        case TokenType::CIRC_REL: stmt.type = "CIRC_REL"; break;
         default: break;
     }
 
-    // Target point
+    // Target: HOME, identifier, or inline aggregate {A1 10, A2 -90, ...}
     if (check(TokenType::HOME)) {
         advance();
         PointExpr point;
         point.name = "HOME";
         stmt.target = makeExpr(point);
+    } else if (check(TokenType::LBRACE)) {
+        stmt.target = parseAggregate();
     } else if (check(TokenType::IDENTIFIER)) {
         Token name = advance();
         stmt.target = parsePoint(name.lexeme);
     } else {
-        error("Expected point name");
+        error("Expected point name, HOME, or aggregate");
         return nullptr;
     }
 
-    // For CIRC, need auxiliary point
-    if (motionType == TokenType::CIRC && check(TokenType::IDENTIFIER)) {
-        Token auxName = advance();
-        stmt.auxPoint = parsePoint(auxName.lexeme);
+    // KRL syntax: CIRC auxiliary point, then approximation
+    if ((motionType == TokenType::CIRC || motionType == TokenType::CIRC_REL) && check(TokenType::COMMA)) {
+        advance(); // consume comma
+        if (check(TokenType::LBRACE)) {
+            stmt.auxPoint = parseAggregate();
+        } else if (check(TokenType::IDENTIFIER)) {
+            Token auxName = advance();
+            stmt.auxPoint = parsePoint(auxName.lexeme);
+        }
     }
 
-    // Optional parameters: VEL=100%, ACC=100, CONT
-    while (check(TokenType::VEL) || check(TokenType::ACC) || check(TokenType::CONT)) {
-        if (match({TokenType::VEL})) {
-            consume(TokenType::ASSIGN, "Expected '='");
-            Token val = consume(TokenType::NUMBER, "Expected velocity value");
-            stmt.velocity = std::get<double>(val.literal);
-
-            if (match({TokenType::PERCENT})) {
-                stmt.velocityUnit = "percent";
-            } else if (check(TokenType::IDENTIFIER)) {
-                // Check for mm/s
-                Token unit = advance();
-                std::string u = unit.lexeme;
-                std::transform(u.begin(), u.end(), u.begin(), ::tolower);
-                if (u == "mm" || u == "mms") {
-                    stmt.velocityUnit = "mm/s";
-                }
-            }
-        }
-
-        if (match({TokenType::ACC})) {
-            consume(TokenType::ASSIGN, "Expected '='");
-            Token val = consume(TokenType::NUMBER, "Expected acceleration value");
-            stmt.acceleration = std::get<double>(val.literal);
-        }
-
-        if (match({TokenType::CONT})) {
-            stmt.continuous = true;
-        }
+    // Optional approximation: C_PTP, C_DIS, C_VEL, C_ORI
+    if (match({TokenType::C_PTP})) {
+        stmt.continuous = true;
+        stmt.approxType = "C_PTP";
+    } else if (match({TokenType::C_DIS})) {
+        stmt.continuous = true;
+        stmt.approxType = "C_DIS";
+    } else if (match({TokenType::C_VEL})) {
+        stmt.continuous = true;
+        stmt.approxType = "C_VEL";
+    } else if (match({TokenType::C_ORI})) {
+        stmt.continuous = true;
+        stmt.approxType = "C_ORI";
     }
 
     return makeStmt(stmt);
@@ -574,11 +512,9 @@ StmtPtr Parser::parseWait() {
     stmt.sourceLine = line;
 
     if (match({TokenType::SEC})) {
-        // WAIT SEC <time>
         stmt.type = WaitStmt::WaitType::TIME;
         stmt.value = parseExpression();
     } else if (match({TokenType::FOR})) {
-        // WAIT FOR <condition>
         stmt.type = WaitStmt::WaitType::CONDITION;
         stmt.value = parseExpression();
     } else {
@@ -600,14 +536,12 @@ StmtPtr Parser::parseIf() {
     consume(TokenType::THEN, "Expected 'THEN'");
     skipNewlines();
 
-    // Then branch
     while (!check(TokenType::ELSE) && !check(TokenType::ENDIF) && !isAtEnd()) {
         auto s = parseStatement();
         if (s) stmt.thenBranch.push_back(s);
         skipNewlines();
     }
 
-    // Else branch
     if (match({TokenType::ELSE})) {
         skipNewlines();
         while (!check(TokenType::ENDIF) && !isAtEnd()) {
@@ -627,14 +561,8 @@ StmtPtr Parser::parseLoop() {
 
     LoopStmt stmt;
     stmt.sourceLine = line;
-
-    // Optional count
-    if (check(TokenType::NUMBER)) {
-        stmt.count = parseExpression();
-    }
     skipNewlines();
 
-    // Body
     while (!check(TokenType::ENDLOOP) && !isAtEnd()) {
         auto s = parseStatement();
         if (s) stmt.body.push_back(s);
@@ -655,7 +583,6 @@ StmtPtr Parser::parseWhile() {
     stmt.condition = parseExpression();
     skipNewlines();
 
-    // Body
     while (!check(TokenType::ENDWHILE) && !isAtEnd()) {
         auto s = parseStatement();
         if (s) stmt.body.push_back(s);
@@ -666,7 +593,155 @@ StmtPtr Parser::parseWhile() {
     return makeStmt(stmt);
 }
 
-// Expression parsing - recursive descent
+// FOR counter = start TO end STEP increment ... ENDFOR
+StmtPtr Parser::parseFor() {
+    int line = peek().line;
+    consume(TokenType::FOR, "Expected 'FOR'");
+
+    ForStmt stmt;
+    stmt.sourceLine = line;
+
+    Token counter = consume(TokenType::IDENTIFIER, "Expected counter variable");
+    stmt.counter = counter.lexeme;
+
+    consume(TokenType::ASSIGN, "Expected '='");
+    stmt.start = parseExpression();
+
+    consume(TokenType::TO, "Expected 'TO'");
+    stmt.end = parseExpression();
+
+    // Optional STEP
+    if (match({TokenType::STEP})) {
+        stmt.step = parseExpression();
+    }
+
+    skipNewlines();
+
+    while (!check(TokenType::ENDFOR) && !isAtEnd()) {
+        auto s = parseStatement();
+        if (s) stmt.body.push_back(s);
+        skipNewlines();
+    }
+
+    consume(TokenType::ENDFOR, "Expected 'ENDFOR'");
+    return makeStmt(stmt);
+}
+
+// REPEAT ... UNTIL condition
+StmtPtr Parser::parseRepeat() {
+    int line = peek().line;
+    consume(TokenType::REPEAT, "Expected 'REPEAT'");
+
+    RepeatStmt stmt;
+    stmt.sourceLine = line;
+    skipNewlines();
+
+    while (!check(TokenType::UNTIL) && !isAtEnd()) {
+        auto s = parseStatement();
+        if (s) stmt.body.push_back(s);
+        skipNewlines();
+    }
+
+    consume(TokenType::UNTIL, "Expected 'UNTIL'");
+    stmt.condition = parseExpression();
+
+    return makeStmt(stmt);
+}
+
+// SWITCH expr CASE val1[,val2] ... DEFAULT ... ENDSWITCH
+StmtPtr Parser::parseSwitch() {
+    int line = peek().line;
+    consume(TokenType::SWITCH, "Expected 'SWITCH'");
+
+    SwitchStmt stmt;
+    stmt.sourceLine = line;
+
+    stmt.selector = parseExpression();
+    skipNewlines();
+
+    while (!check(TokenType::ENDSWITCH) && !isAtEnd()) {
+        if (match({TokenType::CASE})) {
+            SwitchStmt::CaseClause clause;
+
+            // Parse one or more comma-separated values
+            clause.values.push_back(parseExpression());
+            while (match({TokenType::COMMA})) {
+                clause.values.push_back(parseExpression());
+            }
+            skipNewlines();
+
+            // Parse body until next CASE, DEFAULT, or ENDSWITCH
+            while (!check(TokenType::CASE) && !check(TokenType::DEFAULT) &&
+                   !check(TokenType::ENDSWITCH) && !isAtEnd()) {
+                auto s = parseStatement();
+                if (s) clause.body.push_back(s);
+                skipNewlines();
+            }
+
+            stmt.cases.push_back(std::move(clause));
+        } else if (match({TokenType::DEFAULT})) {
+            skipNewlines();
+            while (!check(TokenType::ENDSWITCH) && !isAtEnd()) {
+                auto s = parseStatement();
+                if (s) stmt.defaultBody.push_back(s);
+                skipNewlines();
+            }
+        } else {
+            skipNewlines();
+        }
+    }
+
+    consume(TokenType::ENDSWITCH, "Expected 'ENDSWITCH'");
+    return makeStmt(stmt);
+}
+
+StmtPtr Parser::parseGoto() {
+    int line = peek().line;
+    consume(TokenType::GOTO, "Expected 'GOTO'");
+
+    GotoStmt stmt;
+    stmt.sourceLine = line;
+
+    Token label = consume(TokenType::IDENTIFIER, "Expected label name");
+    stmt.label = label.lexeme;
+
+    return makeStmt(stmt);
+}
+
+StmtPtr Parser::parseHalt() {
+    int line = peek().line;
+    consume(TokenType::HALT, "Expected 'HALT'");
+
+    HaltStmt stmt;
+    stmt.sourceLine = line;
+
+    return makeStmt(stmt);
+}
+
+StmtPtr Parser::parseContinue() {
+    int line = peek().line;
+    consume(TokenType::CONTINUE, "Expected 'CONTINUE'");
+
+    ContinueStmt stmt;
+    stmt.sourceLine = line;
+
+    return makeStmt(stmt);
+}
+
+StmtPtr Parser::parseExit() {
+    int line = peek().line;
+    consume(TokenType::EXIT, "Expected 'EXIT'");
+
+    ExitStmt stmt;
+    stmt.sourceLine = line;
+
+    return makeStmt(stmt);
+}
+
+// ============================================================================
+// Expression Parsing - Recursive Descent
+// ============================================================================
+
 ExprPtr Parser::parseExpression() {
     return parseOr();
 }
@@ -674,11 +749,19 @@ ExprPtr Parser::parseExpression() {
 ExprPtr Parser::parseOr() {
     ExprPtr left = parseAnd();
 
-    while (match({TokenType::OR})) {
+    while (match({TokenType::OR, TokenType::EXOR, TokenType::B_OR, TokenType::B_EXOR})) {
+        std::string op;
+        switch (previous().type) {
+            case TokenType::OR: op = "OR"; break;
+            case TokenType::EXOR: op = "EXOR"; break;
+            case TokenType::B_OR: op = "B_OR"; break;
+            case TokenType::B_EXOR: op = "B_EXOR"; break;
+            default: break;
+        }
         ExprPtr right = parseAnd();
         BinaryExpr expr;
         expr.left = left;
-        expr.op = "OR";
+        expr.op = op;
         expr.right = right;
         left = makeExpr(expr);
     }
@@ -689,11 +772,12 @@ ExprPtr Parser::parseOr() {
 ExprPtr Parser::parseAnd() {
     ExprPtr left = parseEquality();
 
-    while (match({TokenType::AND})) {
+    while (match({TokenType::AND, TokenType::B_AND})) {
+        std::string op = previous().type == TokenType::AND ? "AND" : "B_AND";
         ExprPtr right = parseEquality();
         BinaryExpr expr;
         expr.left = left;
-        expr.op = "AND";
+        expr.op = op;
         expr.right = right;
         left = makeExpr(expr);
     }
@@ -773,8 +857,14 @@ ExprPtr Parser::parseFactor() {
 }
 
 ExprPtr Parser::parseUnary() {
-    if (match({TokenType::MINUS, TokenType::NOT})) {
-        std::string op = previous().type == TokenType::MINUS ? "-" : "NOT";
+    if (match({TokenType::MINUS, TokenType::NOT, TokenType::B_NOT})) {
+        std::string op;
+        switch (previous().type) {
+            case TokenType::MINUS: op = "-"; break;
+            case TokenType::NOT: op = "NOT"; break;
+            case TokenType::B_NOT: op = "B_NOT"; break;
+            default: break;
+        }
         ExprPtr operand = parseUnary();
         UnaryExpr expr;
         expr.op = op;
@@ -786,7 +876,6 @@ ExprPtr Parser::parseUnary() {
 }
 
 ExprPtr Parser::parsePrimary() {
-    // Boolean literals
     if (match({TokenType::TRUE})) {
         LiteralExpr expr;
         expr.value = true;
@@ -799,34 +888,63 @@ ExprPtr Parser::parsePrimary() {
         return makeExpr(expr);
     }
 
-    // Number
     if (match({TokenType::NUMBER})) {
         LiteralExpr expr;
         expr.value = std::get<double>(previous().literal);
         return makeExpr(expr);
     }
 
-    // String
     if (match({TokenType::STRING})) {
         LiteralExpr expr;
         expr.value = std::get<std::string>(previous().literal);
         return makeExpr(expr);
     }
 
-    // System variable $IN[x], $OUT[x]
+    // KRL aggregate: {X 10, Y 20, ...}
+    if (check(TokenType::LBRACE)) {
+        return parseAggregate();
+    }
+
+    // ENUM literal: #value
+    if (match({TokenType::HASH})) {
+        Token val = consume(TokenType::IDENTIFIER, "Expected enum value after '#'");
+        LiteralExpr expr;
+        expr.value = std::string("#") + val.lexeme;
+        return makeExpr(expr);
+    }
+
+    // System variable $IN[x], $OUT[x], $POS_ACT, etc.
     if (check(TokenType::DOLLAR)) {
         return parseSystemVar();
     }
 
-    // Identifier (variable or point)
+    // Identifier (with optional array subscript for TOOL_DATA[1], BASE_DATA[0])
     if (match({TokenType::IDENTIFIER})) {
         std::string name = previous().lexeme;
+        if (match({TokenType::LBRACKET})) {
+            ExprPtr indexExpr = parseExpression();
+            consume(TokenType::RBRACKET, "Expected ']'");
+            // Encode as "NAME[index]" variable reference
+            VariableExpr expr;
+            // Store as composite name for TOOL_DATA[N], BASE_DATA[N]
+            if (auto* lit = std::get_if<LiteralExpr>(indexExpr.get())) {
+                if (auto* dval = std::get_if<double>(&lit->value)) {
+                    expr.name = name + "[" + std::to_string(static_cast<int>(*dval)) + "]";
+                } else if (auto* ival = std::get_if<int>(&lit->value)) {
+                    expr.name = name + "[" + std::to_string(*ival) + "]";
+                } else {
+                    expr.name = name;
+                }
+            } else {
+                expr.name = name;
+            }
+            return makeExpr(expr);
+        }
         VariableExpr expr;
         expr.name = name;
         return makeExpr(expr);
     }
 
-    // HOME
     if (match({TokenType::HOME})) {
         PointExpr expr;
         expr.name = "HOME";
@@ -857,11 +975,62 @@ ExprPtr Parser::parseSystemVar() {
     SystemVarExpr expr;
     expr.name = name.lexeme;
 
+    // Handle dotted notation: $VEL.CP, $APO.CDIS
+    if (match({TokenType::DOT})) {
+        Token subField = consume(TokenType::IDENTIFIER, "Expected sub-field after '.'");
+        expr.subField = subField.lexeme;
+    }
+
     if (match({TokenType::LBRACKET})) {
         expr.index = parseExpression();
         consume(TokenType::RBRACKET, "Expected ']'");
     }
 
+    return makeExpr(expr);
+}
+
+// Parse KRL aggregate: {X 10, Y 20, Z 30, A 0, B 90, C 0}
+// Also supports typed: {E6POS: X 10, Y 20, ...}
+ExprPtr Parser::parseAggregate() {
+    consume(TokenType::LBRACE, "Expected '{'");
+
+    AggregateExpr expr;
+
+    // Check for optional type prefix: {E6POS: ...}
+    if (check(TokenType::IDENTIFIER) || isKrlType()) {
+        // Peek ahead to see if this is "TYPE:" pattern
+        size_t saved = m_current;
+        Token typeTok = advance();
+
+        if (check(TokenType::COLON)) {
+            advance(); // consume ':'
+            expr.typeName = typeTok.lexeme;
+        } else {
+            // Not a type prefix, it's a field name - backtrack
+            m_current = saved;
+        }
+    }
+
+    // Parse fields: FIELD_NAME value, FIELD_NAME value, ...
+    while (!check(TokenType::RBRACE) && !isAtEnd()) {
+        std::string fieldName;
+
+        // Field name (e.g., X, Y, Z, A, B, C, A1, A2, S, T, E1...)
+        if (check(TokenType::IDENTIFIER) || isKrlType()) {
+            fieldName = advance().lexeme;
+        } else {
+            error("Expected field name in aggregate");
+            break;
+        }
+
+        // Field value
+        ExprPtr fieldValue = parseExpression();
+        expr.fields.push_back({fieldName, fieldValue});
+
+        if (!match({TokenType::COMMA})) break;
+    }
+
+    consume(TokenType::RBRACE, "Expected '}'");
     return makeExpr(expr);
 }
 

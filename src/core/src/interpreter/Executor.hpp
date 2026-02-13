@@ -2,9 +2,9 @@
 
 /**
  * @file Executor.hpp
- * @brief Program executor for RPL
+ * @brief Program executor for KRL (KUKA Robot Language)
  *
- * Part of Phase 8: Virtual Simulation (IMPL_P8_02)
+ * Strict KUKA KRL syntax based on KSS 8.x specifications.
  */
 
 #include "AST.hpp"
@@ -14,6 +14,7 @@
 #include <array>
 #include <mutex>
 #include <condition_variable>
+#include <stdexcept>
 
 namespace robot_controller {
 namespace interpreter {
@@ -40,6 +41,15 @@ inline std::string executionStateToString(ExecutionState state) {
         default: return "UNKNOWN";
     }
 }
+
+// KRL control flow exceptions (used internally by Executor)
+struct ExitLoopException : std::exception {};
+struct ContinueLoopException : std::exception {};
+
+struct GotoException : std::exception {
+    std::string label;
+    explicit GotoException(const std::string& l) : label(l) {}
+};
 
 /**
  * Snapshot of executor state before executing a statement.
@@ -116,6 +126,38 @@ public:
     const std::unordered_map<std::string, double>& getVariables() const { return m_variables; }
     void clearVariables() { m_variables.clear(); }
 
+    // System variables (KRL dotted notation: $VEL.CP, $APO.CDIS, etc.)
+    struct SystemVariables {
+        double ovPro = 100.0;              // $OV_PRO (0-100%)
+
+        // Path velocity (Cartesian)
+        double velCp = 2.0;                // $VEL.CP (m/s, default 2.0)
+        std::array<double, 6> velAxis;     // $VEL_AXIS[1..6] (%, default 100)
+
+        // Acceleration
+        double accCp = 1.0;                // $ACC.CP (m/s^2)
+        std::array<double, 6> accAxis;     // $ACC_AXIS[1..6] (%, default 100)
+
+        // Approximation
+        double apoCdis = 0.0;              // $APO.CDIS (mm)
+        double apoCptp = 0.0;              // $APO.CPTP (%)
+        double apoCori = 0.0;              // $APO.CORI (deg)
+        double apoCvel = 0.0;              // $APO.CVEL (%)
+
+        // Tool and Base (indices)
+        int toolIndex = 1;                 // $TOOL = TOOL_DATA[N]
+        int baseIndex = 0;                 // $BASE = BASE_DATA[N]
+
+        SystemVariables() {
+            velAxis.fill(100.0);
+            accAxis.fill(100.0);
+        }
+    };
+
+    double getSystemVariable(const std::string& name, const std::string& subField = "") const;
+    void setSystemVariable(const std::string& name, const std::string& subField, double value);
+    const SystemVariables& getSystemVars() const { return m_sysVars; }
+
     // I/O
     void setInput(int index, bool value);
     bool getInput(int index) const;
@@ -124,6 +166,12 @@ public:
 
     // Error
     std::string getLastError() const { return m_lastError; }
+
+    // Configuration
+    void setMaxLoopIterations(size_t max) { m_maxLoopIterations = max; }
+
+    // Expression evaluation (public for motion callback to evaluate aggregate fields)
+    double evaluateExpression(const ExprPtr& expr);
 
 private:
     ProgramStmt m_program;
@@ -143,11 +191,18 @@ private:
     std::array<bool, 128> m_inputs{};
     std::array<bool, 128> m_outputs{};
 
+    // KRL System Variables instance
+    SystemVariables m_sysVars;
+
     // Block Selection / Undo
     std::vector<ExecutionSnapshot> m_undoStack;
     static constexpr size_t MAX_UNDO_SIZE = 1000;
-    std::unordered_map<int, size_t> m_lineToPC;  // sourceLine → body index
-    std::vector<double> m_currentPosition;        // Current robot TCP for undo
+    std::unordered_map<int, size_t> m_lineToPC;     // sourceLine → body index
+    std::unordered_map<std::string, size_t> m_labelToPC;  // label → body index (GOTO)
+    std::vector<double> m_currentPosition;            // Current robot TCP for undo
+
+    // Safety
+    size_t m_maxLoopIterations = 1000000;
 
     // Callbacks
     MotionCallback m_motionCallback;
@@ -158,7 +213,6 @@ private:
     // Execution
     void executeStatements(const std::vector<StmtPtr>& statements);
     void executeStatement(const StmtPtr& stmt);
-    double evaluateExpression(const ExprPtr& expr);
     bool evaluateCondition(const ExprPtr& expr);
 
     void checkPauseOrStop();
@@ -166,6 +220,7 @@ private:
     std::vector<double> parseRobtargetValues(const std::string& raw);
     void pushUndoSnapshot(const StmtPtr& stmt);
     static int getSourceLine(const StmtPtr& stmt);
+    void buildLabelMap(const std::vector<StmtPtr>& statements);
 };
 
 } // namespace interpreter

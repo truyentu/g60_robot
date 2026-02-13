@@ -729,22 +729,15 @@
                                           SelectedItem="{Binding ProgramEditor.TeachMotionType}"
                                           Margin="0,0,0,8" FontSize="12"/>
 
-                                <!-- Speed -->
-                                <TextBlock Text="Speed" Foreground="Gray" FontSize="10" Margin="0,0,0,4"/>
-                                <ComboBox ItemsSource="{Binding ProgramEditor.AvailableSpeeds}"
-                                          SelectedItem="{Binding ProgramEditor.TeachSpeed}"
-                                          Margin="0,0,0,8" FontSize="12"/>
+                                <!-- Velocity ($VEL.CP m/s) -->
+                                <TextBlock Text="Velocity (m/s)" Foreground="Gray" FontSize="10" Margin="0,0,0,4"/>
+                                <TextBox Text="{Binding ProgramEditor.TeachVelocity, StringFormat=F2}"
+                                         Margin="0,0,0,8" FontSize="12"/>
 
-                                <!-- Zone -->
-                                <TextBlock Text="Zone" Foreground="Gray" FontSize="10" Margin="0,0,0,4"/>
-                                <ComboBox ItemsSource="{Binding ProgramEditor.AvailableZones}"
-                                          SelectedItem="{Binding ProgramEditor.TeachZone}"
-                                          Margin="0,0,0,8" FontSize="12"/>
-
-                                <!-- Tool -->
-                                <TextBlock Text="Tool" Foreground="Gray" FontSize="10" Margin="0,0,0,4"/>
-                                <ComboBox ItemsSource="{Binding ProgramEditor.AvailableTools}"
-                                          SelectedItem="{Binding ProgramEditor.TeachTool}"
+                                <!-- Approximation -->
+                                <TextBlock Text="Approximation" Foreground="Gray" FontSize="10" Margin="0,0,0,4"/>
+                                <ComboBox ItemsSource="{Binding ProgramEditor.AvailableApproximations}"
+                                          SelectedItem="{Binding ProgramEditor.TeachApproximation}"
                                           Margin="0,0,0,10" FontSize="12"/>
 
                                 <!-- Teach Button -->

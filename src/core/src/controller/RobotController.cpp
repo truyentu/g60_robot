@@ -330,30 +330,41 @@ bool RobotController::loadProgram(const std::string& source) {
 
         // Set up motion callback - resolve point, IK, interpolate, update joints
         m_programExecutor->setMotionCallback([this](const interpreter::MotionStmt& motion) {
-            // 1. Resolve target point name from PointExpr
-            std::string pointName;
+            // 1. Resolve target coordinates from expression
+            std::vector<double> targetValues;
+            std::string pointName = "(inline)";
+
             if (motion.target) {
-                std::visit([&pointName](auto&& e) {
+                std::visit([&](auto&& e) {
                     using T = std::decay_t<decltype(e)>;
                     if constexpr (std::is_same_v<T, interpreter::PointExpr>) {
                         pointName = e.name;
+                        if (!e.values.empty()) {
+                            targetValues = e.values;
+                        } else {
+                            targetValues = m_programExecutor->getPoint(e.name);
+                        }
+                    }
+                    else if constexpr (std::is_same_v<T, interpreter::VariableExpr>) {
+                        pointName = e.name;
+                        targetValues = m_programExecutor->getPoint(e.name);
+                    }
+                    else if constexpr (std::is_same_v<T, interpreter::AggregateExpr>) {
+                        // Extract field values from aggregate {X 10, Y 20, Z 30, A 0, B 90, C 0}
+                        for (const auto& [fieldName, fieldExpr] : e.fields) {
+                            targetValues.push_back(m_programExecutor->evaluateExpression(fieldExpr));
+                        }
+                        pointName = e.typeName.empty() ? "(aggregate)" : e.typeName;
                     }
                 }, *motion.target);
             }
 
-            if (pointName.empty()) {
-                LOG_WARN("Motion {}: no target point name", motion.type);
-                return;
-            }
-
-            // 2. Get target coordinates from executor point database
-            auto targetValues = m_programExecutor->getPoint(pointName);
             if (targetValues.size() < 3) {
-                LOG_WARN("Motion {}: point '{}' not found or has < 3 values", motion.type, pointName);
+                LOG_WARN("Motion {}: target '{}' not resolved or has < 3 values", motion.type, pointName);
                 return;
             }
 
-            // 3. Build target pose [x, y, z, rx, ry, rz] (mm, degrees)
+            // 2. Build target pose [x, y, z, rx, ry, rz] (mm, degrees)
             double tx = targetValues[0];
             double ty = targetValues[1];
             double tz = targetValues[2];
@@ -424,9 +435,21 @@ bool RobotController::loadProgram(const std::string& source) {
             }
 
             // 8. Interpolate from current to target joints
-            // Determine speed: MoveJ = fast, MoveL = based on velocity
-            double speed_mm_s = motion.velocity;  // mm/s from parser
-            bool isJoint = (motion.type == "PTP" || motion.type == "MoveJ");
+            // Read velocity from KRL system variables
+            double overrideFactor = m_programExecutor->getSystemVariable("OV_PRO") / 100.0;
+            if (overrideFactor < 0.01) overrideFactor = 0.01;
+
+            bool isJoint = (motion.type == "PTP" || motion.type == "PTP_REL");
+            double speed_mm_s;
+            if (isJoint) {
+                // PTP: use $VEL_AXIS[1] (%), map to mm/s
+                double velAxisPct = m_programExecutor->getSystemVariable("VEL_AXIS");
+                speed_mm_s = (velAxisPct / 100.0) * 5000.0 * overrideFactor;  // scale: 100% = 5000 mm/s equiv
+            } else {
+                // LIN/CIRC: use $VEL.CP (m/s) -> mm/s
+                double velCp = m_programExecutor->getSystemVariable("VEL", "CP");
+                speed_mm_s = velCp * 1000.0 * overrideFactor;
+            }
 
             // Calculate interpolation steps
             double maxJointDelta = 0;
@@ -485,6 +508,11 @@ bool RobotController::loadProgram(const std::string& source) {
             }
 
             LOG_DEBUG("Motion {} to '{}' completed", motion.type, pointName);
+
+            // Update executor's current position for $POS_ACT and undo
+            auto finalJoints = m_activeDriver->getJointPositions();
+            std::vector<double> finalPos(finalJoints.begin(), finalJoints.end());
+            m_programExecutor->updateCurrentPosition(finalPos);
         });
 
         m_programExecutor->setLineCallback([this](int line) {
@@ -2068,6 +2096,62 @@ void RobotController::registerIpcHandlers() {
             } else {
                 response["points"] = nlohmann::json::object();
             }
+
+            return response;
+        });
+
+    // BLOCK_SELECT handler (Satzanwahl - jump to line)
+    m_ipcServer->registerHandler(MessageType::BLOCK_SELECT,
+        [this](const Message& request) -> nlohmann::json {
+            nlohmann::json response;
+
+            int line = request.payload.value("line", 0);
+
+            LOG_INFO("BLOCK_SELECT request: line={}", line);
+
+            if (!m_programExecutor) {
+                response["success"] = false;
+                response["error"] = "No program loaded";
+                return response;
+            }
+
+            if (line <= 0) {
+                response["success"] = false;
+                response["error"] = "Invalid line number";
+                return response;
+            }
+
+            m_programExecutor->blockSelect(line);
+            response["success"] = true;
+            response["state"] = interpreter::executionStateToString(m_programExecutor->getState());
+            response["current_line"] = m_programExecutor->getCurrentLine();
+
+            return response;
+        });
+
+    // BACKWARD_STEP handler (BWD - undo last step)
+    m_ipcServer->registerHandler(MessageType::BACKWARD_STEP,
+        [this](const Message& request) -> nlohmann::json {
+            nlohmann::json response;
+
+            LOG_INFO("BACKWARD_STEP request");
+
+            if (!m_programExecutor) {
+                response["success"] = false;
+                response["error"] = "No program loaded";
+                return response;
+            }
+
+            if (!m_programExecutor->canBackward()) {
+                response["success"] = false;
+                response["error"] = "No steps to undo";
+                return response;
+            }
+
+            m_programExecutor->backward();
+            response["success"] = true;
+            response["state"] = interpreter::executionStateToString(m_programExecutor->getState());
+            response["current_line"] = m_programExecutor->getCurrentLine();
 
             return response;
         });

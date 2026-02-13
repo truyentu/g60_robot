@@ -129,20 +129,16 @@ public partial class ProgramEditor : UserControl
             }
         }
 
-        // Trigger completion when typing motion keywords
-        if (e.Text == " " || e.Text == "\t")
-        {
-            var wordBefore = GetWordBeforeCaret();
-            if (wordBefore.StartsWith("Move", StringComparison.OrdinalIgnoreCase) && wordBefore.Length <= 5)
-            {
-                // Don't trigger if it's already a complete instruction
-            }
-        }
-
-        // Trigger speed/zone completion after comma in motion instruction
-        if (e.Text == ",")
+        // Trigger approximation completion after space in motion instruction
+        if (e.Text == " ")
         {
             TryShowParameterCompletion();
+        }
+
+        // Trigger system variable completion after "$"
+        if (e.Text == "$")
+        {
+            ShowSystemVarCompletion();
         }
     }
 
@@ -160,6 +156,25 @@ public partial class ProgramEditor : UserControl
         _completionWindow.Closed += (_, _) => _completionWindow = null;
     }
 
+    private void ShowSystemVarCompletion()
+    {
+        _completionWindow = new CompletionWindow(CodeEditor.TextArea);
+        var data = _completionWindow.CompletionList.CompletionData;
+
+        data.Add(SystemVarCompletionData.VelCp);
+        data.Add(SystemVarCompletionData.AccCp);
+        data.Add(SystemVarCompletionData.ApoCdis);
+        data.Add(SystemVarCompletionData.ApoCptp);
+        data.Add(SystemVarCompletionData.ApoCori);
+        data.Add(SystemVarCompletionData.ApoCvel);
+        data.Add(SystemVarCompletionData.OvPro);
+        data.Add(SystemVarCompletionData.Tool);
+        data.Add(SystemVarCompletionData.Base);
+
+        _completionWindow.Show();
+        _completionWindow.Closed += (_, _) => _completionWindow = null;
+    }
+
     private void TryShowParameterCompletion()
     {
         var lineNumber = CodeEditor.TextArea.Caret.Line;
@@ -170,38 +185,14 @@ public partial class ProgramEditor : UserControl
 
         if (!RegexHelper.IsMotionInstruction(lineText)) return;
 
-        // Count commas before caret to determine which parameter we're on
-        var textBeforeCaret = CodeEditor.Document.GetText(line.Offset,
-            CodeEditor.CaretOffset - line.Offset);
-        int commaCount = textBeforeCaret.Count(c => c == ',');
-
+        // After motion target, suggest approximation keywords (C_PTP, C_DIS, etc.)
         _completionWindow = new CompletionWindow(CodeEditor.TextArea);
         var data = _completionWindow.CompletionList.CompletionData;
 
-        if (commaCount == 1)
-        {
-            // Second param = speed
-            data.Add(new SpeedCompletionData(SpeedData.V5));
-            data.Add(new SpeedCompletionData(SpeedData.V10));
-            data.Add(new SpeedCompletionData(SpeedData.V50));
-            data.Add(new SpeedCompletionData(SpeedData.V100));
-            data.Add(new SpeedCompletionData(SpeedData.V200));
-            data.Add(new SpeedCompletionData(SpeedData.V500));
-            data.Add(new SpeedCompletionData(SpeedData.V1000));
-            data.Add(new SpeedCompletionData(SpeedData.V2000));
-            data.Add(new SpeedCompletionData(SpeedData.VMax));
-        }
-        else if (commaCount == 2)
-        {
-            // Third param = zone
-            data.Add(new ZoneCompletionData(ZoneData.Fine));
-            data.Add(new ZoneCompletionData(ZoneData.Z1));
-            data.Add(new ZoneCompletionData(ZoneData.Z5));
-            data.Add(new ZoneCompletionData(ZoneData.Z10));
-            data.Add(new ZoneCompletionData(ZoneData.Z50));
-            data.Add(new ZoneCompletionData(ZoneData.Z100));
-            data.Add(new ZoneCompletionData(ZoneData.Z200));
-        }
+        data.Add(new ApproximationCompletionData("C_PTP", "PTP approximation ($APO.CPTP %)"));
+        data.Add(new ApproximationCompletionData("C_DIS", "Distance approximation ($APO.CDIS mm)"));
+        data.Add(new ApproximationCompletionData("C_VEL", "Velocity approximation ($APO.CVEL %)"));
+        data.Add(new ApproximationCompletionData("C_ORI", "Orientation approximation ($APO.CORI deg)"));
 
         if (data.Count > 0)
         {
@@ -494,7 +485,7 @@ public class CurrentLineBackgroundRenderer : IBackgroundRenderer
 
 /// <summary>
 /// Background renderer for motion instruction line highlighting (orange).
-/// Shows when the caret is on a MoveL/MoveJ/MoveC line.
+/// Shows when the caret is on a PTP/LIN/CIRC line.
 /// </summary>
 public class MotionLineBackgroundRenderer : IBackgroundRenderer
 {

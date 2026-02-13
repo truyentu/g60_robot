@@ -50,27 +50,33 @@ public partial class ProgramEditorViewModel : ObservableObject
     private readonly IViewportService _viewportService;
 
     [ObservableProperty]
-    private string _programSource = @"! Robot Program - Welding Example
-! Variable Definitions
-CONST robtarget pHome := [[500.00,0.00,800.00],[1.0000,0.0000,0.0000,0.0000],[0,0,0,0],[9E9,9E9,9E9,9E9,9E9,9E9]];
-CONST robtarget p1 := [[600.00,100.00,500.00],[0.7071,0.0000,0.7071,0.0000],[0,0,0,0],[9E9,9E9,9E9,9E9,9E9,9E9]];
-CONST robtarget p2 := [[700.00,100.00,500.00],[0.7071,0.0000,0.7071,0.0000],[0,0,0,0],[9E9,9E9,9E9,9E9,9E9,9E9]];
-CONST robtarget p3 := [[700.00,200.00,500.00],[0.7071,0.0000,0.7071,0.0000],[0,0,0,0],[9E9,9E9,9E9,9E9,9E9,9E9]];
+    private string _programSource = @"; Robot Program - Welding Example
+DECL E6POS pHome = {X 500.00, Y 0.00, Z 800.00, A 0.00, B 0.00, C 0.00}
+DECL E6POS p1 = {X 600.00, Y 100.00, Z 500.00, A 0.00, B 90.00, C 0.00}
+DECL E6POS p2 = {X 700.00, Y 100.00, Z 500.00, A 0.00, B 90.00, C 0.00}
+DECL E6POS p3 = {X 700.00, Y 200.00, Z 500.00, A 0.00, B 90.00, C 0.00}
 
 DEF WeldProgram()
-    ! Approach
-    MoveJ pHome, vmax, z100, tool0;
-    MoveL p1, v1000, z50, tool0;
+    $TOOL = TOOL_DATA[1]
+    $BASE = BASE_DATA[0]
+    $VEL.CP = 0.5
+    $APO.CDIS = 10
 
-    ! Weld Seam 1
-    ArcStart(Job_ID:=1);
-    MoveL p2, v100, fine, tool0;
-    MoveL p3, v100, fine, tool0;
-    ArcEnd;
+    ; Approach
+    PTP pHome
+    LIN p1
 
-    ! Retract
-    MoveL p1, v1000, z50, tool0;
-    MoveJ pHome, vmax, z100, tool0;
+    ; Weld Seam 1
+    $VEL.CP = 0.02
+    ArcStart(Job_ID:=1)
+    LIN p2 C_DIS
+    LIN p3
+    ArcEnd
+
+    ; Retract
+    $VEL.CP = 0.5
+    LIN p1
+    PTP pHome
 END";
 
     [ObservableProperty]
@@ -232,7 +238,7 @@ END";
 
             // 3. Create new RobTarget from current pose
             var newTarget = RobTarget.FromPose(CaretTargetName, tcpPose);
-            var newValue = newTarget.ToRplString();
+            var newValue = newTarget.ToKrlString();
 
             // 4. Find the variable definition in the document text
             var definition = RegexHelper.FindVariableDefinition(ProgramSource, CaretTargetName);
@@ -418,6 +424,81 @@ END";
         ExecutionState = "IDLE";
     }
 
+    [RelayCommand]
+    private async Task BackwardStepAsync()
+    {
+        try
+        {
+            var response = await _ipcClient.BackwardStepAsync();
+            if (response == null)
+            {
+                ShowToast("Failed to communicate with Core", "error");
+                return;
+            }
+
+            if (response.Success)
+            {
+                ExecutionState = response.State;
+                CurrentLine = response.CurrentLine;
+                ShowToast($"Stepped back to line {response.CurrentLine}");
+            }
+            else
+            {
+                ShowToast(response.Error ?? "No steps to undo", "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Backward step failed: {ex.Message}", "error");
+            Log.Error(ex, "Backward step failed");
+        }
+    }
+
+    [RelayCommand]
+    private async Task BlockSelectAsync()
+    {
+        try
+        {
+            if (CaretLineNumber <= 0)
+            {
+                ShowToast("Place caret on a line first", "error");
+                return;
+            }
+
+            // Load program first if not running
+            if (!IsRunning)
+            {
+                await LoadProgramAsync();
+                if (Errors.Count > 0) return;
+                IsRunning = true;
+            }
+
+            var response = await _ipcClient.BlockSelectAsync(CaretLineNumber);
+            if (response == null)
+            {
+                ShowToast("Failed to communicate with Core", "error");
+                return;
+            }
+
+            if (response.Success)
+            {
+                ExecutionState = response.State;
+                CurrentLine = response.CurrentLine;
+                IsPaused = response.State == "PAUSED";
+                ShowToast($"Block select: line {response.CurrentLine}");
+            }
+            else
+            {
+                ShowToast(response.Error ?? "Block select failed", "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Block select failed: {ex.Message}", "error");
+            Log.Error(ex, "Block select failed");
+        }
+    }
+
     // ========================================================================
     // File Open / Save
     // ========================================================================
@@ -567,25 +648,24 @@ END";
     }
 
     // ========================================================================
-    // Teach & Insert (KUKA/ABB-style teaching workflow)
+    // Teach & Insert (KRL-style teaching workflow)
     // ========================================================================
 
     [ObservableProperty]
-    private string _teachMotionType = "MoveL";
+    private string _teachMotionType = "LIN";
 
     [ObservableProperty]
-    private string _teachSpeed = "v100";
+    private ApproximationType _teachApproximation = ApproximationType.EXACT;
 
     [ObservableProperty]
-    private string _teachZone = "fine";
+    private double _teachVelocity = 0.1;  // m/s ($VEL.CP)
 
-    [ObservableProperty]
-    private string _teachTool = "tool0";
-
-    public ObservableCollection<string> AvailableMotionTypes { get; } = new() { "MoveL", "MoveJ", "MoveC" };
-    public ObservableCollection<string> AvailableSpeeds { get; } = new() { "v5", "v10", "v20", "v50", "v100", "v200", "v500", "v1000", "vmax" };
-    public ObservableCollection<string> AvailableZones { get; } = new() { "fine", "z1", "z5", "z10", "z20", "z50", "z100", "z200" };
-    public ObservableCollection<string> AvailableTools { get; } = new() { "tool0", "tool1", "tool2", "tool3" };
+    public ObservableCollection<string> AvailableMotionTypes { get; } = new() { "PTP", "LIN", "CIRC" };
+    public ObservableCollection<ApproximationType> AvailableApproximations { get; } = new()
+    {
+        ApproximationType.EXACT, ApproximationType.C_PTP, ApproximationType.C_DIS,
+        ApproximationType.C_VEL, ApproximationType.C_ORI
+    };
 
     [RelayCommand]
     private async Task TeachAndInsertAsync()
@@ -608,15 +688,24 @@ END";
             // 2. Auto-generate point name
             var pointName = GenerateNextPointName();
 
-            // 3. Create CONST robtarget definition
+            // 3. Create DECL E6POS definition (KRL)
             var target = RobTarget.FromPose(pointName, tcpPose);
-            var constLine = $"CONST robtarget {pointName} := {target.ToRplString()};";
+            var constLine = $"DECL E6POS {pointName} = {target.ToKrlString()}";
 
-            // 4. Create motion instruction
-            var motionLine = $"    {TeachMotionType} {pointName}, {TeachSpeed}, {TeachZone}, {TeachTool};";
+            // 4. Create KRL velocity + motion instruction
+            var velLine = $"    $VEL.CP = {TeachVelocity:F2}";
+            var approxSuffix = TeachApproximation switch
+            {
+                ApproximationType.C_PTP => " C_PTP",
+                ApproximationType.C_DIS => " C_DIS",
+                ApproximationType.C_VEL => " C_VEL",
+                ApproximationType.C_ORI => " C_ORI",
+                _ => ""
+            };
+            var motionLine = $"    {TeachMotionType} {pointName}{approxSuffix}";
 
-            // 5. Insert into editor
-            InsertTeachLines(constLine, motionLine);
+            // 5. Insert into editor (velocity line + motion line)
+            InsertTeachLines(constLine, velLine + "\n" + motionLine);
 
             // 6. Update Points list
             Points.Add(new PointInfo
@@ -640,7 +729,7 @@ END";
 
     private string GenerateNextPointName()
     {
-        var regex = new Regex(@"CONST\s+robtarget\s+(p\d+)", RegexOptions.IgnoreCase);
+        var regex = new Regex(@"(?:DECL|CONST)\s+(?:E6POS|POS)\s+(p\d+)", RegexOptions.IgnoreCase);
         var matches = regex.Matches(ProgramSource);
         var maxNum = 0;
         foreach (Match m in matches)
@@ -656,11 +745,12 @@ END";
     {
         var lines = ProgramSource.Split('\n').ToList();
 
-        // Find last CONST robtarget line for inserting variable definition
+        // Find last DECL E6POS line for inserting variable definition
         int lastConstIndex = -1;
         for (int i = 0; i < lines.Count; i++)
         {
-            if (lines[i].TrimStart().StartsWith("CONST robtarget", StringComparison.OrdinalIgnoreCase))
+            if (lines[i].TrimStart().StartsWith("DECL E6POS", StringComparison.OrdinalIgnoreCase) ||
+                lines[i].TrimStart().StartsWith("CONST E6POS", StringComparison.OrdinalIgnoreCase))
                 lastConstIndex = i;
         }
 

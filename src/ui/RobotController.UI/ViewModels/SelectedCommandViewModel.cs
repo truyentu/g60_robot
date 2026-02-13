@@ -10,7 +10,7 @@ namespace RobotController.UI.ViewModels;
 public enum InlineCommandType
 {
     None,
-    Motion,    // MoveL / MoveJ / MoveC
+    Motion,    // PTP / LIN / CIRC
     ArcStart   // ArcStart(Job_ID:=N)
 }
 
@@ -18,6 +18,10 @@ public enum InlineCommandType
 /// ViewModel for the KUKA-style Inline Command Editor popup.
 /// Parses the current line and provides dropdown selections for parameters.
 /// Two-way: changing a dropdown immediately updates the document text.
+///
+/// KRL motion syntax: PTP target [C_PTP|C_DIS|C_VEL|C_ORI]
+/// Velocity via system variables: $VEL.CP = 0.1 (m/s)
+/// Tool/Base via system variables: $TOOL = TOOL_DATA[1]
 /// </summary>
 public partial class SelectedCommandViewModel : ObservableObject
 {
@@ -43,23 +47,17 @@ public partial class SelectedCommandViewModel : ObservableObject
     private string _originalLineText = "";
 
     // ========================================================================
-    // Motion Parameters (MoveL/MoveJ/MoveC)
+    // Motion Parameters (PTP/LIN/CIRC) - KRL style
     // ========================================================================
 
     [ObservableProperty]
-    private string _motionType = "MoveL";
+    private string _motionType = "LIN";
 
     [ObservableProperty]
     private string _targetName = "";
 
     [ObservableProperty]
-    private SpeedData _selectedSpeed = SpeedData.V100;
-
-    [ObservableProperty]
-    private ZoneData _selectedZone = ZoneData.Fine;
-
-    [ObservableProperty]
-    private string _toolName = "tool0";
+    private ApproximationType _approximation = ApproximationType.EXACT;
 
     // ========================================================================
     // ArcStart Parameters
@@ -72,21 +70,16 @@ public partial class SelectedCommandViewModel : ObservableObject
     // Available Options
     // ========================================================================
 
-    public List<string> MotionTypes { get; } = ["MoveL", "MoveJ", "MoveC"];
+    public List<string> MotionTypes { get; } = ["PTP", "LIN", "CIRC"];
 
-    public List<SpeedData> AvailableSpeeds { get; } =
+    public List<ApproximationType> AvailableApproximations { get; } =
     [
-        SpeedData.V5, SpeedData.V10, SpeedData.V50, SpeedData.V100,
-        SpeedData.V200, SpeedData.V500, SpeedData.V1000, SpeedData.V2000, SpeedData.VMax
+        ApproximationType.EXACT,
+        ApproximationType.C_PTP,
+        ApproximationType.C_DIS,
+        ApproximationType.C_VEL,
+        ApproximationType.C_ORI
     ];
-
-    public List<ZoneData> AvailableZones { get; } =
-    [
-        ZoneData.Fine, ZoneData.Z1, ZoneData.Z5, ZoneData.Z10,
-        ZoneData.Z50, ZoneData.Z100, ZoneData.Z200
-    ];
-
-    public List<string> AvailableTools { get; } = ["tool0", "tool1", "tool2", "weldgun"];
 
     public List<WeldingJobInfo> AvailableJobs => WeldingJobInfo.DefaultJobs;
 
@@ -110,23 +103,14 @@ public partial class SelectedCommandViewModel : ObservableObject
             LineNumber = lineNumber;
             OriginalLineText = lineText;
 
-            // Try motion instruction: MoveL target, speed, zone, tool;
-            var motionMatch = RegexHelper.MotionInstructionRegex().Match(lineText);
+            // Try KRL motion instruction: PTP target [C_DIS]
+            var motionMatch = RegexHelper.KrlMotionRegex().Match(lineText);
             if (motionMatch.Success)
             {
                 CommandType = InlineCommandType.Motion;
-                MotionType = motionMatch.Groups[1].Value;
+                MotionType = motionMatch.Groups[1].Value.ToUpperInvariant();
                 TargetName = motionMatch.Groups[2].Value;
-
-                var speedName = motionMatch.Groups[3].Value;
-                SelectedSpeed = AvailableSpeeds.FirstOrDefault(
-                    s => s.Name.Equals(speedName, StringComparison.OrdinalIgnoreCase)) ?? SpeedData.V100;
-
-                var zoneName = motionMatch.Groups[4].Value;
-                SelectedZone = AvailableZones.FirstOrDefault(
-                    z => z.Name.Equals(zoneName, StringComparison.OrdinalIgnoreCase)) ?? ZoneData.Fine;
-
-                ToolName = motionMatch.Groups[5].Value;
+                Approximation = RegexHelper.ExtractApproximation(lineText);
                 return true;
             }
 
@@ -160,9 +144,7 @@ public partial class SelectedCommandViewModel : ObservableObject
     // ========================================================================
 
     partial void OnMotionTypeChanged(string value) => RebuildMotionLine();
-    partial void OnSelectedSpeedChanged(SpeedData value) => RebuildMotionLine();
-    partial void OnSelectedZoneChanged(ZoneData value) => RebuildMotionLine();
-    partial void OnToolNameChanged(string value) => RebuildMotionLine();
+    partial void OnApproximationChanged(ApproximationType value) => RebuildMotionLine();
     partial void OnSelectedJobChanged(WeldingJobInfo? value) => RebuildArcStartLine();
 
     private void RebuildMotionLine()
@@ -177,7 +159,17 @@ public partial class SelectedCommandViewModel : ObservableObject
             else break;
         }
 
-        var newLine = $"{indent}{MotionType} {TargetName}, {SelectedSpeed.Name}, {SelectedZone.Name}, {ToolName};";
+        // KRL format: PTP target [C_DIS] (no commas, no semicolons)
+        var approxSuffix = Approximation switch
+        {
+            ApproximationType.C_PTP => " C_PTP",
+            ApproximationType.C_DIS => " C_DIS",
+            ApproximationType.C_VEL => " C_VEL",
+            ApproximationType.C_ORI => " C_ORI",
+            _ => ""
+        };
+
+        var newLine = $"{indent}{MotionType} {TargetName}{approxSuffix}";
         _updateLineAction(newLine);
     }
 
@@ -192,7 +184,7 @@ public partial class SelectedCommandViewModel : ObservableObject
             else break;
         }
 
-        var newLine = $"{indent}ArcStart(Job_ID:={SelectedJob.Id});";
+        var newLine = $"{indent}ArcStart(Job_ID:={SelectedJob.Id})";
         _updateLineAction(newLine);
     }
 }

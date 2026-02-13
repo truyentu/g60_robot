@@ -1,8 +1,12 @@
 /**
  * @file Lexer.cpp
- * @brief Lexer implementation for RPL
+ * @brief Lexer implementation for KRL (KUKA Robot Language)
  *
- * Part of Phase 8: Virtual Simulation (IMPL_P8_02)
+ * Strict KUKA KRL syntax based on KSS 8.x specifications.
+ * - Case-insensitive keyword matching
+ * - Comments start with ; (semicolon)
+ * - Assignment uses = (not :=)
+ * - System variables start with $
  */
 
 #include "Lexer.hpp"
@@ -12,42 +16,91 @@
 namespace robot_controller {
 namespace interpreter {
 
-// Keyword map (case-insensitive matching)
+// KRL keyword map (all uppercase for case-insensitive matching)
 const std::unordered_map<std::string, TokenType> Lexer::s_keywords = {
+    // Program structure
     {"DEF", TokenType::DEF},
     {"END", TokenType::END},
+    {"DEFDAT", TokenType::DEFDAT},
+    {"ENDDAT", TokenType::ENDDAT},
+    {"PUBLIC", TokenType::PUBLIC},
+    {"GLOBAL", TokenType::GLOBAL},
+
+    // Declarations
     {"DECL", TokenType::DECL},
     {"CONST", TokenType::CONST},
-    {"ROBTARGET", TokenType::ROBTARGET},
-    {"REAL", TokenType::REAL},
+    {"STRUC", TokenType::STRUC},
+    {"ENUM", TokenType::ENUM},
+
+    // Data types
     {"INT", TokenType::INT},
+    {"REAL", TokenType::REAL},
     {"BOOL", TokenType::BOOL},
+    {"CHAR", TokenType::CHAR},
+    {"FRAME", TokenType::FRAME},
+    {"POS", TokenType::POS},
+    {"E6POS", TokenType::E6POS},
+    {"E6AXIS", TokenType::E6AXIS},
+    {"AXIS", TokenType::AXIS},
+
+    // Control flow
     {"IF", TokenType::IF},
     {"THEN", TokenType::THEN},
     {"ELSE", TokenType::ELSE},
     {"ENDIF", TokenType::ENDIF},
-    {"LOOP", TokenType::LOOP},
-    {"ENDLOOP", TokenType::ENDLOOP},
+    {"FOR", TokenType::FOR},
+    {"TO", TokenType::TO},
+    {"STEP", TokenType::STEP},
+    {"ENDFOR", TokenType::ENDFOR},
     {"WHILE", TokenType::WHILE},
     {"ENDWHILE", TokenType::ENDWHILE},
+    {"LOOP", TokenType::LOOP},
+    {"ENDLOOP", TokenType::ENDLOOP},
+    {"REPEAT", TokenType::REPEAT},
+    {"UNTIL", TokenType::UNTIL},
+    {"SWITCH", TokenType::SWITCH},
+    {"CASE", TokenType::CASE},
+    {"DEFAULT", TokenType::DEFAULT},
+    {"ENDSWITCH", TokenType::ENDSWITCH},
+
+    // Jump / flow control
+    {"GOTO", TokenType::GOTO},
+    {"HALT", TokenType::HALT},
+    {"CONTINUE", TokenType::CONTINUE},
+    {"EXIT", TokenType::EXIT},
     {"WAIT", TokenType::WAIT},
     {"SEC", TokenType::SEC},
-    {"FOR", TokenType::FOR},
+
+    // Boolean literals
     {"TRUE", TokenType::TRUE},
     {"FALSE", TokenType::FALSE},
+
+    // Motion commands
     {"PTP", TokenType::PTP},
     {"LIN", TokenType::LIN},
     {"CIRC", TokenType::CIRC},
-    {"MOVEJ", TokenType::MOVEJ},
-    {"MOVEL", TokenType::MOVEL},
-    {"MOVEC", TokenType::MOVEC},
-    {"VEL", TokenType::VEL},
-    {"ACC", TokenType::ACC},
-    {"CONT", TokenType::CONT},
+    {"PTP_REL", TokenType::PTP_REL},
+    {"LIN_REL", TokenType::LIN_REL},
+    {"CIRC_REL", TokenType::CIRC_REL},
     {"HOME", TokenType::HOME},
+
+    // Approximation keywords
+    {"C_PTP", TokenType::C_PTP},
+    {"C_DIS", TokenType::C_DIS},
+    {"C_VEL", TokenType::C_VEL},
+    {"C_ORI", TokenType::C_ORI},
+
+    // Logical operators (KRL keywords)
     {"AND", TokenType::AND},
     {"OR", TokenType::OR},
-    {"NOT", TokenType::NOT}
+    {"NOT", TokenType::NOT},
+    {"EXOR", TokenType::EXOR},
+
+    // Bitwise operators (KRL keywords)
+    {"B_AND", TokenType::B_AND},
+    {"B_OR", TokenType::B_OR},
+    {"B_NOT", TokenType::B_NOT},
+    {"B_EXOR", TokenType::B_EXOR}
 };
 
 Lexer::Lexer(const std::string& source)
@@ -59,7 +112,6 @@ std::vector<Token> Lexer::tokenize() {
         scanToken();
     }
 
-    // Add EOF token
     m_tokens.push_back({TokenType::END_OF_FILE, "", std::monostate{}, m_line, m_column});
     return m_tokens;
 }
@@ -113,8 +165,9 @@ void Lexer::scanToken() {
         case '[': addToken(TokenType::LBRACKET); break;
         case ']': addToken(TokenType::RBRACKET); break;
         case ',': addToken(TokenType::COMMA); break;
+        case '.': addToken(TokenType::DOT); break;
         case ':':
-            addToken(match('=') ? TokenType::COLONASSIGN : TokenType::COLON);
+            addToken(TokenType::COLON);
             break;
         case '+': addToken(TokenType::PLUS); break;
         case '-': addToken(TokenType::MINUS); break;
@@ -122,6 +175,7 @@ void Lexer::scanToken() {
         case '/': addToken(TokenType::SLASH); break;
         case '%': addToken(TokenType::PERCENT); break;
         case '$': addToken(TokenType::DOLLAR); break;
+        case '#': addToken(TokenType::HASH); break;
 
         case '=':
             addToken(match('=') ? TokenType::EQUAL : TokenType::ASSIGN);
@@ -137,11 +191,8 @@ void Lexer::scanToken() {
             addToken(match('=') ? TokenType::GREATER_EQ : TokenType::GREATER);
             break;
 
+        // Semicolon: KRL comment delimiter
         case ';':
-            addToken(TokenType::SEMICOLON);
-            break;
-
-        case '!':
             scanComment();
             break;
 
@@ -158,7 +209,6 @@ void Lexer::scanToken() {
         case ' ':
         case '\r':
         case '\t':
-            // Ignore whitespace
             break;
 
         default:
@@ -176,16 +226,16 @@ void Lexer::scanToken() {
 void Lexer::scanNumber() {
     while (std::isdigit(peek())) advance();
 
-    // Look for decimal
+    // Decimal part
     if (peek() == '.' && std::isdigit(peekNext())) {
         advance();  // consume '.'
         while (std::isdigit(peek())) advance();
     }
 
-    // Look for scientific notation (e.g., 9E9, 1.5e-3)
+    // Scientific notation (e.g., 9E9, 1.5e-3)
     if (peek() == 'E' || peek() == 'e') {
-        advance();  // consume 'E'/'e'
-        if (peek() == '+' || peek() == '-') advance();  // optional sign
+        advance();
+        if (peek() == '+' || peek() == '-') advance();
         if (!std::isdigit(peek())) {
             error("Expected digit after exponent");
             return;
@@ -214,7 +264,6 @@ void Lexer::scanString() {
 
     advance();  // closing "
 
-    // Trim quotes
     std::string value = m_source.substr(m_start + 1, m_current - m_start - 2);
     addToken(TokenType::STRING, value);
 }
@@ -224,13 +273,12 @@ void Lexer::scanIdentifier() {
 
     std::string text = m_source.substr(m_start, m_current - m_start);
 
-    // Convert to uppercase for keyword matching
+    // KRL is case-insensitive: normalize to uppercase for keyword matching
     std::string upper = text;
     std::transform(upper.begin(), upper.end(), upper.begin(), ::toupper);
 
     auto it = s_keywords.find(upper);
     if (it != s_keywords.end()) {
-        // Special handling for TRUE/FALSE
         if (it->second == TokenType::TRUE) {
             addToken(TokenType::TRUE, true);
         } else if (it->second == TokenType::FALSE) {
@@ -244,12 +292,11 @@ void Lexer::scanIdentifier() {
 }
 
 void Lexer::scanComment() {
-    // Comment runs until end of line
+    // KRL comment: ; until end of line
     while (peek() != '\n' && !isAtEnd()) {
         advance();
     }
-    // Optionally add comment token (we skip it for now)
-    // addToken(TokenType::COMMENT);
+    // Skip comment tokens (don't add to token stream)
 }
 
 void Lexer::error(const std::string& message) {

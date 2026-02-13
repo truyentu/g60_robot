@@ -9,15 +9,13 @@
     <Color name="TypeKeyword" foreground="#4FC1FF"/>
     <Color name="Qualifier" foreground="#569CD6"/>
     <Color name="Point" foreground="#DCDCAA"/>
-    <Color name="Speed" foreground="#D7BA7D"/>
-    <Color name="Zone" foreground="#9CDCFE"/>
+    <Color name="Approximation" foreground="#D7BA7D" fontWeight="bold"/>
     <Color name="SystemVar" foreground="#9CDCFE"/>
     <Color name="Operator" foreground="#D4D4D4"/>
 
     <RuleSet ignoreCase="true">
-        <!-- Comments: both ; (KUKA) and ! (ABB RAPID) styles -->
+        <!-- Comments: ; (KUKA KRL style) -->
         <Span color="Comment" begin=";"/>
-        <Span color="Comment" begin="!"/>
 
         <!-- Strings -->
         <Span color="String">
@@ -36,35 +34,28 @@
             <Word>Job_ID</Word>
         </Keywords>
 
-        <!-- Motion commands (ABB RAPID + KUKA KRL) -->
+        <!-- Motion commands (KUKA KRL) -->
         <Keywords color="Motion">
-            <Word>MoveL</Word>
-            <Word>MoveJ</Word>
-            <Word>MoveC</Word>
-            <Word>MoveAbsJ</Word>
             <Word>PTP</Word>
+            <Word>PTP_REL</Word>
             <Word>LIN</Word>
+            <Word>LIN_REL</Word>
             <Word>CIRC</Word>
+            <Word>CIRC_REL</Word>
             <Word>HOME</Word>
         </Keywords>
 
-        <!-- Type keywords -->
+        <!-- Type keywords (KUKA KRL) -->
         <Keywords color="TypeKeyword">
-            <Word>robtarget</Word>
-            <Word>jointtarget</Word>
-            <Word>speeddata</Word>
-            <Word>zonedata</Word>
-            <Word>tooldata</Word>
-            <Word>wobjdata</Word>
-            <Word>welddata</Word>
-            <Word>seamdata</Word>
-            <Word>weavedata</Word>
-            <Word>num</Word>
-            <Word>string</Word>
-            <Word>bool</Word>
+            <Word>E6POS</Word>
+            <Word>POS</Word>
+            <Word>FRAME</Word>
+            <Word>E6AXIS</Word>
+            <Word>AXIS</Word>
             <Word>REAL</Word>
             <Word>INT</Word>
             <Word>BOOL</Word>
+            <Word>CHAR</Word>
         </Keywords>
 
         <!-- Qualifiers / Declarations -->
@@ -76,31 +67,36 @@
             <Word>DECL</Word>
         </Keywords>
 
-        <!-- Control flow -->
+        <!-- Control flow (KUKA KRL) -->
         <Keywords color="Keyword">
             <Word>DEF</Word>
             <Word>END</Word>
-            <Word>PROC</Word>
-            <Word>ENDPROC</Word>
-            <Word>MODULE</Word>
-            <Word>ENDMODULE</Word>
+            <Word>DEFFCT</Word>
+            <Word>ENDFCT</Word>
             <Word>IF</Word>
             <Word>THEN</Word>
             <Word>ELSE</Word>
-            <Word>ELSEIF</Word>
             <Word>ENDIF</Word>
             <Word>FOR</Word>
-            <Word>FROM</Word>
             <Word>TO</Word>
             <Word>STEP</Word>
             <Word>ENDFOR</Word>
             <Word>WHILE</Word>
-            <Word>DO</Word>
             <Word>ENDWHILE</Word>
             <Word>LOOP</Word>
             <Word>ENDLOOP</Word>
+            <Word>REPEAT</Word>
+            <Word>UNTIL</Word>
+            <Word>SWITCH</Word>
+            <Word>CASE</Word>
+            <Word>DEFAULT</Word>
+            <Word>ENDSWITCH</Word>
+            <Word>GOTO</Word>
             <Word>WAIT</Word>
             <Word>SEC</Word>
+            <Word>HALT</Word>
+            <Word>EXIT</Word>
+            <Word>CONTINUE</Word>
             <Word>RETURN</Word>
             <Word>TRUE</Word>
             <Word>FALSE</Word>
@@ -109,35 +105,17 @@
             <Word>NOT</Word>
         </Keywords>
 
-        <!-- Predefined speeds -->
-        <Keywords color="Speed">
-            <Word>v5</Word>
-            <Word>v10</Word>
-            <Word>v50</Word>
-            <Word>v100</Word>
-            <Word>v200</Word>
-            <Word>v500</Word>
-            <Word>v1000</Word>
-            <Word>v2000</Word>
-            <Word>vmax</Word>
+        <!-- Approximation keywords (KUKA KRL) -->
+        <Keywords color="Approximation">
+            <Word>C_PTP</Word>
+            <Word>C_DIS</Word>
+            <Word>C_VEL</Word>
+            <Word>C_ORI</Word>
         </Keywords>
 
-        <!-- Predefined zones -->
-        <Keywords color="Zone">
-            <Word>fine</Word>
-            <Word>z1</Word>
-            <Word>z5</Word>
-            <Word>z10</Word>
-            <Word>z50</Word>
-            <Word>z100</Word>
-            <Word>z200</Word>
-            <Word>tool0</Word>
-            <Word>wobj0</Word>
-        </Keywords>
-
-        <!-- System variables ($xxx) -->
+        <!-- System variables ($VEL.CP, $APO.CDIS, $TOOL, $BASE, $VEL_AXIS[1], etc.) -->
         <Rule color="SystemVar">
-            \$[A-Za-z_][A-Za-z0-9_]*(\[[0-9]+\])?
+            \$[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?(\[[0-9]+\])?
         </Rule>
 
         <!-- Points (p followed by alphanumeric, e.g., p1, pHome, P10) -->

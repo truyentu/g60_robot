@@ -14,7 +14,7 @@
         </Border.Effect>
 
         <Grid>
-            <!-- Motion Instruction Form: MoveL/MoveJ/MoveC -->
+            <!-- Motion Instruction Form: PTP/LIN/CIRC -->
             <StackPanel Orientation="Horizontal"
                         Visibility="{Binding IsMotionCommand, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}">
 
@@ -36,36 +36,12 @@
 
                 <Rectangle Width="1" Fill="#555555" Margin="10,2"/>
 
-                <!-- Speed Dropdown -->
-                <TextBlock Text="Speed:" Foreground="#AAAAAA" VerticalAlignment="Center"
+                <!-- Approximation Dropdown (KRL: C_PTP, C_DIS, C_VEL, C_ORI) -->
+                <TextBlock Text="Approx:" Foreground="#AAAAAA" VerticalAlignment="Center"
                            FontSize="11" Margin="10,0,4,0"/>
-                <ComboBox ItemsSource="{Binding AvailableSpeeds}"
-                          SelectedItem="{Binding SelectedSpeed, Mode=TwoWay}"
-                          DisplayMemberPath="Name"
-                          Width="75" FontSize="11"
-                          Background="#3C3C3C" Foreground="White"
-                          BorderBrush="#555555"/>
-
-                <Rectangle Width="1" Fill="#555555" Margin="10,2"/>
-
-                <!-- Zone Dropdown -->
-                <TextBlock Text="Zone:" Foreground="#AAAAAA" VerticalAlignment="Center"
-                           FontSize="11" Margin="10,0,4,0"/>
-                <ComboBox ItemsSource="{Binding AvailableZones}"
-                          SelectedItem="{Binding SelectedZone, Mode=TwoWay}"
-                          DisplayMemberPath="Name"
-                          Width="70" FontSize="11"
-                          Background="#3C3C3C" Foreground="White"
-                          BorderBrush="#555555"/>
-
-                <Rectangle Width="1" Fill="#555555" Margin="10,2"/>
-
-                <!-- Tool Dropdown -->
-                <TextBlock Text="Tool:" Foreground="#AAAAAA" VerticalAlignment="Center"
-                           FontSize="11" Margin="10,0,4,0"/>
-                <ComboBox ItemsSource="{Binding AvailableTools}"
-                          SelectedItem="{Binding ToolName, Mode=TwoWay}"
-                          Width="80" FontSize="11"
+                <ComboBox ItemsSource="{Binding AvailableApproximations}"
+                          SelectedItem="{Binding Approximation, Mode=TwoWay}"
+                          Width="85" FontSize="11"
                           Background="#3C3C3C" Foreground="White"
                           BorderBrush="#555555"/>
             </StackPanel>
