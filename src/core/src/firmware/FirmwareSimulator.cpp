@@ -100,7 +100,14 @@ std::string FirmwareSimulator::getResponse() {
 }
 
 void FirmwareSimulator::update(double dt_seconds) {
-    if (m_state == State::IDLE || m_state == State::HOLD || m_state == State::ALARM) {
+    // V2: handle homing simulation
+    if (m_state == State::HOMING) {
+        updateHomingSimulation(dt_seconds);
+        return;
+    }
+
+    if (m_state == State::IDLE || m_state == State::HOLD ||
+        m_state == State::ALARM || m_state == State::DISABLED) {
         return;
     }
 
@@ -152,12 +159,14 @@ std::array<double, SIM_NUM_AXES> FirmwareSimulator::getJointPositions() const {
 
 std::string FirmwareSimulator::getStateString() const {
     switch (m_state.load()) {
-        case State::IDLE:  return "Idle";
-        case State::RUN:   return "Run";
-        case State::JOG:   return "Jog";
-        case State::HOLD:  return "Hold";
-        case State::ALARM: return "Alarm";
-        default:           return "Unknown";
+        case State::IDLE:     return "Idle";
+        case State::RUN:      return "Run";
+        case State::JOG:      return "Jog";
+        case State::HOLD:     return "Hold";
+        case State::ALARM:    return "Alarm";
+        case State::DISABLED: return "Disabled";
+        case State::HOMING:   return "Homing";
+        default:              return "Unknown";
     }
 }
 
@@ -192,7 +201,8 @@ void FirmwareSimulator::reset() {
     std::lock_guard<std::mutex> lock(m_mutex);
     m_targets = m_positions;
     m_isJogMode = false;
-    m_state = State::IDLE;
+    m_driveAlarmMask = 0x00;
+    m_state = m_drivesEnabled ? State::IDLE : State::DISABLED;
     while (!m_responses.empty()) m_responses.pop();
     LOG_INFO("FirmwareSimulator: Reset");
 }
@@ -427,6 +437,220 @@ bool FirmwareSimulator::isAtTarget() const {
         }
     }
     return true;
+}
+
+// ============================================================================
+// V2 Structured Commands Implementation
+// ============================================================================
+
+bool FirmwareSimulator::enableDrives(uint8_t axisMask) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_drivesEnabled = true;
+    if (m_state == State::DISABLED) {
+        m_state = State::IDLE;
+    }
+    LOG_INFO("FirmwareSimulator: Drives enabled (mask=0x{:02X})", axisMask);
+    return true;
+}
+
+bool FirmwareSimulator::disableDrives(uint8_t axisMask) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_targets = m_positions;
+    m_isJogMode = false;
+    m_currentVelocities.fill(0.0);
+    m_drivesEnabled = false;
+    m_state = State::DISABLED;
+    LOG_INFO("FirmwareSimulator: Drives disabled (mask=0x{:02X})", axisMask);
+    return true;
+}
+
+bool FirmwareSimulator::resetAlarm(uint8_t axisMask) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_driveAlarmMask &= ~axisMask;
+    if (m_state == State::ALARM && m_driveAlarmMask == 0) {
+        m_state = m_drivesEnabled ? State::IDLE : State::DISABLED;
+    }
+    LOG_INFO("FirmwareSimulator: Alarm reset (mask=0x{:02X})", axisMask);
+    return true;
+}
+
+bool FirmwareSimulator::jogStart(uint8_t axis, int8_t direction, uint16_t speed) {
+    if (axis >= SIM_NUM_AXES) return false;
+    if (!m_drivesEnabled) return false;
+
+    std::lock_guard<std::mutex> lock(m_mutex);
+    auto newTargets = m_positions;
+    double range = (direction > 0) ? m_maxLimits[axis] : m_minLimits[axis];
+    newTargets[axis] = range;
+
+    m_targets = newTargets;
+    m_isJogMode = true;
+    m_state = State::JOG;
+
+    // Speed is in steps/ms — convert to deg/min for feedRate
+    double speedDegPerSec = static_cast<double>(speed) / m_stepsPerDegree[axis] * 1000.0;
+    m_feedRate = speedDegPerSec * 60.0;
+
+    if (m_smoother) {
+        m_smoother->setTarget(m_positions, m_currentVelocities, m_targets);
+    }
+    return true;
+}
+
+bool FirmwareSimulator::jogStop() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_targets = m_positions;
+    m_currentVelocities.fill(0.0);
+    if (m_smoother && m_smoother->isActive()) {
+        m_smoother->cancelToStop(m_positions, {0,0,0,0,0,0});
+    }
+    m_isJogMode = false;
+    m_state = m_drivesEnabled ? State::IDLE : State::DISABLED;
+    return true;
+}
+
+bool FirmwareSimulator::stopMotion(uint8_t mode) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_targets = m_positions;
+    m_currentVelocities.fill(0.0);
+    if (m_smoother && m_smoother->isActive()) {
+        m_smoother->cancelToStop(m_positions, {0,0,0,0,0,0});
+    }
+    m_isJogMode = false;
+    m_state = m_drivesEnabled ? State::IDLE : State::DISABLED;
+    return true;
+}
+
+bool FirmwareSimulator::homeStart(uint8_t axisMask, uint8_t sequence, uint8_t method) {
+    if (!m_drivesEnabled) return false;
+
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    if (method == 2) {
+        // method 2 = current_position: mark axes as homed immediately
+        m_homeStatusMask |= axisMask;
+        LOG_INFO("FirmwareSimulator: Axes homed at current position (mask=0x{:02X})", axisMask);
+        return true;
+    }
+
+    // Start homing simulation for requested axes
+    m_homingActiveMask = axisMask & 0x3F;
+    for (int i = 0; i < SIM_NUM_AXES; i++) {
+        if (m_homingActiveMask & (1 << i)) {
+            m_homingProgress[i] = 0.0;
+        }
+    }
+    m_state = State::HOMING;
+    LOG_INFO("FirmwareSimulator: Homing started (mask=0x{:02X}, method={})", axisMask, method);
+    return true;
+}
+
+bool FirmwareSimulator::homeStop(uint8_t axisMask) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_homingActiveMask &= ~axisMask;
+    if (m_homingActiveMask == 0) {
+        m_state = m_drivesEnabled ? State::IDLE : State::DISABLED;
+    }
+    LOG_INFO("FirmwareSimulator: Homing stopped (mask=0x{:02X})", axisMask);
+    return true;
+}
+
+void FirmwareSimulator::updateHomingSimulation(double dt) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    bool allDone = true;
+    for (int i = 0; i < SIM_NUM_AXES; i++) {
+        if (!(m_homingActiveMask & (1 << i))) continue;
+
+        m_homingProgress[i] += dt / HOMING_DURATION;
+        if (m_homingProgress[i] >= 1.0) {
+            m_homingProgress[i] = 1.0;
+            m_homeStatusMask |= (1 << i);
+            m_homingActiveMask &= ~(1 << i);
+            m_positions[i] = 0.0;  // Home position = 0
+            m_targets[i] = 0.0;
+        } else {
+            allDone = false;
+        }
+    }
+
+    if (allDone || m_homingActiveMask == 0) {
+        m_state = m_drivesEnabled ? State::IDLE : State::DISABLED;
+        LOG_INFO("FirmwareSimulator: Homing complete (homed=0x{:02X})", m_homeStatusMask);
+    }
+}
+
+protocol::StatusPacket FirmwareSimulator::getStatusPacket() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    protocol::StatusPacket pkt;
+    pkt.clear();
+
+    // Map internal state to SystemState
+    pkt.state = static_cast<uint8_t>(getSystemState());
+
+    // Positions
+    for (int i = 0; i < SIM_NUM_AXES; i++) {
+        pkt.actual_pos[i] = static_cast<int32_t>(m_positions[i] * m_stepsPerDegree[i]);
+        pkt.cmd_pos[i] = static_cast<int32_t>(m_targets[i] * m_stepsPerDegree[i]);
+        pkt.velocity[i] = static_cast<int16_t>(m_currentVelocities[i] * m_stepsPerDegree[i] / 1000.0);
+    }
+
+    pkt.drive_ready = m_driveReadyMask;
+    pkt.drive_alarm = m_driveAlarmMask;
+    pkt.digital_inputs = m_digitalInputs;
+    pkt.digital_outputs = m_digitalOutputs;
+    pkt.pvt_buffer_lvl = 0;
+    pkt.home_status = m_homeStatusMask;
+    pkt.timestamp_us = 0;
+
+    return pkt;
+}
+
+protocol::SystemState FirmwareSimulator::getSystemState() const {
+    switch (m_state.load()) {
+        case State::IDLE:     return protocol::SystemState::STATE_IDLE;
+        case State::RUN:      return protocol::SystemState::STATE_MOVING;
+        case State::JOG:      return protocol::SystemState::STATE_JOGGING;
+        case State::HOLD:     return protocol::SystemState::STATE_HOLD;
+        case State::ALARM:    return protocol::SystemState::STATE_ALARM;
+        case State::DISABLED: return protocol::SystemState::STATE_DISABLED;
+        case State::HOMING:   return protocol::SystemState::STATE_HOMING;
+        default:              return protocol::SystemState::STATE_ERROR;
+    }
+}
+
+int32_t FirmwareSimulator::degreesToSteps(uint8_t axis, double degrees) const {
+    if (axis >= SIM_NUM_AXES) return 0;
+    return static_cast<int32_t>(degrees * m_stepsPerDegree[axis]);
+}
+
+double FirmwareSimulator::stepsToDegrees(uint8_t axis, int32_t steps) const {
+    if (axis >= SIM_NUM_AXES) return 0.0;
+    return static_cast<double>(steps) / m_stepsPerDegree[axis];
+}
+
+bool FirmwareSimulator::setOutput(uint8_t index, bool value) {
+    if (index >= 16) return false;
+    if (value) {
+        m_digitalOutputs |= (1 << index);
+    } else {
+        m_digitalOutputs &= ~(1 << index);
+    }
+    return true;
+}
+
+bool FirmwareSimulator::setOutputsBatch(uint16_t mask, uint16_t values) {
+    m_digitalOutputs = (m_digitalOutputs & ~mask) | (values & mask);
+    return true;
+}
+
+uint16_t FirmwareSimulator::getDigitalInputs() const {
+    return m_digitalInputs;
+}
+
+uint16_t FirmwareSimulator::getDigitalOutputs() const {
+    return m_digitalOutputs;
 }
 
 } // namespace firmware

@@ -51,6 +51,15 @@ struct RobotStatus {
     int programOverride = 100;    // Program execution speed (1-100%)
     int jogOverride = 100;        // Manual jog speed (1-100%)
     int manualOverride = 100;     // T1 mode cap (1-100%, max 250mm/s)
+
+    // V2 additions
+    uint8_t driveReady = 0;         // bit0-5: drive ready flags
+    uint8_t driveAlarm = 0;         // bit0-5: drive alarm flags
+    uint8_t bufferLevel = 0;        // PVT buffer fill (0-255)
+    uint16_t digitalInputs = 0;    // Digital inputs state
+    uint16_t digitalOutputs = 0;   // Digital outputs state
+    uint8_t homeStatus = 0;         // bit0-5: axis homed flags
+    std::string firmwareMode = "SIM";
 };
 
 /**
@@ -110,10 +119,16 @@ public:
     bool jogCartesian(int axis, double speed);
     bool stopJog();
 
-    // Firmware mode switch (Phase 9)
+    // Firmware mode switch (Phase 9 → V2)
     bool switchToSimMode();
-    bool switchToRealMode(const std::string& portName = "");
+    bool switchToRealMode(const std::string& portName = "");  // Legacy (returns false)
+    bool switchToSTM32Mode(const std::string& ip = "192.168.1.100", uint16_t port = 5001);
     std::string getFirmwareMode() const;
+
+    // V2: Drive/Home control
+    bool enableDrives(uint8_t axisMask = 0x3F);
+    bool disableDrives(uint8_t axisMask = 0x3F);
+    bool goHome(uint8_t axisMask = 0x3F);
 
     // Program execution (Phase 8)
     bool loadProgram(const std::string& source);
@@ -144,7 +159,7 @@ private:
     std::unique_ptr<jog::JogController> m_jogController;
     std::shared_ptr<firmware::IFirmwareDriver> m_activeDriver;
     std::shared_ptr<firmware::FirmwareSimulator> m_simDriver;
-    std::shared_ptr<firmware::IFirmwareDriver> m_realDriver;
+    std::shared_ptr<firmware::IFirmwareDriver> m_realDriver;  // V2: STM32EthernetDriver (set in switchToSTM32Mode)
     bool m_isSimMode{true};
     std::optional<config::RobotPackage> m_activePackage;
     Eigen::Matrix4d m_flangeTransform = Eigen::Matrix4d::Identity(); // T_flangeOffset from package

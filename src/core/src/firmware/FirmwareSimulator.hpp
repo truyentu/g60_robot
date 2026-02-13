@@ -6,6 +6,7 @@
 #include <queue>
 #include <mutex>
 #include <atomic>
+#include <chrono>
 #include "../jog/RuckigSmoother.hpp"
 
 namespace robot_controller {
@@ -18,7 +19,10 @@ public:
     FirmwareSimulator();
     ~FirmwareSimulator() override = default;
 
-    // IFirmwareDriver interface
+    // ========================================================================
+    // V1 IFirmwareDriver interface (existing — unchanged signatures)
+    // ========================================================================
+
     bool isConnected() const override { return true; }
     bool sendCommand(const std::string& gcode) override;
     std::string getResponse() override;
@@ -35,14 +39,51 @@ public:
     std::string getDriverName() const override { return "FirmwareSimulator"; }
     bool isSimulation() const override { return true; }
 
+    // ========================================================================
+    // V2 Structured Commands (new overrides)
+    // ========================================================================
+
+    // Drive Control
+    bool enableDrives(uint8_t axisMask = 0x3F) override;
+    bool disableDrives(uint8_t axisMask = 0x3F) override;
+    bool resetAlarm(uint8_t axisMask = 0x3F) override;
+
+    // Jog (structured)
+    bool jogStart(uint8_t axis, int8_t direction, uint16_t speed) override;
+    bool jogStop() override;
+
+    // Motion (structured)
+    bool stopMotion(uint8_t mode = 0) override;
+
+    // Homing
+    bool homeStart(uint8_t axisMask = 0x3F, uint8_t sequence = 0,
+                   uint8_t method = 0) override;
+    bool homeStop(uint8_t axisMask = 0x3F) override;
+
+    // Status
+    protocol::StatusPacket getStatusPacket() const override;
+    uint8_t getBufferLevel() const override { return 0; }
+    protocol::SystemState getSystemState() const override;
+
+    // Unit Conversion (simulated: 2777.78 steps/degree for all axes)
+    int32_t degreesToSteps(uint8_t axis, double degrees) const override;
+    double stepsToDegrees(uint8_t axis, int32_t steps) const override;
+
+    // I/O
+    bool setOutput(uint8_t index, bool value) override;
+    bool setOutputsBatch(uint16_t mask, uint16_t values) override;
+    uint16_t getDigitalInputs() const override;
+    uint16_t getDigitalOutputs() const override;
+
 private:
     bool parseGcode(const std::string& gcode);
     bool parseJogCommand(const std::string& gcode);
     void interpolateMotion(double dt);
     bool isAtTarget() const;
+    void updateHomingSimulation(double dt);
 
-    enum class State { IDLE, JOG, RUN, HOLD, ALARM };
-    std::atomic<State> m_state{State::IDLE};
+    enum class State { IDLE, JOG, RUN, HOLD, ALARM, DISABLED, HOMING };
+    std::atomic<State> m_state{State::DISABLED};  // V2: start DISABLED until drives enabled
 
     mutable std::mutex m_mutex;
     std::array<double, SIM_NUM_AXES> m_positions{};
@@ -61,6 +102,25 @@ private:
     // Ruckig S-curve trajectory smoother
     std::unique_ptr<jog::RuckigSmoother> m_smoother;
     std::array<double, SIM_NUM_AXES> m_currentVelocities{};
+
+    // V2: Drive state
+    bool m_drivesEnabled{false};
+    uint8_t m_driveReadyMask{0x3F};   // All drives physically ready (simulated)
+    uint8_t m_driveAlarmMask{0x00};
+
+    // V2: Homing simulation
+    uint8_t m_homeStatusMask{0x00};       // bit0-5: axis homed flags
+    uint8_t m_homingActiveMask{0x00};     // bit0-5: axes currently homing
+    double m_homingProgress[SIM_NUM_AXES]{};  // per-axis progress (0..1)
+    static constexpr double HOMING_DURATION = 2.0;  // seconds per axis
+
+    // V2: Digital I/O simulation
+    uint16_t m_digitalInputs{0};
+    uint16_t m_digitalOutputs{0};
+
+    // V2: Unit conversion (simulated encoder resolution)
+    std::array<double, SIM_NUM_AXES> m_stepsPerDegree{
+        2777.78, 2777.78, 2777.78, 2777.78, 2777.78, 2777.78};
 
     static constexpr double POSITION_TOLERANCE = 0.01;
 };

@@ -77,10 +77,10 @@ CLAUDE.md
 
 # Batch/test scripts at root
 *.bat
-test_*.cpp
-test_*.py
-test_*.xml
-verify_*.py
+/test_*.cpp
+/test_*.py
+/test_*.xml
+/verify_*.py
 
 # Config files that are generated
 config/robots/

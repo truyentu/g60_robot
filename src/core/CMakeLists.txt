@@ -49,7 +49,8 @@ set(CORE_SOURCES
     src/ipc/RobotPackagePayloads.cpp
     src/ipc/JogPayloads.cpp
     src/firmware/FirmwareSimulator.cpp
-    src/firmware/RealFirmwareDriver.cpp
+    src/firmware/STM32EthernetDriver.cpp
+    src/firmware/plugins/GcodeAdapter.cpp
     src/jog/JogController.cpp
     src/jog/RuckigSmoother.cpp
     src/config/ConfigManager.cpp
@@ -108,10 +109,13 @@ set(CORE_HEADERS
     src/trajectory/Interpolators.hpp
     src/trajectory/TrajectoryPlanner.hpp
     src/trajectory/TrajectoryExecutor.hpp
-    src/firmware/FirmwareProtocol.hpp
-    src/firmware/SerialPort.hpp
-    src/firmware/FirmwareInterface.hpp
-    src/firmware/MotionStreamer.hpp
+    src/firmware/LegacyGrblProtocol.hpp
+    src/firmware/protocol/PacketTypes.hpp
+    src/firmware/protocol/PVTPoint.hpp
+    src/firmware/protocol/StatusPacket.hpp
+    src/firmware/protocol/BinaryProtocol.hpp
+    src/firmware/STM32EthernetDriver.hpp
+    src/firmware/plugins/GcodeAdapter.hpp
     src/welding/WeldingTypes.hpp
     src/welding/WeldingStateMachine.hpp
     src/welding/WeldingController.hpp
@@ -150,7 +154,6 @@ set(CORE_HEADERS
     src/ipc/JogPayloads.hpp
     src/firmware/FirmwareSimulator.hpp
     src/firmware/IFirmwareDriver.hpp
-    src/firmware/RealFirmwareDriver.hpp
     src/jog/JogController.hpp
     src/jog/RuckigSmoother.hpp
     src/ipc/OverridePayloads.hpp
@@ -539,6 +542,70 @@ if(WIN32)
 endif()
 
 gtest_discover_tests(test_firmware)
+
+# ============================================================================
+# Binary Protocol Tests (V2 packet framing, CRC, struct sizes)
+# ============================================================================
+add_executable(test_binary_protocol
+    tests/test_binary_protocol.cpp
+)
+
+target_include_directories(test_binary_protocol
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_binary_protocol
+    PRIVATE
+        GTest::gtest
+        GTest::gtest_main
+)
+
+if(WIN32)
+    target_compile_definitions(test_binary_protocol PRIVATE
+        NOMINMAX
+        _WIN32_WINNT=0x0A00
+    )
+endif()
+
+gtest_discover_tests(test_binary_protocol)
+
+# ============================================================================
+# Firmware V2 Tests (Simulator drive states, jog, homing, I/O)
+# ============================================================================
+add_executable(test_firmware_v2
+    tests/test_firmware_v2.cpp
+    src/firmware/FirmwareSimulator.cpp
+    src/jog/RuckigSmoother.cpp
+    src/logging/Logger.cpp
+)
+
+target_include_directories(test_firmware_v2
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_firmware_v2
+    PRIVATE
+        GTest::gtest
+        GTest::gtest_main
+        spdlog::spdlog
+        Eigen3::Eigen
+        Boost::system
+        ruckig::ruckig
+)
+
+if(WIN32)
+    target_compile_definitions(test_firmware_v2 PRIVATE
+        NOMINMAX
+        _WIN32_WINNT=0x0A00
+        _USE_MATH_DEFINES
+    )
+endif()
+
+gtest_discover_tests(test_firmware_v2)
 
 # ============================================================================
 # Welding Tests

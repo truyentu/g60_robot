@@ -1,6 +1,7 @@
 /**
- * @file FirmwareProtocol.hpp
- * @brief Protocol definitions for firmware communication with grblHAL
+ * @file LegacyGrblProtocol.hpp
+ * @brief Legacy protocol definitions for grblHAL communication
+ * @note V2: Renamed from FirmwareProtocol.hpp. Kept for GcodeAdapter reference.
  */
 
 #pragma once

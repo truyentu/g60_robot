@@ -93,6 +93,13 @@ private:
     double m_tcpVelocity{0.0};          // Current TCP speed (mm/s or deg/s)
     double m_targetTcpVelocity{0.0};    // Target TCP speed (ramp toward this)
 
+    // Fixed-reference jog state (prevents integration drift in Tool/User frames)
+    // When jogging in Tool frame, we store the initial TCP pose and accumulate
+    // total distance. Each step computes target = startPose + totalDistance * fixedDirection
+    // instead of incrementally adding to currentPose (which drifts due to IK error).
+    kinematics::TCPPose m_jogStartTcpPose;      // TCP pose when jog session started
+    double m_jogTotalDistance{0.0};               // Accumulated distance (mm or deg)
+
     std::array<double, 6> m_minLimits{-170, -190, -120, -185, -120, -350};
     std::array<double, 6> m_maxLimits{170, 45, 156, 185, 120, 350};
     std::array<double, 6> m_maxVelocities{156, 156, 176, 343, 384, 721};

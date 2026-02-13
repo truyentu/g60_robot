@@ -17,8 +17,8 @@
 #include "../config/RobotPackageLoader.hpp"
 #include "../config/UrdfParser.hpp"
 #include "../kinematics/DHParameters.hpp"
-// Include RealFirmwareDriver AFTER all other headers to avoid Windows IDLE macro conflict
-#include "../firmware/RealFirmwareDriver.hpp"
+// V2: STM32EthernetDriver for hardware connection
+#include "../firmware/STM32EthernetDriver.hpp"
 #include <chrono>
 #include <algorithm>
 #include <filesystem>
@@ -36,7 +36,6 @@ RobotController::RobotController()
     , m_baseFrameManager(std::make_unique<frame::BaseFrameManager>())
     , m_overrideManager(std::make_unique<override::OverrideManager>())
     , m_simDriver(std::make_shared<firmware::FirmwareSimulator>())
-    , m_realDriver(std::make_shared<firmware::RealFirmwareDriver>())
     , m_jogController(std::make_unique<jog::JogController>())
 {
     // Default to simulation mode
@@ -651,10 +650,8 @@ bool RobotController::switchToSimMode() {
 
     // Disconnect real driver if connected
     if (m_realDriver && m_realDriver->isConnected()) {
-        auto realDriver = std::dynamic_pointer_cast<firmware::RealFirmwareDriver>(m_realDriver);
-        if (realDriver) {
-            realDriver->disconnect();
-        }
+        // V2: generic disconnect — driver handles its own cleanup
+        m_realDriver.reset();
     }
 
     // Switch to simulator
@@ -671,7 +668,18 @@ bool RobotController::switchToSimMode() {
 }
 
 bool RobotController::switchToRealMode(const std::string& portName) {
-    LOG_INFO("Switching to REAL mode, port={}...", portName.empty() ? "auto" : portName);
+    // V2: switchToRealMode is now a placeholder
+    // Use switchToSTM32Mode() for STM32 Ethernet connection (Step 8)
+    LOG_WARN("switchToRealMode('{}') called — legacy Teensy driver removed. Use STM32 mode.", portName);
+    return false;
+}
+
+std::string RobotController::getFirmwareMode() const {
+    return m_isSimMode ? "SIM" : "STM32";
+}
+
+bool RobotController::switchToSTM32Mode(const std::string& ip, uint16_t port) {
+    LOG_INFO("Switching to STM32 mode, ip={}:{}", ip, port);
 
     // Stop any active jog
     if (m_jogController) {
@@ -679,26 +687,15 @@ bool RobotController::switchToRealMode(const std::string& portName) {
         m_jogController->disable();
     }
 
-    auto realDriver = std::dynamic_pointer_cast<firmware::RealFirmwareDriver>(m_realDriver);
-    if (!realDriver) {
-        LOG_ERROR("Real firmware driver not available");
+    // Create STM32 driver
+    auto stm32Driver = std::make_shared<firmware::STM32EthernetDriver>();
+    if (!stm32Driver->connect(ip, port)) {
+        LOG_ERROR("Failed to connect to STM32 at {}:{}", ip, port);
         return false;
     }
 
-    // Connect to real hardware
-    bool connected = false;
-    if (portName.empty()) {
-        connected = realDriver->autoConnect();
-    } else {
-        connected = realDriver->connect(portName);
-    }
-
-    if (!connected) {
-        LOG_ERROR("Failed to connect to real hardware");
-        return false;
-    }
-
-    // Switch to real driver
+    // Switch to STM32 driver
+    m_realDriver = stm32Driver;
     m_activeDriver = m_realDriver;
     m_isSimMode = false;
 
@@ -707,12 +704,26 @@ bool RobotController::switchToRealMode(const std::string& portName) {
         m_jogController->setFirmwareDriver(m_activeDriver);
     }
 
-    LOG_INFO("Switched to REAL mode on {}", realDriver->getPortName());
+    LOG_INFO("Switched to STM32 mode at {}:{}", ip, port);
     return true;
 }
 
-std::string RobotController::getFirmwareMode() const {
-    return m_isSimMode ? "SIM" : "REAL";
+bool RobotController::enableDrives(uint8_t axisMask) {
+    if (!m_activeDriver) return false;
+    LOG_INFO("Enabling drives (mask=0x{:02X})", axisMask);
+    return m_activeDriver->enableDrives(axisMask);
+}
+
+bool RobotController::disableDrives(uint8_t axisMask) {
+    if (!m_activeDriver) return false;
+    LOG_INFO("Disabling drives (mask=0x{:02X})", axisMask);
+    return m_activeDriver->disableDrives(axisMask);
+}
+
+bool RobotController::goHome(uint8_t axisMask) {
+    if (!m_activeDriver) return false;
+    LOG_INFO("Starting homing (mask=0x{:02X})", axisMask);
+    return m_activeDriver->homeStart(axisMask, 0, 0);
 }
 
 void RobotController::controlLoop() {
@@ -825,6 +836,18 @@ void RobotController::updateStatus() {
 
     // TODO: Get active tool from ToolManager
     // m_status.activeToolId is already initialized
+
+    // V2: Update drive/home/IO status from firmware driver
+    if (m_activeDriver) {
+        auto statusPkt = m_activeDriver->getStatusPacket();
+        m_status.driveReady = statusPkt.drive_ready;
+        m_status.driveAlarm = statusPkt.drive_alarm;
+        m_status.bufferLevel = statusPkt.pvt_buffer_lvl;
+        m_status.digitalInputs = statusPkt.digital_inputs;
+        m_status.digitalOutputs = statusPkt.digital_outputs;
+        m_status.homeStatus = statusPkt.home_status;
+        m_status.firmwareMode = m_isSimMode ? "SIM" : "STM32";
+    }
 }
 
 void RobotController::publishStatus() {
@@ -865,10 +888,16 @@ void RobotController::publishStatus() {
     // Add firmware mode info
     if (m_activeDriver) {
         payload["firmware"] = {
-            {"mode", m_isSimMode ? "SIM" : "REAL"},
+            {"mode", m_isSimMode ? "SIM" : "STM32"},
             {"connected", m_activeDriver->isConnected()},
             {"driver", m_activeDriver->getDriverName()},
-            {"is_simulation", m_activeDriver->isSimulation()}
+            {"is_simulation", m_activeDriver->isSimulation()},
+            {"drive_ready", status.driveReady},
+            {"drive_alarm", status.driveAlarm},
+            {"home_status", status.homeStatus},
+            {"buffer_level", status.bufferLevel},
+            {"digital_inputs", status.digitalInputs},
+            {"digital_outputs", status.digitalOutputs}
         };
     }
 
@@ -2502,22 +2531,15 @@ void RobotController::registerIpcHandlers() {
 
             LOG_INFO("FIRMWARE_CONNECT request: port={}, baud={}", port, baudRate);
 
+            // V2: Legacy serial connection removed. Use STM32 Ethernet (Step 8).
             bool success = false;
-            if (port.empty()) {
-                success = switchToRealMode();
-            } else {
-                success = switchToRealMode(port);
-            }
-
-            auto realPtr = std::dynamic_pointer_cast<firmware::RealFirmwareDriver>(m_realDriver);
-            std::string realPort = (success && realPtr) ? realPtr->getPortName() : "";
 
             return {
                 {"success", success},
-                {"mode", success ? "REAL" : "SIM"},
-                {"port", realPort},
+                {"mode", "SIM"},
+                {"port", ""},
                 {"driver_name", m_activeDriver->getDriverName()},
-                {"error", success ? "" : "Failed to connect to hardware"}
+                {"error", "Legacy serial connection removed. Use STM32 Ethernet mode."}
             };
         });
 
@@ -2538,28 +2560,151 @@ void RobotController::registerIpcHandlers() {
     // FIRMWARE_GET_MODE handler
     m_ipcServer->registerHandler(MessageType::FIRMWARE_GET_MODE,
         [this](const Message& request) -> nlohmann::json {
-            auto realPtr = std::dynamic_pointer_cast<firmware::RealFirmwareDriver>(m_realDriver);
-            std::string port = (!m_isSimMode && realPtr) ? realPtr->getPortName() : "";
             return {
-                {"mode", m_isSimMode ? "SIM" : "REAL"},
+                {"mode", m_isSimMode ? "SIM" : "STM32"},
                 {"is_connected", m_activeDriver->isConnected()},
                 {"driver_name", m_activeDriver->getDriverName()},
                 {"is_simulation", m_activeDriver->isSimulation()},
-                {"port", port}
+                {"port", ""}
             };
         });
 
-    // FIRMWARE_SCAN_PORTS handler
+    // FIRMWARE_SCAN_PORTS handler — V2: returns empty, serial ports no longer used
     m_ipcServer->registerHandler(MessageType::FIRMWARE_SCAN_PORTS,
         [this](const Message& request) -> nlohmann::json {
-            LOG_INFO("FIRMWARE_SCAN_PORTS request");
-
-            auto ports = firmware::RealFirmwareDriver::scanPorts();
+            LOG_INFO("FIRMWARE_SCAN_PORTS request — legacy serial removed");
 
             return {
-                {"ports", ports},
-                {"count", ports.size()}
+                {"ports", nlohmann::json::array()},
+                {"count", 0}
             };
+        });
+
+    // ========================================================================
+    // V2: Drive/Home/STM32 IPC Handlers
+    // ========================================================================
+
+    // ENABLE_DRIVES
+    m_ipcServer->registerHandler(MessageType::ENABLE_DRIVES,
+        [this](const Message& request) -> nlohmann::json {
+            uint8_t mask = request.payload.value("axis_mask", 0x3F);
+            LOG_INFO("ENABLE_DRIVES request (mask=0x{:02X})", mask);
+            bool success = enableDrives(mask);
+            return {
+                {"success", success},
+                {"drives_enabled", success}
+            };
+        });
+
+    // DISABLE_DRIVES
+    m_ipcServer->registerHandler(MessageType::DISABLE_DRIVES,
+        [this](const Message& request) -> nlohmann::json {
+            uint8_t mask = request.payload.value("axis_mask", 0x3F);
+            LOG_INFO("DISABLE_DRIVES request (mask=0x{:02X})", mask);
+            bool success = disableDrives(mask);
+            return {
+                {"success", success},
+                {"drives_enabled", false}
+            };
+        });
+
+    // RESET_ALARM
+    m_ipcServer->registerHandler(MessageType::RESET_ALARM,
+        [this](const Message& request) -> nlohmann::json {
+            uint8_t mask = request.payload.value("axis_mask", 0x3F);
+            LOG_INFO("RESET_ALARM request (mask=0x{:02X})", mask);
+            bool success = m_activeDriver->resetAlarm(mask);
+            return {{"success", success}};
+        });
+
+    // HOME_ALL
+    m_ipcServer->registerHandler(MessageType::HOME_ALL,
+        [this](const Message& request) -> nlohmann::json {
+            LOG_INFO("HOME_ALL request");
+            bool success = goHome(0x3F);
+            return {
+                {"success", success},
+                {"homing", success}
+            };
+        });
+
+    // HOME_AXIS
+    m_ipcServer->registerHandler(MessageType::HOME_AXIS,
+        [this](const Message& request) -> nlohmann::json {
+            int axis = request.payload.value("axis", 0);
+            LOG_INFO("HOME_AXIS request (axis={})", axis);
+            bool success = goHome(static_cast<uint8_t>(1 << axis));
+            return {
+                {"success", success},
+                {"axis", axis}
+            };
+        });
+
+    // GET_DRIVE_STATUS
+    m_ipcServer->registerHandler(MessageType::GET_DRIVE_STATUS,
+        [this](const Message& request) -> nlohmann::json {
+            auto pkt = m_activeDriver->getStatusPacket();
+            return {
+                {"drive_ready", pkt.drive_ready},
+                {"drive_alarm", pkt.drive_alarm},
+                {"home_status", pkt.home_status},
+                {"system_state", firmware::protocol::systemStateToString(
+                    static_cast<firmware::protocol::SystemState>(pkt.state))},
+                {"buffer_level", pkt.pvt_buffer_lvl}
+            };
+        });
+
+    // STM32_CONNECT
+    m_ipcServer->registerHandler(MessageType::STM32_CONNECT,
+        [this](const Message& request) -> nlohmann::json {
+            std::string ip = request.payload.value("ip", "192.168.1.100");
+            int port = request.payload.value("port", 5001);
+            LOG_INFO("STM32_CONNECT request: ip={} port={}", ip, port);
+
+            bool success = switchToSTM32Mode(ip, static_cast<uint16_t>(port));
+            return {
+                {"success", success},
+                {"mode", success ? "STM32" : "SIM"},
+                {"ip", ip},
+                {"port", port},
+                {"driver_name", m_activeDriver->getDriverName()},
+                {"error", success ? "" : "Failed to connect to STM32"}
+            };
+        });
+
+    // STM32_DISCONNECT
+    m_ipcServer->registerHandler(MessageType::STM32_DISCONNECT,
+        [this](const Message& request) -> nlohmann::json {
+            LOG_INFO("STM32_DISCONNECT request");
+            switchToSimMode();
+            return {
+                {"success", true},
+                {"mode", "SIM"},
+                {"driver_name", m_activeDriver->getDriverName()}
+            };
+        });
+
+    // GET_IO_STATE
+    m_ipcServer->registerHandler(MessageType::GET_IO_STATE,
+        [this](const Message& request) -> nlohmann::json {
+            return {
+                {"digital_inputs", m_activeDriver->getDigitalInputs()},
+                {"digital_outputs", m_activeDriver->getDigitalOutputs()}
+            };
+        });
+
+    // SET_IO_OUTPUT
+    m_ipcServer->registerHandler(MessageType::SET_IO_OUTPUT,
+        [this](const Message& request) -> nlohmann::json {
+            int index = request.payload.value("index", -1);
+            bool value = request.payload.value("value", false);
+
+            if (index < 0 || index > 15) {
+                return {{"success", false}, {"error", "Invalid I/O index"}};
+            }
+
+            bool success = m_activeDriver->setOutput(static_cast<uint8_t>(index), value);
+            return {{"success", success}};
         });
 
     LOG_DEBUG("IPC handlers registered");

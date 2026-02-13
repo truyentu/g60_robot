@@ -110,7 +110,7 @@ std::string JogController::startContinuousJog(int mode, int axis, int direction,
         return startCartesianJog(axis, direction, speedPercent, frame);
     }
 
-    // Joint jog → G-code to limit (existing approach, works fine)
+    // Joint jog → V2 structured API: jogStart
     auto positions = m_firmwareDriver->getJointPositions();
     double currentPos = positions[axis];
     double target;
@@ -124,14 +124,17 @@ std::string JogController::startContinuousJog(int mode, int axis, int direction,
         return "Joint at soft limit";
     }
 
-    double feedRate = calculateFeedRate(axis, speedPercent);
-    std::string gcode = "$J=G90 J" + std::to_string(axis) + ":" +
-                        std::to_string(target) + " F" + std::to_string(feedRate);
+    // Calculate speed in steps/ms
+    double feedRateDegPerSec = m_maxVelocities[axis] * (speedPercent / 100.0);
+    uint16_t speedStepsPerMs = static_cast<uint16_t>(
+        std::clamp(feedRateDegPerSec * m_firmwareDriver->degreesToSteps(axis, 1.0) / 1000.0, 1.0, 65535.0));
 
-    LOG_DEBUG("JogController: Continuous jog J{} dir={} speed={}% -> gcode: {}",
-              axis, direction, speedPercent, gcode);
+    LOG_DEBUG("JogController: Continuous jog J{} dir={} speed={}% -> V2 jogStart(axis={}, dir={}, speed={})",
+              axis, direction, speedPercent, axis, direction, speedStepsPerMs);
 
-    m_firmwareDriver->sendCommand(gcode);
+    m_firmwareDriver->jogStart(static_cast<uint8_t>(axis),
+                               static_cast<int8_t>(direction),
+                               speedStepsPerMs);
 
     m_isJogging = true;
     m_currentAxis = axis;
@@ -154,8 +157,8 @@ std::string JogController::stopJog() {
         return "";
     }
 
-    // Joint jog: send jog cancel command
-    m_firmwareDriver->sendCommand(std::string(1, '\x85'));
+    // Joint jog: V2 structured jogStop
+    m_firmwareDriver->jogStop();
 
     m_isJogging = false;
     m_currentDirection = 0;
@@ -174,7 +177,7 @@ std::string JogController::jogStep(int mode, int axis, int direction, double inc
         return jogCartesianStep(axis, direction, increment, speedPercent, frame);
     }
 
-    // Joint step jog
+    // Joint step jog — V2: use setJointPositionsDirect for precise step
     if (increment <= 0) {
         return "Increment must be positive";
     }
@@ -190,14 +193,14 @@ std::string JogController::jogStep(int mode, int axis, int direction, double inc
         return "Joint at soft limit";
     }
 
-    double feedRate = calculateFeedRate(axis, speedPercent);
-    std::string gcode = "$J=G90 J" + std::to_string(axis) + ":" +
-                        std::to_string(target) + " F" + std::to_string(feedRate);
+    // Use setJointPositionsDirect for step jog (precise single-step move)
+    auto targetPositions = positions;
+    targetPositions[axis] = target;
 
-    LOG_DEBUG("JogController: Step jog J{} dir={} inc={} -> target={} gcode: {}",
-              axis, direction, increment, target, gcode);
+    LOG_DEBUG("JogController: Step jog J{} dir={} inc={} -> target={} (V2 direct)",
+              axis, direction, increment, target);
 
-    m_firmwareDriver->sendCommand(gcode);
+    m_firmwareDriver->setJointPositionsDirect(targetPositions);
 
     m_isJogging = true;
     m_currentAxis = axis;
@@ -281,8 +284,30 @@ std::string JogController::startCartesianJog(int axis, int direction, double spe
     m_currentMode = 1;
     m_currentFrame = frame;
 
-    LOG_DEBUG("JogController: Cartesian velocity streaming started axis={} dir={} speed={}% frame={} targetV={}",
-              axis, direction, speedPercent, frame, targetSpeed);
+    // === Capture initial TCP pose for fixed-reference jogging ===
+    // This prevents integration drift: instead of using currentPose.rotation
+    // (which drifts due to IK epsilon) to compute each step's direction,
+    // we lock the rotation at session start and use it throughout.
+    m_jogTotalDistance = 0.0;
+    {
+        auto positions = m_firmwareDriver->getJointPositions();
+        kinematics::JointAngles jointRad;
+        for (int i = 0; i < 6; i++) {
+            jointRad[i] = positions[i] * M_PI / 180.0;
+        }
+        auto flangePose = m_urdfFk->compute(jointRad);
+        m_jogStartTcpPose = flangePose;
+        if (m_hasToolOffset) {
+            Eigen::Matrix4d T_flange = flangePose.toTransform();
+            Eigen::Matrix4d T_tcp = T_flange * m_toolTransform;
+            m_jogStartTcpPose = kinematics::TCPPose::fromTransform(T_tcp);
+        }
+    }
+
+    LOG_DEBUG("JogController: Cartesian velocity streaming started axis={} dir={} speed={}% frame={} targetV={} "
+              "startPos=[{:.1f},{:.1f},{:.1f}]",
+              axis, direction, speedPercent, frame, targetSpeed,
+              m_jogStartTcpPose.position[0], m_jogStartTcpPose.position[1], m_jogStartTcpPose.position[2]);
 
     return "";
 }
@@ -318,34 +343,61 @@ void JogController::updateCartesianVelocityStreaming(double dt) {
         return;
     }
 
-    // === Compute Cartesian delta for this timestep ===
-    double delta = m_tcpVelocity * dt;  // mm or deg
+    // === Accumulate total distance (absolute from start) ===
+    double stepDelta = m_tcpVelocity * dt;  // mm or deg
+    m_jogTotalDistance += stepDelta;
 
-    // Skip if delta too small (avoid unnecessary IK computations)
-    if (std::abs(delta) < 0.0001) return;
+    // Skip if total distance too small (avoid unnecessary IK computations)
+    if (std::abs(m_jogTotalDistance) < 0.0001) return;
 
-    // === Get current joint positions and FK ===
+    // === Get current joint positions (for IK seed only) ===
     auto positions = m_firmwareDriver->getJointPositions();
     kinematics::JointAngles jointRad;
     for (int i = 0; i < 6; i++) {
         jointRad[i] = positions[i] * M_PI / 180.0;
     }
 
-    // FK returns last-link pose (no flange offset, no tool TCP)
-    auto flangePose = m_urdfFk->compute(jointRad);
+    // === Compute target TCP pose ABSOLUTELY from start pose ===
+    // Instead of: target = current + delta (drifts due to IK error)
+    // We use:     target = start + totalDistance * fixedDirection
+    // This ensures the path is perfectly straight regardless of IK accuracy.
+    kinematics::TCPPose targetTcpPose = m_jogStartTcpPose;
 
-    // Compute TRUE TCP pose = T_lastLink × T_composed (T_flangeOffset × T_toolTcp)
-    kinematics::TCPPose currentTcpPose = flangePose;
-    if (m_hasToolOffset) {
-        Eigen::Matrix4d T_flange = flangePose.toTransform();
-        Eigen::Matrix4d T_tcp = T_flange * m_toolTransform;
-        currentTcpPose = kinematics::TCPPose::fromTransform(T_tcp);
+    if (m_currentFrame == 2) {
+        // TOOL frame: use FIXED initial rotation to project direction
+        kinematics::Matrix3d R_start = m_jogStartTcpPose.rotation;
+
+        if (isLinear) {
+            kinematics::Vector3d axis_tool = kinematics::Vector3d::Zero();
+            axis_tool[m_currentAxis] = 1.0;
+            kinematics::Vector3d direction_world = R_start * axis_tool;
+            targetTcpPose.position = m_jogStartTcpPose.position + m_jogTotalDistance * direction_world;
+            // Orientation stays EXACTLY the same as start
+            targetTcpPose.rotation = m_jogStartTcpPose.rotation;
+            targetTcpPose.rpy = m_jogStartTcpPose.rpy;
+            targetTcpPose.quaternion = m_jogStartTcpPose.quaternion;
+        } else {
+            // Rotation jog in tool frame
+            kinematics::Vector3d rot_axis_tool = kinematics::Vector3d::Zero();
+            rot_axis_tool[m_currentAxis - 3] = 1.0;
+            kinematics::Vector3d rot_axis_world = R_start * rot_axis_tool;
+            double totalRad = m_jogTotalDistance * M_PI / 180.0;
+            kinematics::AngleAxisd aa(totalRad, rot_axis_world);
+            targetTcpPose.rotation = aa.toRotationMatrix() * m_jogStartTcpPose.rotation;
+            targetTcpPose.rpy = kinematics::rotationToRPY(targetTcpPose.rotation);
+            targetTcpPose.quaternion = kinematics::Quaterniond(targetTcpPose.rotation);
+        }
+    } else {
+        // WORLD/BASE/USER frame: apply total delta directly on start pose
+        if (isLinear) {
+            targetTcpPose.position[m_currentAxis] = m_jogStartTcpPose.position[m_currentAxis] + m_jogTotalDistance;
+        } else {
+            double totalRad = m_jogTotalDistance * M_PI / 180.0;
+            targetTcpPose.rpy[m_currentAxis - 3] = m_jogStartTcpPose.rpy[m_currentAxis - 3] + totalRad;
+            targetTcpPose.rotation = kinematics::rpyToRotation(targetTcpPose.rpy);
+            targetTcpPose.quaternion = kinematics::Quaterniond(targetTcpPose.rotation);
+        }
     }
-
-    // === Apply Cartesian delta in the selected frame ===
-    // Delta is applied on TRUE TCP pose (not flange)
-    kinematics::TCPPose targetTcpPose = currentTcpPose;
-    transformDeltaToWorld(m_currentFrame, m_currentAxis, delta, currentTcpPose, targetTcpPose);
 
     // === Back-calculation: T_flange_desired = T_tcp_desired × T_tool⁻¹ ===
     kinematics::TCPPose targetFlangePose = targetTcpPose;
@@ -379,6 +431,29 @@ void JogController::updateCartesianVelocityStreaming(double dt) {
         kinematics::Matrix3d R_err = verifyPose.rotation.transpose() * targetFlangePose.rotation;
         double orientErr = std::acos(std::clamp((R_err.trace() - 1.0) / 2.0, -1.0, 1.0));
         double orientErrDeg = orientErr * 180.0 / M_PI;
+
+        // Also verify at TCP level (tool amplifies orientation error)
+        double tcpPosErr = 0.0;
+        if (m_hasToolOffset) {
+            Eigen::Matrix4d T_actual_flange = verifyPose.toTransform();
+            Eigen::Matrix4d T_actual_tcp = T_actual_flange * m_toolTransform;
+            Eigen::Matrix4d T_desired_tcp = targetTcpPose.toTransform();
+            kinematics::Vector3d actualTcpPos = T_actual_tcp.block<3,1>(0,3);
+            kinematics::Vector3d desiredTcpPos = T_desired_tcp.block<3,1>(0,3);
+            tcpPosErr = (actualTcpPos - desiredTcpPos).norm();
+        }
+
+        // Periodic debug logging (every ~100 steps based on totalDistance)
+        static int debugCounter = 0;
+        if (++debugCounter % 100 == 0) {
+            LOG_DEBUG("JogController: [DIAG] frame={} axis={} totalDist={:.1f}mm "
+                     "flangeErr={:.3f}mm orientErr={:.3f}deg tcpErr={:.3f}mm "
+                     "targetTCP=[{:.1f},{:.1f},{:.1f}] hasToolOff={}",
+                     m_currentFrame, m_currentAxis, m_jogTotalDistance,
+                     posErr, orientErrDeg, tcpPosErr,
+                     targetTcpPose.position[0], targetTcpPose.position[1], targetTcpPose.position[2],
+                     m_hasToolOffset);
+        }
 
         if (orientErrDeg > 0.5) {
             LOG_WARN("JogController: IK orientation drift REJECTED! posErr={:.3f}mm orientErr={:.1f}deg "
@@ -481,22 +556,18 @@ std::string JogController::jogCartesianStep(int axis, int direction, double incr
         return "IK solution not found (out of workspace)";
     }
 
-    std::ostringstream gcode;
-    gcode << "$J=G90";
-    double maxFeedRate = 0;
+    // V2: Use setJointPositionsDirect for Cartesian step jog
+    std::array<double, 6> targetDeg;
     for (int i = 0; i < 6; i++) {
-        double targetDeg = ikResult->angles[i] * 180.0 / M_PI;
-        targetDeg = std::clamp(targetDeg, m_minLimits[i] + SOFT_LIMIT_MARGIN,
-                                          m_maxLimits[i] - SOFT_LIMIT_MARGIN);
-        gcode << " J" << i << ":" << targetDeg;
-        maxFeedRate = std::max(maxFeedRate, calculateFeedRate(i, speedPercent));
+        targetDeg[i] = ikResult->angles[i] * 180.0 / M_PI;
+        targetDeg[i] = std::clamp(targetDeg[i], m_minLimits[i] + SOFT_LIMIT_MARGIN,
+                                                  m_maxLimits[i] - SOFT_LIMIT_MARGIN);
     }
-    gcode << " F" << maxFeedRate;
 
-    LOG_DEBUG("JogController: Cartesian step axis={} dir={} inc={} frame={} -> {}",
-              axis, direction, increment, frame, gcode.str());
+    LOG_DEBUG("JogController: Cartesian step axis={} dir={} inc={} frame={} (V2 direct)",
+              axis, direction, increment, frame);
 
-    m_firmwareDriver->sendCommand(gcode.str());
+    m_firmwareDriver->setJointPositionsDirect(targetDeg);
 
     m_isJogging = true;
     m_currentAxis = axis;
@@ -614,6 +685,30 @@ std::optional<kinematics::IKSolution> JogController::computeIK(
             }
         }
         return std::nullopt;
+    }
+
+    // === Verify IK accuracy at TCP level ===
+    if (m_urdfFk) {
+        auto verifyFlange = m_urdfFk->compute(result->angles);
+        kinematics::TCPPose verifyTcp = verifyFlange;
+        if (m_hasToolOffset) {
+            Eigen::Matrix4d T_vf = verifyFlange.toTransform();
+            Eigen::Matrix4d T_vt = T_vf * m_toolTransform;
+            verifyTcp = kinematics::TCPPose::fromTransform(T_vt);
+        }
+        double tcpPosErr = (verifyTcp.position - tcpTarget.position).norm();
+        kinematics::Matrix3d R_err = verifyTcp.rotation.transpose() * tcpTarget.rotation;
+        double orientErr = std::acos(std::clamp((R_err.trace() - 1.0) / 2.0, -1.0, 1.0));
+        double orientErrDeg = orientErr * 180.0 / M_PI;
+
+        static int ikDiagCounter = 0;
+        if (++ikDiagCounter % 10 == 0) {
+            LOG_INFO("computeIK [DIAG]: targetTCP=[{:.1f},{:.1f},{:.1f}] actualTCP=[{:.1f},{:.1f},{:.1f}] "
+                     "posErr={:.3f}mm orientErr={:.3f}deg hasToolOff={} iter={}",
+                     tcpTarget.position[0], tcpTarget.position[1], tcpTarget.position[2],
+                     verifyTcp.position[0], verifyTcp.position[1], verifyTcp.position[2],
+                     tcpPosErr, orientErrDeg, m_hasToolOffset, result->iterations);
+        }
     }
 
     return result;
