@@ -106,6 +106,8 @@ enum class MessageType {
     PROGRAM_STATE_CHANGED,
     SET_POINT,
     GET_POINTS,
+    BLOCK_SELECT,
+    BACKWARD_STEP,
 
     // URDF Import (Auto robot package creation)
     PARSE_URDF,
@@ -127,6 +129,21 @@ enum class MessageType {
     FIRMWARE_GET_MODE,
     FIRMWARE_SET_MODE,
     FIRMWARE_SCAN_PORTS,
+
+    // V2: Drive/Home Control
+    ENABLE_DRIVES,
+    DISABLE_DRIVES,
+    RESET_ALARM,
+    HOME_ALL,
+    HOME_AXIS,
+    GET_DRIVE_STATUS,
+    DRIVE_STATUS_CHANGED,
+
+    // V2: STM32 Ethernet Connection
+    STM32_CONNECT,
+    STM32_DISCONNECT,
+    GET_IO_STATE,
+    SET_IO_OUTPUT,
 
     // Commands
     COMMAND,
@@ -213,6 +230,8 @@ inline std::string messageTypeToString(MessageType type) {
         case MessageType::PROGRAM_STATE_CHANGED: return "PROGRAM_STATE_CHANGED";
         case MessageType::SET_POINT:           return "SET_POINT";
         case MessageType::GET_POINTS:          return "GET_POINTS";
+        case MessageType::BLOCK_SELECT:        return "BLOCK_SELECT";
+        case MessageType::BACKWARD_STEP:       return "BACKWARD_STEP";
         case MessageType::PARSE_URDF:          return "PARSE_URDF";
         case MessageType::GENERATE_ROBOT_YAML: return "GENERATE_ROBOT_YAML";
         case MessageType::JOG_START:          return "JOG_START";
@@ -226,6 +245,17 @@ inline std::string messageTypeToString(MessageType type) {
         case MessageType::FIRMWARE_GET_MODE:  return "FIRMWARE_GET_MODE";
         case MessageType::FIRMWARE_SET_MODE:  return "FIRMWARE_SET_MODE";
         case MessageType::FIRMWARE_SCAN_PORTS: return "FIRMWARE_SCAN_PORTS";
+        case MessageType::ENABLE_DRIVES:      return "ENABLE_DRIVES";
+        case MessageType::DISABLE_DRIVES:     return "DISABLE_DRIVES";
+        case MessageType::RESET_ALARM:        return "RESET_ALARM";
+        case MessageType::HOME_ALL:           return "HOME_ALL";
+        case MessageType::HOME_AXIS:          return "HOME_AXIS";
+        case MessageType::GET_DRIVE_STATUS:   return "GET_DRIVE_STATUS";
+        case MessageType::DRIVE_STATUS_CHANGED: return "DRIVE_STATUS_CHANGED";
+        case MessageType::STM32_CONNECT:      return "STM32_CONNECT";
+        case MessageType::STM32_DISCONNECT:   return "STM32_DISCONNECT";
+        case MessageType::GET_IO_STATE:       return "GET_IO_STATE";
+        case MessageType::SET_IO_OUTPUT:      return "SET_IO_OUTPUT";
         case MessageType::COMMAND:             return "COMMAND";
         case MessageType::COMMAND_ACK:         return "COMMAND_ACK";
         case MessageType::ERROR:               return "ERROR";
@@ -306,6 +336,8 @@ inline MessageType stringToMessageType(const std::string& str) {
     if (str == "PROGRAM_STATE_CHANGED") return MessageType::PROGRAM_STATE_CHANGED;
     if (str == "SET_POINT")           return MessageType::SET_POINT;
     if (str == "GET_POINTS")          return MessageType::GET_POINTS;
+    if (str == "BLOCK_SELECT")        return MessageType::BLOCK_SELECT;
+    if (str == "BACKWARD_STEP")       return MessageType::BACKWARD_STEP;
     if (str == "PARSE_URDF")          return MessageType::PARSE_URDF;
     if (str == "GENERATE_ROBOT_YAML") return MessageType::GENERATE_ROBOT_YAML;
     if (str == "JOG_START")          return MessageType::JOG_START;
@@ -319,6 +351,17 @@ inline MessageType stringToMessageType(const std::string& str) {
     if (str == "FIRMWARE_GET_MODE")  return MessageType::FIRMWARE_GET_MODE;
     if (str == "FIRMWARE_SET_MODE")  return MessageType::FIRMWARE_SET_MODE;
     if (str == "FIRMWARE_SCAN_PORTS") return MessageType::FIRMWARE_SCAN_PORTS;
+    if (str == "ENABLE_DRIVES")      return MessageType::ENABLE_DRIVES;
+    if (str == "DISABLE_DRIVES")     return MessageType::DISABLE_DRIVES;
+    if (str == "RESET_ALARM")        return MessageType::RESET_ALARM;
+    if (str == "HOME_ALL")           return MessageType::HOME_ALL;
+    if (str == "HOME_AXIS")          return MessageType::HOME_AXIS;
+    if (str == "GET_DRIVE_STATUS")   return MessageType::GET_DRIVE_STATUS;
+    if (str == "DRIVE_STATUS_CHANGED") return MessageType::DRIVE_STATUS_CHANGED;
+    if (str == "STM32_CONNECT")      return MessageType::STM32_CONNECT;
+    if (str == "STM32_DISCONNECT")   return MessageType::STM32_DISCONNECT;
+    if (str == "GET_IO_STATE")       return MessageType::GET_IO_STATE;
+    if (str == "SET_IO_OUTPUT")      return MessageType::SET_IO_OUTPUT;
     if (str == "COMMAND")             return MessageType::COMMAND;
     if (str == "COMMAND_ACK")         return MessageType::COMMAND_ACK;
     if (str == "ERROR")               return MessageType::ERROR;

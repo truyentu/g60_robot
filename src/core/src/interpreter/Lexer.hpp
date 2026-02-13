@@ -2,9 +2,10 @@
 
 /**
  * @file Lexer.hpp
- * @brief Lexer for RPL (Robot Programming Language)
+ * @brief Lexer for KRL (KUKA Robot Language)
  *
- * Part of Phase 8: Virtual Simulation (IMPL_P8_02)
+ * KRL is case-insensitive. Comments start with ;
+ * Assignment uses = (not :=). System variables start with $.
  */
 
 #include "Token.hpp"

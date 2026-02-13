@@ -2,9 +2,9 @@
 
 /**
  * @file Parser.hpp
- * @brief Parser for RPL (Robot Programming Language)
+ * @brief Parser for KRL (KUKA Robot Language)
  *
- * Part of Phase 8: Virtual Simulation (IMPL_P8_02)
+ * Strict KUKA KRL syntax based on KSS 8.x specifications.
  */
 
 #include "Token.hpp"
@@ -41,23 +41,34 @@ private:
     void error(const std::string& message);
     void synchronize();
     void skipNewlines();
+    bool isKrlType() const;
 
-    // Grammar rules
+    // Program structure
     ProgramStmt parseProgram();
     StmtPtr parseStatement();
+
+    // Declarations
     StmtPtr parseDeclaration();
     StmtPtr parseConstDeclaration();
+
+    // Statements
     StmtPtr parseFunctionCall(const std::string& name);
     StmtPtr parseAssignment(const std::string& name);
     StmtPtr parseSystemAssignment();
     StmtPtr parseMotion(TokenType motionType);
-    StmtPtr parseRapidMotion(TokenType motionType);
     StmtPtr parseWait();
     StmtPtr parseIf();
     StmtPtr parseLoop();
     StmtPtr parseWhile();
-    void consumeOptionalSemicolon();
+    StmtPtr parseFor();
+    StmtPtr parseRepeat();
+    StmtPtr parseSwitch();
+    StmtPtr parseGoto();
+    StmtPtr parseHalt();
+    StmtPtr parseContinue();
+    StmtPtr parseExit();
 
+    // Expressions
     ExprPtr parseExpression();
     ExprPtr parseOr();
     ExprPtr parseAnd();
@@ -69,6 +80,7 @@ private:
     ExprPtr parsePrimary();
     ExprPtr parsePoint(const std::string& name);
     ExprPtr parseSystemVar();
+    ExprPtr parseAggregate();
 };
 
 } // namespace interpreter
