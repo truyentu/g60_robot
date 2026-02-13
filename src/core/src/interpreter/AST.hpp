@@ -176,7 +176,8 @@ struct SystemAssignStmt {
 struct MotionStmt {
     std::string type;      // PTP, LIN, CIRC, PTP_REL, LIN_REL, CIRC_REL
     ExprPtr target;        // Point expression or aggregate
-    ExprPtr auxPoint;      // For CIRC/CIRC_REL
+    ExprPtr auxPoint;      // For CIRC/CIRC_REL (auxiliary/via point)
+    ExprPtr circAngle;     // For CIRC/CIRC_REL: optional CA angle (degrees)
 
     // KRL approximation (from instruction keyword, velocity/tool via system variables)
     bool continuous = false;

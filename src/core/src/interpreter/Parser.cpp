@@ -459,31 +459,50 @@ StmtPtr Parser::parseMotion(TokenType motionType) {
         default: break;
     }
 
-    // Target: HOME, identifier, or inline aggregate {A1 10, A2 -90, ...}
-    if (check(TokenType::HOME)) {
-        advance();
-        PointExpr point;
-        point.name = "HOME";
-        stmt.target = makeExpr(point);
-    } else if (check(TokenType::LBRACE)) {
-        stmt.target = parseAggregate();
-    } else if (check(TokenType::IDENTIFIER)) {
-        Token name = advance();
-        stmt.target = parsePoint(name.lexeme);
-    } else {
+    // Parse first argument (point/aggregate/HOME)
+    auto parsePointArg = [&]() -> ExprPtr {
+        if (check(TokenType::HOME)) {
+            advance();
+            PointExpr point;
+            point.name = "HOME";
+            return makeExpr(point);
+        } else if (check(TokenType::LBRACE)) {
+            return parseAggregate();
+        } else if (check(TokenType::IDENTIFIER)) {
+            Token name = advance();
+            return parsePoint(name.lexeme);
+        }
         error("Expected point name, HOME, or aggregate");
         return nullptr;
-    }
+    };
 
-    // KRL syntax: CIRC auxiliary point, then approximation
-    if ((motionType == TokenType::CIRC || motionType == TokenType::CIRC_REL) && check(TokenType::COMMA)) {
-        advance(); // consume comma
-        if (check(TokenType::LBRACE)) {
-            stmt.auxPoint = parseAggregate();
-        } else if (check(TokenType::IDENTIFIER)) {
-            Token auxName = advance();
-            stmt.auxPoint = parsePoint(auxName.lexeme);
+    bool isCirc = (motionType == TokenType::CIRC || motionType == TokenType::CIRC_REL);
+
+    if (isCirc) {
+        // KRL CIRC syntax: CIRC AuxPoint, TargetPoint <, CA Angle> <C_DIS|C_ORI|C_VEL>
+        stmt.auxPoint = parsePointArg();
+        if (!stmt.auxPoint) return nullptr;
+
+        if (!check(TokenType::COMMA)) {
+            error("Expected ',' after auxiliary point in CIRC");
+            return nullptr;
         }
+        advance(); // consume comma
+
+        stmt.target = parsePointArg();
+        if (!stmt.target) return nullptr;
+
+        // Optional: , CA angle
+        if (check(TokenType::COMMA)) {
+            advance(); // consume comma
+            if (match({TokenType::CA})) {
+                stmt.circAngle = parseExpression();
+            }
+        }
+    } else {
+        // PTP/LIN: single target point
+        stmt.target = parsePointArg();
+        if (!stmt.target) return nullptr;
     }
 
     // Optional approximation: C_PTP, C_DIS, C_VEL, C_ORI

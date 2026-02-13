@@ -14,8 +14,10 @@ public static partial class RegexHelper
     // ========================================================================
 
     /// <summary>
-    /// Match a KRL motion instruction line: PTP/LIN/CIRC targetName [C_PTP|C_DIS|C_VEL|C_ORI]
-    /// Groups: [1]=MotionType, [2]=TargetName
+    /// Match a KRL motion instruction line.
+    /// PTP/LIN: MOTION target
+    /// CIRC: MOTION auxPoint, target
+    /// Groups: [1]=MotionType, [2]=FirstPointName (target for PTP/LIN, auxPoint for CIRC)
     /// </summary>
     [GeneratedRegex(@"(PTP|LIN|CIRC|PTP_REL|LIN_REL|CIRC_REL)\s+([a-zA-Z_]\w*)\b",
         RegexOptions.IgnoreCase | RegexOptions.Compiled)]
@@ -23,10 +25,11 @@ public static partial class RegexHelper
 
     /// <summary>
     /// Match a full KRL motion instruction with optional approximation:
-    /// PTP/LIN/CIRC target [C_PTP|C_DIS|C_VEL|C_ORI]
-    /// Groups: [1]=MotionType, [2]=TargetName, [3]=Approximation (optional)
+    /// PTP/LIN target [C_PTP|C_DIS|C_VEL|C_ORI]
+    /// CIRC auxPoint, target [, CA angle] [C_DIS|C_ORI|C_VEL]
+    /// Groups: [1]=MotionType, [2]=Point1, [3]=Point2 (CIRC only), [4]=CA angle, [5]=Approximation
     /// </summary>
-    [GeneratedRegex(@"(PTP|LIN|CIRC|PTP_REL|LIN_REL|CIRC_REL)\s+([a-zA-Z_]\w*)(?:\s+(C_PTP|C_DIS|C_VEL|C_ORI))?\s*$",
+    [GeneratedRegex(@"(PTP|LIN|CIRC|PTP_REL|LIN_REL|CIRC_REL)\s+([a-zA-Z_]\w*)(?:\s*,\s*([a-zA-Z_]\w*))?(?:\s*,\s*CA\s+([\d\.\-eE]+))?(?:\s+(C_PTP|C_DIS|C_VEL|C_ORI))?\s*$",
         RegexOptions.IgnoreCase | RegexOptions.Compiled)]
     public static partial Regex KrlMotionRegex();
 
@@ -110,9 +113,9 @@ public static partial class RegexHelper
     public static ApproximationType ExtractApproximation(string lineText)
     {
         var match = KrlMotionRegex().Match(lineText);
-        if (!match.Success || !match.Groups[3].Success) return ApproximationType.EXACT;
+        if (!match.Success || !match.Groups[5].Success) return ApproximationType.EXACT;
 
-        return match.Groups[3].Value.ToUpperInvariant() switch
+        return match.Groups[5].Value.ToUpperInvariant() switch
         {
             "C_PTP" => ApproximationType.C_PTP,
             "C_DIS" => ApproximationType.C_DIS,

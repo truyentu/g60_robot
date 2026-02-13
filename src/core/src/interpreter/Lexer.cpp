@@ -89,6 +89,7 @@ const std::unordered_map<std::string, TokenType> Lexer::s_keywords = {
     {"C_DIS", TokenType::C_DIS},
     {"C_VEL", TokenType::C_VEL},
     {"C_ORI", TokenType::C_ORI},
+    {"CA", TokenType::CA},
 
     // Logical operators (KRL keywords)
     {"AND", TokenType::AND},

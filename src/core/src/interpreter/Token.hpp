@@ -54,6 +54,7 @@ enum class TokenType {
 
     // Approximation
     C_PTP, C_DIS, C_VEL, C_ORI,
+    CA,                         // CA (circle angle for CIRC)
 
     // Arithmetic Operators
     PLUS, MINUS, STAR, SLASH,
@@ -159,6 +160,7 @@ inline std::string tokenTypeToString(TokenType type) {
         case TokenType::C_DIS: return "C_DIS";
         case TokenType::C_VEL: return "C_VEL";
         case TokenType::C_ORI: return "C_ORI";
+        case TokenType::CA: return "CA";
         case TokenType::PLUS: return "PLUS";
         case TokenType::MINUS: return "MINUS";
         case TokenType::STAR: return "STAR";

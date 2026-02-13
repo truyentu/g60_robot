@@ -6,17 +6,20 @@ namespace RobotController.Tests;
 /// <summary>
 /// Unit tests for RegexHelper - verifying robustness with messy inputs.
 /// Covers: tabs, extra spaces, trailing comments, mixed case, malformed syntax.
+/// Tests updated for pure KRL (KUKA Robot Language) syntax.
 /// </summary>
 public class RegexHelperTests
 {
     // ========================================================================
-    // ExtractTargetName - Basic Cases
+    // ExtractTargetName - Basic Cases (KRL)
     // ========================================================================
 
     [Theory]
-    [InlineData("MoveL p1, v100, fine, tool0;", "p1")]
-    [InlineData("MoveJ pHome, vmax, z100, tool0;", "pHome")]
-    [InlineData("MoveC pArc, v50, z10, tool0;", "pArc")]
+    [InlineData("LIN p1", "p1")]
+    [InlineData("PTP pHome", "pHome")]
+    [InlineData("CIRC pArc", "pArc")]
+    [InlineData("PTP_REL pRel", "pRel")]
+    [InlineData("LIN_REL pRel2", "pRel2")]
     public void ExtractTargetName_StandardInput_ReturnsTargetName(string line, string expected)
     {
         var result = RegexHelper.ExtractTargetName(line);
@@ -24,16 +27,16 @@ public class RegexHelperTests
     }
 
     // ========================================================================
-    // ExtractTargetName - Messy Inputs (Leader's requirement)
+    // ExtractTargetName - Messy Inputs
     // ========================================================================
 
     [Theory]
-    [InlineData("    MoveL p1, v100, fine, tool0;", "p1")]                    // Leading spaces
-    [InlineData("\tMoveL p1, v100, fine, tool0;", "p1")]                      // Leading tab
-    [InlineData("\t\t  MoveL p1, v100, fine, tool0;", "p1")]                  // Tabs + spaces
-    [InlineData("MoveL   p1 , v100 , fine , tool0 ;", "p1")]                  // Extra spaces everywhere
-    [InlineData("MoveL\tp1,\tv100,\tfine,\ttool0;", "p1")]                    // Tabs as separators
-    [InlineData("MoveL  \t p1  ,v100, fine, tool0;", "p1")]                   // Mixed tabs+spaces
+    [InlineData("    LIN p1", "p1")]                              // Leading spaces
+    [InlineData("\tPTP p1", "p1")]                                // Leading tab
+    [InlineData("\t\t  LIN p1", "p1")]                            // Tabs + spaces
+    [InlineData("LIN   p1", "p1")]                                // Extra spaces
+    [InlineData("LIN\tp1", "p1")]                                 // Tab as separator
+    [InlineData("LIN  \t p1", "p1")]                              // Mixed tabs+spaces
     public void ExtractTargetName_MessyWhitespace_ReturnsTargetName(string line, string expected)
     {
         var result = RegexHelper.ExtractTargetName(line);
@@ -41,11 +44,11 @@ public class RegexHelperTests
     }
 
     [Theory]
-    [InlineData("MoveL P1, v100, fine, tool0;", "P1")]                        // Uppercase target
-    [InlineData("movel p1, v100, fine, tool0;", "p1")]                        // Lowercase motion
-    [InlineData("MOVEL P1, V100, FINE, TOOL0;", "P1")]                        // All uppercase
-    [InlineData("moveL p1, v100, fine, tool0;", "p1")]                        // Mixed case motion
-    [InlineData("MoveL my_target_1, v100, fine, tool0;", "my_target_1")]      // Underscore in name
+    [InlineData("LIN P1", "P1")]                                  // Uppercase target
+    [InlineData("lin p1", "p1")]                                  // Lowercase motion
+    [InlineData("PTP P1", "P1")]                                  // All uppercase
+    [InlineData("Lin p1", "p1")]                                  // Mixed case motion
+    [InlineData("LIN my_target_1", "my_target_1")]                // Underscore in name
     public void ExtractTargetName_CaseVariations_ReturnsTargetName(string line, string expected)
     {
         var result = RegexHelper.ExtractTargetName(line);
@@ -53,27 +56,24 @@ public class RegexHelperTests
     }
 
     [Theory]
-    [InlineData("MoveL p1, v100, fine, tool0; ! go to start", "p1")]          // ABB comment after
-    [InlineData("MoveL p1, v100, fine, tool0; ; KUKA comment", "p1")]         // KUKA comment after
-    [InlineData("MoveL p1, v100, fine, tool0; //C-style comment", "p1")]      // C-style comment after
-    [InlineData("  MoveL p1, v100, fine, tool0 ;  ! approach point  ", "p1")] // Whitespace + comment
-    public void ExtractTargetName_TrailingComments_ReturnsTargetName(string line, string expected)
+    [InlineData("LIN p1 ; go to start", "p1")]                   // KRL comment after
+    [InlineData("  PTP p1 C_PTP", "p1")]                          // With approximation
+    public void ExtractTargetName_TrailingContent_ReturnsTargetName(string line, string expected)
     {
         var result = RegexHelper.ExtractTargetName(line);
         Assert.Equal(expected, result);
     }
 
     [Theory]
-    [InlineData("! This is a comment", null)]                                  // Comment-only line
-    [InlineData("; KUKA comment", null)]                                       // KUKA comment
-    [InlineData("", null)]                                                     // Empty line
-    [InlineData("   ", null)]                                                  // Whitespace-only
-    [InlineData("ArcStart(Job_ID:=1);", null)]                                 // Process command
-    [InlineData("ArcEnd;", null)]                                              // Process command
-    [InlineData("DEF WeldProgram()", null)]                                    // Routine definition
-    [InlineData("END", null)]                                                  // End block
-    [InlineData("CONST robtarget p1 := [[100,200,300],...];", null)]           // Variable definition (not motion)
-    [InlineData("IF flag = TRUE THEN", null)]                                  // Control flow
+    [InlineData("; This is a KRL comment", null)]                  // Comment-only line
+    [InlineData("", null)]                                         // Empty line
+    [InlineData("   ", null)]                                      // Whitespace-only
+    [InlineData("ArcStart(Job_ID:=1)", null)]                      // Process command
+    [InlineData("ArcEnd", null)]                                   // Process command
+    [InlineData("DEF WeldProgram()", null)]                        // Routine definition
+    [InlineData("END", null)]                                      // End block
+    [InlineData("DECL E6POS p1 = {X 100, Y 200, Z 300, A 0, B 0, C 0}", null)] // Variable definition (not motion)
+    [InlineData("IF flag == TRUE THEN", null)]                     // Control flow
     public void ExtractTargetName_NonMotionLines_ReturnsNull(string line, string? expected)
     {
         var result = RegexHelper.ExtractTargetName(line);
@@ -81,16 +81,18 @@ public class RegexHelperTests
     }
 
     // ========================================================================
-    // ExtractMotionType
+    // ExtractMotionType (KRL)
     // ========================================================================
 
     [Theory]
-    [InlineData("MoveL p1, v100, fine, tool0;", MotionType.MoveL)]
-    [InlineData("MoveJ pHome, vmax, z100, tool0;", MotionType.MoveJ)]
-    [InlineData("MoveC pArc, v50, z10, tool0;", MotionType.MoveC)]
-    [InlineData("\t  movel  p1 , v100, fine, tool0;", MotionType.MoveL)]      // Messy + lowercase
-    [InlineData("! comment line", null)]
-    [InlineData("ArcStart;", null)]
+    [InlineData("LIN p1", MotionType.LIN)]
+    [InlineData("PTP pHome", MotionType.PTP)]
+    [InlineData("CIRC pArc", MotionType.CIRC)]
+    [InlineData("PTP_REL pRel", MotionType.PTP)]
+    [InlineData("LIN_REL pRel", MotionType.LIN)]
+    [InlineData("\t  lin  p1", MotionType.LIN)]                   // Messy + lowercase
+    [InlineData("; comment line", null)]
+    [InlineData("ArcStart", null)]
     public void ExtractMotionType_VariousInputs_ReturnsCorrectType(string line, MotionType? expected)
     {
         var result = RegexHelper.ExtractMotionType(line);
@@ -98,15 +100,15 @@ public class RegexHelperTests
     }
 
     // ========================================================================
-    // IsMotionInstruction
+    // IsMotionInstruction (KRL)
     // ========================================================================
 
     [Theory]
-    [InlineData("MoveL p1, v100, fine, tool0;", true)]
-    [InlineData("\tMoveJ pHome, vmax, z100, tool0; ! comment", true)]
-    [InlineData("! just a comment", false)]
-    [InlineData("ArcStart(Job_ID:=1);", false)]
-    [InlineData("CONST robtarget p1 := [[100,0,0],...];", false)]
+    [InlineData("LIN p1", true)]
+    [InlineData("\tPTP pHome ; comment", true)]
+    [InlineData("; just a comment", false)]
+    [InlineData("ArcStart(Job_ID:=1)", false)]
+    [InlineData("DECL E6POS p1 = {X 100, Y 0, Z 0, A 0, B 0, C 0}", false)]
     [InlineData("", false)]
     public void IsMotionInstruction_VariousInputs_ReturnsCorrectResult(string line, bool expected)
     {
@@ -115,69 +117,67 @@ public class RegexHelperTests
     }
 
     // ========================================================================
-    // FindVariableDefinition - Core Touch-Up logic
+    // FindVariableDefinition - Core Touch-Up logic (KRL)
     // ========================================================================
 
     [Fact]
     public void FindVariableDefinition_StandardDefinition_FindsValueRange()
     {
-        var doc = "CONST robtarget p1 := [[600.00,100.00,500.00],[0.7071,0.0000,0.7071,0.0000],[0,0,0,0],[9E9,9E9,9E9,9E9,9E9,9E9]];";
+        var doc = "DECL E6POS p1 = {X 600.00, Y 100.00, Z 500.00, A 0.00, B 90.00, C 0.00}";
         var result = RegexHelper.FindVariableDefinition(doc, "p1");
 
         Assert.NotNull(result);
         var (offset, length, value) = result.Value;
-        Assert.StartsWith("[[600.00", value);
-        Assert.EndsWith("]]", value);
-        // Verify the extracted range is correct by checking the document
+        Assert.StartsWith("{X 600.00", value);
+        Assert.EndsWith("}", value);
         Assert.Equal(value, doc.Substring(offset, length));
     }
 
     [Fact]
     public void FindVariableDefinition_WithIndentation_PreservesContext()
     {
-        var doc = @"! Program header
-    CONST robtarget p1 := [[100.00,200.00,300.00],[1.0,0.0,0.0,0.0],[0,0,0,0],[9E9,9E9,9E9,9E9,9E9,9E9]];
-    CONST robtarget p2 := [[400.00,500.00,600.00],[1.0,0.0,0.0,0.0],[0,0,0,0],[9E9,9E9,9E9,9E9,9E9,9E9]];";
+        var doc = @"; Program header
+    DECL E6POS p1 = {X 100.00, Y 200.00, Z 300.00, A 0.00, B 0.00, C 0.00}
+    DECL E6POS p2 = {X 400.00, Y 500.00, Z 600.00, A 0.00, B 0.00, C 0.00}";
 
         var result = RegexHelper.FindVariableDefinition(doc, "p2");
         Assert.NotNull(result);
         var (offset, length, value) = result.Value;
 
-        // Verify only the value range is returned, not indentation
-        Assert.StartsWith("[[400.00", value);
-        Assert.DoesNotContain("CONST", value);
-        Assert.DoesNotContain("robtarget", value);
+        Assert.StartsWith("{X 400.00", value);
+        Assert.DoesNotContain("DECL", value);
+        Assert.DoesNotContain("E6POS", value);
     }
 
     [Fact]
-    public void FindVariableDefinition_VarQualifier_Works()
+    public void FindVariableDefinition_ConstQualifier_Works()
     {
-        var doc = "VAR robtarget pMid := [[0,0,0],[1,0,0,0],[0,0,0,0],[9E9,9E9,9E9,9E9,9E9,9E9]];";
+        var doc = "CONST E6POS pFixed = {X 0, Y 0, Z 0, A 0, B 0, C 0}";
+        var result = RegexHelper.FindVariableDefinition(doc, "pFixed");
+        Assert.NotNull(result);
+        Assert.StartsWith("{X 0", result.Value.currentValue);
+    }
+
+    [Fact]
+    public void FindVariableDefinition_PosType_Works()
+    {
+        var doc = "DECL POS pMid = {X 10, Y 20, Z 30, A 0, B 0, C 0}";
         var result = RegexHelper.FindVariableDefinition(doc, "pMid");
         Assert.NotNull(result);
-        Assert.StartsWith("[[0,0,0]", result.Value.currentValue);
     }
 
     [Fact]
-    public void FindVariableDefinition_PersQualifier_Works()
+    public void FindVariableDefinition_FrameType_Works()
     {
-        var doc = "PERS robtarget pSaved := [[10,20,30],[1,0,0,0],[0,0,0,0],[9E9,9E9,9E9,9E9,9E9,9E9]];";
-        var result = RegexHelper.FindVariableDefinition(doc, "pSaved");
-        Assert.NotNull(result);
-    }
-
-    [Fact]
-    public void FindVariableDefinition_NoQualifier_Works()
-    {
-        var doc = "robtarget pTemp := [[0,0,0],[1,0,0,0],[0,0,0,0],[9E9,9E9,9E9,9E9,9E9,9E9]];";
-        var result = RegexHelper.FindVariableDefinition(doc, "pTemp");
+        var doc = "DECL FRAME base1 = {X 0, Y 0, Z 0, A 0, B 0, C 0}";
+        var result = RegexHelper.FindVariableDefinition(doc, "base1");
         Assert.NotNull(result);
     }
 
     [Fact]
     public void FindVariableDefinition_NotFound_ReturnsNull()
     {
-        var doc = "CONST robtarget p1 := [[100,200,300],[1,0,0,0],[0,0,0,0],[9E9,9E9,9E9,9E9,9E9,9E9]];";
+        var doc = "DECL E6POS p1 = {X 100, Y 200, Z 300, A 0, B 0, C 0}";
         var result = RegexHelper.FindVariableDefinition(doc, "pNotExist");
         Assert.Null(result);
     }
@@ -185,27 +185,26 @@ public class RegexHelperTests
     [Fact]
     public void FindVariableDefinition_CaseInsensitive_MatchesTarget()
     {
-        var doc = "CONST robtarget pHome := [[500,0,800],[1,0,0,0],[0,0,0,0],[9E9,9E9,9E9,9E9,9E9,9E9]];";
+        var doc = "DECL E6POS pHome = {X 500, Y 0, Z 800, A 0, B 0, C 0}";
         var result = RegexHelper.FindVariableDefinition(doc, "PHOME");
         Assert.NotNull(result);
     }
 
     // ========================================================================
-    // FindVariableDefinition - Formatting Preservation (Action Item #2)
+    // FindVariableDefinition - Formatting Preservation
     // ========================================================================
 
     [Fact]
     public void TouchUp_Simulation_PreservesDocumentFormatting()
     {
-        // Simulate the exact Touch-Up workflow
-        var originalDoc = @"! Robot Program - Welding Example
-! Variable Definitions
-    CONST robtarget pHome := [[500.00,0.00,800.00],[1.0000,0.0000,0.0000,0.0000],[0,0,0,0],[9E9,9E9,9E9,9E9,9E9,9E9]];
-    CONST robtarget p1 := [[600.00,100.00,500.00],[0.7071,0.0000,0.7071,0.0000],[0,0,0,0],[9E9,9E9,9E9,9E9,9E9,9E9]];
+        var originalDoc = @"; Robot Program - Welding Example
+; Variable Definitions
+    DECL E6POS pHome = {X 500.00, Y 0.00, Z 800.00, A 0.00, B 0.00, C 0.00}
+    DECL E6POS p1 = {X 600.00, Y 100.00, Z 500.00, A 0.00, B 90.00, C 0.00}
 
 DEF WeldProgram()
-    MoveJ pHome, vmax, z100, tool0;
-    MoveL p1, v1000, z50, tool0;
+    PTP pHome
+    LIN p1
 END";
 
         // Step 1: Find p1's value range
@@ -214,23 +213,23 @@ END";
         var (offset, length, oldValue) = definition.Value;
 
         // Step 2: Simulate new value from Touch-Up
-        var newValue = "[[650.00,150.00,480.00],[0.7071,0.0000,0.7071,0.0000],[0,0,0,0],[9E9,9E9,9E9,9E9,9E9,9E9]]";
+        var newValue = "{X 650.00, Y 150.00, Z 480.00, A 0.00, B 90.00, C 0.00}";
 
-        // Step 3: Replace (same as ProgramEditorViewModel.ModifyPositionAsync)
+        // Step 3: Replace
         var newDoc = originalDoc.Remove(offset, length).Insert(offset, newValue);
 
         // VERIFY: Indentation preserved
-        Assert.Contains("    CONST robtarget p1 := [[650.00", newDoc);
+        Assert.Contains("    DECL E6POS p1 = {X 650.00", newDoc);
 
         // VERIFY: Other lines untouched
-        Assert.Contains("    CONST robtarget pHome := [[500.00", newDoc);
+        Assert.Contains("    DECL E6POS pHome = {X 500.00", newDoc);
         Assert.Contains("DEF WeldProgram()", newDoc);
-        Assert.Contains("    MoveJ pHome, vmax, z100, tool0;", newDoc);
-        Assert.Contains("    MoveL p1, v1000, z50, tool0;", newDoc);
+        Assert.Contains("    PTP pHome", newDoc);
+        Assert.Contains("    LIN p1", newDoc);
         Assert.Contains("END", newDoc);
 
         // VERIFY: Comment preserved
-        Assert.Contains("! Robot Program - Welding Example", newDoc);
+        Assert.Contains("; Robot Program - Welding Example", newDoc);
 
         // VERIFY: pHome definition NOT changed
         var pHomeResult = RegexHelper.FindVariableDefinition(newDoc, "pHome");
@@ -241,14 +240,14 @@ END";
     [Fact]
     public void TouchUp_Simulation_MultipleUpdates_PreservesStructure()
     {
-        var doc = @"CONST robtarget p1 := [[100,0,0],[1,0,0,0],[0,0,0,0],[9E9,9E9,9E9,9E9,9E9,9E9]];
-CONST robtarget p2 := [[200,0,0],[1,0,0,0],[0,0,0,0],[9E9,9E9,9E9,9E9,9E9,9E9]];
-CONST robtarget p3 := [[300,0,0],[1,0,0,0],[0,0,0,0],[9E9,9E9,9E9,9E9,9E9,9E9]];";
+        var doc = @"DECL E6POS p1 = {X 100, Y 0, Z 0, A 0, B 0, C 0}
+DECL E6POS p2 = {X 200, Y 0, Z 0, A 0, B 0, C 0}
+DECL E6POS p3 = {X 300, Y 0, Z 0, A 0, B 0, C 0}";
 
         // Update p2
         var def = RegexHelper.FindVariableDefinition(doc, "p2");
         Assert.NotNull(def);
-        var newVal = "[[250,50,10],[1,0,0,0],[0,0,0,0],[9E9,9E9,9E9,9E9,9E9,9E9]]";
+        var newVal = "{X 250, Y 50, Z 10, A 0, B 0, C 0}";
         doc = doc.Remove(def.Value.offset, def.Value.length).Insert(def.Value.offset, newVal);
 
         // Verify p1 and p3 untouched
@@ -256,25 +255,25 @@ CONST robtarget p3 := [[300,0,0],[1,0,0,0],[0,0,0,0],[9E9,9E9,9E9,9E9,9E9,9E9]];
         var p3 = RegexHelper.FindVariableDefinition(doc, "p3");
         Assert.NotNull(p1);
         Assert.NotNull(p3);
-        Assert.Contains("100,0,0", p1.Value.currentValue);
-        Assert.Contains("300,0,0", p3.Value.currentValue);
+        Assert.Contains("X 100", p1.Value.currentValue);
+        Assert.Contains("X 300", p3.Value.currentValue);
 
         // Verify p2 updated
         var p2 = RegexHelper.FindVariableDefinition(doc, "p2");
         Assert.NotNull(p2);
-        Assert.Contains("250,50,10", p2.Value.currentValue);
+        Assert.Contains("X 250", p2.Value.currentValue);
     }
 
     // ========================================================================
-    // BuildCoordinateCache
+    // BuildCoordinateCache (KRL)
     // ========================================================================
 
     [Fact]
     public void BuildCoordinateCache_MultipleTargets_ReturnsAll()
     {
-        var doc = @"CONST robtarget p1 := [[100.0,200.0,300.0],[1,0,0,0],[0,0,0,0],[9E9,9E9,9E9,9E9,9E9,9E9]];
-CONST robtarget p2 := [[400.0,500.0,600.0],[1,0,0,0],[0,0,0,0],[9E9,9E9,9E9,9E9,9E9,9E9]];
-VAR robtarget p3 := [[700.0,800.0,900.0],[1,0,0,0],[0,0,0,0],[9E9,9E9,9E9,9E9,9E9,9E9]];";
+        var doc = @"DECL E6POS p1 = {X 100.0, Y 200.0, Z 300.0, A 0, B 0, C 0}
+DECL E6POS p2 = {X 400.0, Y 500.0, Z 600.0, A 0, B 0, C 0}
+CONST E6POS p3 = {X 700.0, Y 800.0, Z 900.0, A 0, B 0, C 0}";
 
         var cache = RegexHelper.BuildCoordinateCache(doc);
 
@@ -289,7 +288,7 @@ VAR robtarget p3 := [[700.0,800.0,900.0],[1,0,0,0],[0,0,0,0],[9E9,9E9,9E9,9E9,9E
     [Fact]
     public void BuildCoordinateCache_ScientificNotation_ParsesCorrectly()
     {
-        var doc = "CONST robtarget p1 := [[1.5E2,2.0E1,3.0E-1],[1,0,0,0],[0,0,0,0],[9E9,9E9,9E9,9E9,9E9,9E9]];";
+        var doc = "DECL E6POS p1 = {X 1.5E2, Y 2.0E1, Z 3.0E-1, A 0, B 0, C 0}";
         var cache = RegexHelper.BuildCoordinateCache(doc);
 
         Assert.Single(cache);
@@ -301,7 +300,7 @@ VAR robtarget p3 := [[700.0,800.0,900.0],[1,0,0,0],[0,0,0,0],[9E9,9E9,9E9,9E9,9E
     [Fact]
     public void BuildCoordinateCache_NegativeCoordinates_ParsesCorrectly()
     {
-        var doc = "CONST robtarget p1 := [[-100.5,-200.3,-300.7],[1,0,0,0],[0,0,0,0],[9E9,9E9,9E9,9E9,9E9,9E9]];";
+        var doc = "DECL E6POS p1 = {X -100.5, Y -200.3, Z -300.7, A 0, B 0, C 0}";
         var cache = RegexHelper.BuildCoordinateCache(doc);
 
         Assert.Single(cache);
@@ -318,24 +317,24 @@ VAR robtarget p3 := [[700.0,800.0,900.0],[1,0,0,0],[0,0,0,0],[9E9,9E9,9E9,9E9,9E
     }
 
     [Fact]
-    public void BuildCoordinateCache_NoRobTargets_ReturnsEmpty()
+    public void BuildCoordinateCache_NoE6Pos_ReturnsEmpty()
     {
-        var doc = @"! Just comments
+        var doc = @"; Just comments
 DEF MyProgram()
-    MoveL p1, v100, fine, tool0;
+    LIN p1
 END";
         var cache = RegexHelper.BuildCoordinateCache(doc);
         Assert.Empty(cache);
     }
 
     // ========================================================================
-    // ParsePosition
+    // ParsePosition (KRL aggregate)
     // ========================================================================
 
     [Theory]
-    [InlineData("[[100,200,300],[1,0,0,0],[0,0,0,0],[9E9,9E9,9E9,9E9,9E9,9E9]]", 100, 200, 300)]
-    [InlineData("[[100.50,200.75,300.25],[1,0,0,0],[0,0,0,0],[9E9,9E9,9E9,9E9,9E9,9E9]]", 100.5, 200.75, 300.25)]
-    [InlineData("[[-50,0,1000],[1,0,0,0],[0,0,0,0],[9E9,9E9,9E9,9E9,9E9,9E9]]", -50, 0, 1000)]
+    [InlineData("{X 100, Y 200, Z 300, A 0, B 0, C 0}", 100, 200, 300)]
+    [InlineData("{X 100.50, Y 200.75, Z 300.25, A 0, B 0, C 0}", 100.5, 200.75, 300.25)]
+    [InlineData("{X -50, Y 0, Z 1000, A 0, B 0, C 0}", -50, 0, 1000)]
     public void ParsePosition_ValidValues_ReturnsCorrectCoordinates(string value, double expX, double expY, double expZ)
     {
         var result = RegexHelper.ParsePosition(value);
@@ -347,8 +346,8 @@ END";
 
     [Theory]
     [InlineData("")]
-    [InlineData("not a robtarget")]
-    [InlineData("[100,200,300]")]  // Missing outer bracket
+    [InlineData("not an e6pos")]
+    [InlineData("100,200,300")]   // Missing field names
     public void ParsePosition_InvalidValues_ReturnsNull(string value)
     {
         var result = RegexHelper.ParsePosition(value);
@@ -360,13 +359,13 @@ END";
     // ========================================================================
 
     [Theory]
-    [InlineData("ArcStart(Job_ID:=1);", true, "1")]
-    [InlineData("ArcStart(Job_ID:=5);", true, "5")]
-    [InlineData("ArcStart(Job_ID := 3);", true, "3")]        // Extra spaces
-    [InlineData("ArcStart;", true, null)]                      // No Job_ID
-    [InlineData("ArcStart()", true, null)]                     // Empty parens
-    [InlineData("arcstart(Job_ID:=1);", true, "1")]           // Lowercase
-    [InlineData("MoveL p1;", false, null)]                     // Not ArcStart
+    [InlineData("ArcStart(Job_ID:=1)", true, "1")]
+    [InlineData("ArcStart(Job_ID:=5)", true, "5")]
+    [InlineData("ArcStart(Job_ID := 3)", true, "3")]              // Extra spaces
+    [InlineData("ArcStart", true, null)]                           // No Job_ID
+    [InlineData("ArcStart()", true, null)]                         // Empty parens
+    [InlineData("arcstart(Job_ID:=1)", true, "1")]                // Lowercase
+    [InlineData("LIN p1", false, null)]                            // Not ArcStart
     public void ArcStartRegex_VariousInputs_MatchesCorrectly(string line, bool shouldMatch, string? expectedJobId)
     {
         var match = RegexHelper.ArcStartRegex().Match(line);
@@ -378,40 +377,41 @@ END";
     }
 
     [Theory]
-    [InlineData("ArcEnd;", true)]
     [InlineData("ArcEnd", true)]
-    [InlineData("arcend;", true)]
-    [InlineData("  ArcEnd  ;  ", true)]
-    [InlineData("ArcStart;", false)]
+    [InlineData("arcend", true)]
+    [InlineData("  ArcEnd  ", true)]
+    [InlineData("ArcStart", false)]
     public void ArcEndRegex_VariousInputs_MatchesCorrectly(string line, bool shouldMatch)
     {
         Assert.Equal(shouldMatch, RegexHelper.ArcEndRegex().IsMatch(line));
     }
 
     // ========================================================================
-    // RobTarget Model Tests
+    // RobTarget Model Tests (KRL E6POS)
     // ========================================================================
 
     [Fact]
-    public void RobTarget_ToRplString_ProducesValidFormat()
+    public void RobTarget_ToKrlString_ProducesValidFormat()
     {
         var target = new RobTarget
         {
             Name = "p1",
             X = 600.0, Y = 100.0, Z = 500.0,
-            Q1 = 0.7071, Q2 = 0.0, Q3 = 0.7071, Q4 = 0.0,
-            Cf1 = 0, Cf4 = 0, Cf6 = 0, Cfx = 0
+            A = 0.0, B = 90.0, C = 0.0
         };
 
-        var rpl = target.ToRplString();
+        var krl = target.ToKrlString();
 
-        Assert.StartsWith("[[600.00,100.00,500.00]", rpl);
-        Assert.Contains("[0.7071,0.0000,0.7071,0.0000]", rpl);
-        Assert.Contains("[0,0,0,0]", rpl);
-        Assert.EndsWith("]]", rpl);
+        Assert.StartsWith("{X 600.00", krl);
+        Assert.Contains("Y 100.00", krl);
+        Assert.Contains("Z 500.00", krl);
+        Assert.Contains("A 0.00", krl);
+        Assert.Contains("B 90.00", krl);
+        Assert.Contains("C 0.00", krl);
+        Assert.EndsWith("}", krl);
 
         // Verify it can be parsed back
-        var pos = RegexHelper.ParsePosition(rpl);
+        var pos = RegexHelper.ParsePosition(krl);
         Assert.NotNull(pos);
         Assert.Equal(600.0, pos.Value.x, 0.01);
         Assert.Equal(100.0, pos.Value.y, 0.01);
@@ -419,34 +419,86 @@ END";
     }
 
     [Fact]
-    public void RobTarget_FromPose_ConvertsEulerToQuaternion()
+    public void RobTarget_FromPose_StoresEulerAngles()
     {
-        // Identity orientation (0,0,0 Euler = [1,0,0,0] quaternion)
-        var target = RobTarget.FromPose("test", new double[] { 100, 200, 300, 0, 0, 0 });
+        var target = RobTarget.FromPose("test", new double[] { 100, 200, 300, 45, 90, 0 });
 
         Assert.Equal("test", target.Name);
         Assert.Equal(100.0, target.X, 0.01);
         Assert.Equal(200.0, target.Y, 0.01);
         Assert.Equal(300.0, target.Z, 0.01);
-        Assert.Equal(1.0, target.Q1, 0.01);
-        Assert.Equal(0.0, target.Q2, 0.01);
-        Assert.Equal(0.0, target.Q3, 0.01);
-        Assert.Equal(0.0, target.Q4, 0.01);
+        Assert.Equal(45.0, target.A, 0.01);
+        Assert.Equal(90.0, target.B, 0.01);
+        Assert.Equal(0.0, target.C, 0.01);
     }
 
     [Fact]
-    public void RobTarget_RoundTrip_ToRplString_ThenParse()
+    public void RobTarget_RoundTrip_ToKrlString_ThenParse()
     {
         var original = RobTarget.FromPose("pTest", new double[] { 123.45, -67.89, 456.78, 0, 0, 0 });
-        var rpl = original.ToRplString();
+        var krl = original.ToKrlString();
 
         // Put into a document
-        var doc = $"CONST robtarget pTest := {rpl};";
+        var doc = $"DECL E6POS pTest = {krl}";
         var cache = RegexHelper.BuildCoordinateCache(doc);
 
         Assert.True(cache.ContainsKey("pTest"));
         Assert.Equal(123.45, cache["pTest"].x, 0.01);
         Assert.Equal(-67.89, cache["pTest"].y, 0.01);
         Assert.Equal(456.78, cache["pTest"].z, 0.01);
+    }
+
+    // ========================================================================
+    // KrlMotionRegex - CIRC syntax (KRL: CIRC auxPoint, target <, CA angle> <approx>)
+    // ========================================================================
+
+    [Theory]
+    [InlineData("CIRC pAux, pTarget", true, "pAux", "pTarget", null, null)]
+    [InlineData("CIRC pAux, pTarget C_DIS", true, "pAux", "pTarget", null, "C_DIS")]
+    [InlineData("CIRC pAux, pTarget, CA 120.0 C_VEL", true, "pAux", "pTarget", "120.0", "C_VEL")]
+    [InlineData("CIRC pAux, pTarget, CA 360", true, "pAux", "pTarget", "360", null)]
+    [InlineData("LIN p1 C_DIS", true, "p1", null, null, "C_DIS")]
+    [InlineData("PTP pHome C_PTP", true, "pHome", null, null, "C_PTP")]
+    [InlineData("PTP pHome", true, "pHome", null, null, null)]
+    public void KrlMotionRegex_VariousInputs_MatchesCorrectly(
+        string line, bool shouldMatch, string? group2, string? group3, string? caAngle, string? approx)
+    {
+        var match = RegexHelper.KrlMotionRegex().Match(line);
+        Assert.Equal(shouldMatch, match.Success);
+        if (shouldMatch)
+        {
+            Assert.Equal(group2 ?? "", match.Groups[2].Success ? match.Groups[2].Value : "");
+            if (group3 != null)
+                Assert.Equal(group3, match.Groups[3].Value);
+            else
+                Assert.False(match.Groups[3].Success);
+            if (caAngle != null)
+                Assert.Equal(caAngle, match.Groups[4].Value);
+            else
+                Assert.False(match.Groups[4].Success);
+            if (approx != null)
+                Assert.Equal(approx, match.Groups[5].Value);
+            else
+                Assert.False(match.Groups[5].Success);
+        }
+    }
+
+    // ========================================================================
+    // ExtractApproximation (KRL)
+    // ========================================================================
+
+    [Theory]
+    [InlineData("PTP p1 C_PTP", ApproximationType.C_PTP)]
+    [InlineData("LIN p1 C_DIS", ApproximationType.C_DIS)]
+    [InlineData("LIN p1 C_VEL", ApproximationType.C_VEL)]
+    [InlineData("LIN p1 C_ORI", ApproximationType.C_ORI)]
+    [InlineData("PTP p1", ApproximationType.EXACT)]
+    [InlineData("CIRC pAux, pTarget C_DIS", ApproximationType.C_DIS)]
+    [InlineData("CIRC pAux, pTarget, CA 180 C_VEL", ApproximationType.C_VEL)]
+    [InlineData("CIRC pAux, pTarget", ApproximationType.EXACT)]
+    public void ExtractApproximation_VariousInputs_ReturnsCorrectType(string line, ApproximationType expected)
+    {
+        var result = RegexHelper.ExtractApproximation(line);
+        Assert.Equal(expected, result);
     }
 }

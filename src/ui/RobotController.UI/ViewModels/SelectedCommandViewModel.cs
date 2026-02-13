@@ -103,13 +103,17 @@ public partial class SelectedCommandViewModel : ObservableObject
             LineNumber = lineNumber;
             OriginalLineText = lineText;
 
-            // Try KRL motion instruction: PTP target [C_DIS]
+            // Try KRL motion instruction: PTP/LIN target or CIRC auxPoint, target
             var motionMatch = RegexHelper.KrlMotionRegex().Match(lineText);
             if (motionMatch.Success)
             {
                 CommandType = InlineCommandType.Motion;
                 MotionType = motionMatch.Groups[1].Value.ToUpperInvariant();
-                TargetName = motionMatch.Groups[2].Value;
+                // For CIRC: group[2]=auxPoint, group[3]=target; for PTP/LIN: group[2]=target
+                if (motionMatch.Groups[3].Success)
+                    TargetName = motionMatch.Groups[3].Value;  // CIRC target
+                else
+                    TargetName = motionMatch.Groups[2].Value;  // PTP/LIN target
                 Approximation = RegexHelper.ExtractApproximation(lineText);
                 return true;
             }

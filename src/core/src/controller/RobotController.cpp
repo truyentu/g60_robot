@@ -408,6 +408,15 @@ bool RobotController::loadProgram(const std::string& source) {
             LOG_INFO("Motion {} to '{}': [{:.1f}, {:.1f}, {:.1f}, {:.1f}, {:.1f}, {:.1f}]",
                      motion.type, pointName, tx, ty, tz, rx_deg, ry_deg, rz_deg);
 
+            // Log CIRC-specific parameters
+            if (motion.auxPoint) {
+                LOG_INFO("  CIRC auxPoint present");
+            }
+            if (motion.circAngle) {
+                double angle = m_programExecutor->evaluateExpression(motion.circAngle);
+                LOG_INFO("  CIRC CA angle: {:.1f} deg", angle);
+            }
+
             // 4. Check if kinematics available
             if (!m_jogController || !m_jogController->hasKinematics()) {
                 LOG_WARN("Motion {}: kinematics not initialized, skipping", motion.type);
