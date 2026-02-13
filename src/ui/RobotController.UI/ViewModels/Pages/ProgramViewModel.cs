@@ -1,11 +1,15 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Win32;
+using Serilog;
 using System.Collections.ObjectModel;
+using System.IO;
+using System.Text.Json;
 
 namespace RobotController.UI.ViewModels.Pages;
 
 /// <summary>
-/// ViewModel for Program management view
+/// ViewModel for Program management view — includes Navigator softkey actions
 /// </summary>
 public partial class ProgramViewModel : ObservableObject
 {
@@ -32,11 +36,17 @@ public partial class ProgramViewModel : ObservableObject
     [ObservableProperty]
     private string _programStatus = "Ready";
 
+    [ObservableProperty]
+    private bool _showModulesOnly;
+
+    // Clipboard for Cut/Copy/Paste
+    private ProgramItem? _clipboard;
+    private bool _isCut;
+
     partial void OnSelectedProgramChanged(ProgramItem? value)
     {
         if (value != null)
         {
-            // Load program code
             ProgramCode = $"; Program: {value.Name}\n; {value.Description}\n\nMOVJ P1 V=50%\nMOVL P2 V=100mm/s\nARCON\nMOVL P3 V=10mm/s\nARCOFF\nMOVJ P4 V=50%\nEND";
             UpdateCounts();
         }
@@ -61,6 +71,183 @@ public partial class ProgramViewModel : ObservableObject
         PointCount = lines.Count(l => l.Trim().StartsWith("MOV", StringComparison.OrdinalIgnoreCase));
     }
 
+    // ====== Navigator Softkey Actions ======
+
+    /// <summary>Create program with a specific name (called from MainViewModel dialog)</summary>
+    public void CreateProgramWithName(string name, string description)
+    {
+        var newProgram = new ProgramItem
+        {
+            Name = name,
+            Description = string.IsNullOrEmpty(description) ? "New program" : description
+        };
+        Programs.Add(newProgram);
+        SelectedProgram = newProgram;
+        ProgramStatus = $"Created: {name}";
+        Log.Information("New program created: {Name}", name);
+    }
+
+    /// <summary>Duplicate selected program with "_Copy" suffix</summary>
+    public void DuplicateSelectedProgram()
+    {
+        if (SelectedProgram == null) return;
+
+        var baseName = SelectedProgram.Name;
+        var copyName = baseName + "_Copy";
+
+        // Avoid name collision
+        int suffix = 1;
+        while (Programs.Any(p => p.Name == copyName))
+        {
+            copyName = $"{baseName}_Copy{suffix++}";
+        }
+
+        var duplicate = new ProgramItem
+        {
+            Name = copyName,
+            Description = SelectedProgram.Description
+        };
+        Programs.Add(duplicate);
+        SelectedProgram = duplicate;
+        ProgramStatus = $"Duplicated: {copyName}";
+        Log.Information("Program duplicated: {Source} -> {Copy}", baseName, copyName);
+    }
+
+    /// <summary>Archive all programs to JSON file</summary>
+    public async Task ArchiveProgramsAsync()
+    {
+        var dlg = new SaveFileDialog
+        {
+            Title = "Archive Programs",
+            Filter = "JSON Archive (*.json)|*.json|All Files (*.*)|*.*",
+            FileName = $"programs_archive_{DateTime.Now:yyyyMMdd_HHmmss}.json"
+        };
+
+        if (dlg.ShowDialog() != true) return;
+
+        try
+        {
+            var archive = Programs.Select(p => new
+            {
+                p.Name,
+                p.Description,
+                Code = p == SelectedProgram ? ProgramCode : ""
+            }).ToList();
+
+            var json = JsonSerializer.Serialize(archive, new JsonSerializerOptions { WriteIndented = true });
+            await File.WriteAllTextAsync(dlg.FileName, json);
+
+            ProgramStatus = $"Archived {Programs.Count} programs";
+            Log.Information("Programs archived to: {Path}", dlg.FileName);
+        }
+        catch (Exception ex)
+        {
+            ProgramStatus = $"Archive failed: {ex.Message}";
+            Log.Error(ex, "Failed to archive programs");
+        }
+    }
+
+    /// <summary>Rename selected program</summary>
+    public void RenameSelectedProgram(string newName)
+    {
+        if (SelectedProgram == null) return;
+        var oldName = SelectedProgram.Name;
+        SelectedProgram.Name = newName;
+
+        // Force UI refresh by re-setting
+        var idx = Programs.IndexOf(SelectedProgram);
+        if (idx >= 0)
+        {
+            var item = Programs[idx];
+            Programs.RemoveAt(idx);
+            Programs.Insert(idx, item);
+            SelectedProgram = item;
+        }
+
+        ProgramStatus = $"Renamed: {oldName} -> {newName}";
+        Log.Information("Program renamed: {Old} -> {New}", oldName, newName);
+    }
+
+    // ====== Edit Submenu Actions ======
+
+    public void EditMenuAction(string action)
+    {
+        switch (action)
+        {
+            case "Cut": CutProgram(); break;
+            case "Copy": CopyProgram(); break;
+            case "Paste": PasteProgram(); break;
+            case "Rename": break; // Handled via MainViewModel dialog
+            case "Filter": ToggleFilter(); break;
+        }
+    }
+
+    private void CutProgram()
+    {
+        if (SelectedProgram == null) return;
+        _clipboard = SelectedProgram;
+        _isCut = true;
+        ProgramStatus = $"Cut: {SelectedProgram.Name}";
+    }
+
+    private void CopyProgram()
+    {
+        if (SelectedProgram == null) return;
+        _clipboard = new ProgramItem
+        {
+            Name = SelectedProgram.Name,
+            Description = SelectedProgram.Description
+        };
+        _isCut = false;
+        ProgramStatus = $"Copied: {SelectedProgram.Name}";
+    }
+
+    private void PasteProgram()
+    {
+        if (_clipboard == null)
+        {
+            ProgramStatus = "Nothing to paste";
+            return;
+        }
+
+        if (_isCut)
+        {
+            // Move: remove from old location (if still exists) and add
+            Programs.Remove(_clipboard);
+            Programs.Add(_clipboard);
+            SelectedProgram = _clipboard;
+            _isCut = false;
+        }
+        else
+        {
+            // Copy: create new with "_Paste" suffix
+            var pasteName = _clipboard.Name + "_Paste";
+            int suffix = 1;
+            while (Programs.Any(p => p.Name == pasteName))
+            {
+                pasteName = $"{_clipboard.Name}_Paste{suffix++}";
+            }
+
+            var pasted = new ProgramItem
+            {
+                Name = pasteName,
+                Description = _clipboard.Description
+            };
+            Programs.Add(pasted);
+            SelectedProgram = pasted;
+        }
+
+        ProgramStatus = $"Pasted: {SelectedProgram?.Name}";
+    }
+
+    private void ToggleFilter()
+    {
+        ShowModulesOnly = !ShowModulesOnly;
+        ProgramStatus = ShowModulesOnly ? "Filter: Modules only" : "Filter: All files";
+    }
+
+    // ====== Existing Commands ======
+
     [RelayCommand]
     private void NewProgram()
     {
@@ -74,7 +261,7 @@ public partial class ProgramViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void DeleteProgram()
+    public void DeleteProgram()
     {
         if (SelectedProgram != null)
         {
@@ -86,7 +273,6 @@ public partial class ProgramViewModel : ObservableObject
     [RelayCommand]
     private void ImportProgram()
     {
-        // TODO: Open file dialog
         ProgramStatus = "Import not implemented";
     }
 

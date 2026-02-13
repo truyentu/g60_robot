@@ -252,3 +252,33 @@ public class GetPointsResponse
     [JsonPropertyName("points")]
     public Dictionary<string, double[]> Points { get; set; } = new();
 }
+
+public class BlockSelectResponse
+{
+    [JsonPropertyName("success")]
+    public bool Success { get; set; }
+
+    [JsonPropertyName("error")]
+    public string? Error { get; set; }
+
+    [JsonPropertyName("state")]
+    public string State { get; set; } = "IDLE";
+
+    [JsonPropertyName("current_line")]
+    public int CurrentLine { get; set; }
+}
+
+public class BackwardStepResponse
+{
+    [JsonPropertyName("success")]
+    public bool Success { get; set; }
+
+    [JsonPropertyName("error")]
+    public string? Error { get; set; }
+
+    [JsonPropertyName("state")]
+    public string State { get; set; } = "IDLE";
+
+    [JsonPropertyName("current_line")]
+    public int CurrentLine { get; set; }
+}

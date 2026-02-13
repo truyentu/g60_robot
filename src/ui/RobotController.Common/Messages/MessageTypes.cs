@@ -97,6 +97,8 @@ public static class MessageTypes
     public const string PROGRAM_STATE_CHANGED = "PROGRAM_STATE_CHANGED";
     public const string SET_POINT = "SET_POINT";
     public const string GET_POINTS = "GET_POINTS";
+    public const string BLOCK_SELECT = "BLOCK_SELECT";
+    public const string BACKWARD_STEP = "BACKWARD_STEP";
 
     // URDF Import (Auto robot package creation)
     public const string PARSE_URDF = "PARSE_URDF";
@@ -118,6 +120,21 @@ public static class MessageTypes
     public const string FIRMWARE_GET_MODE = "FIRMWARE_GET_MODE";
     public const string FIRMWARE_SET_MODE = "FIRMWARE_SET_MODE";
     public const string FIRMWARE_SCAN_PORTS = "FIRMWARE_SCAN_PORTS";
+
+    // V2: Drive/Home Control
+    public const string ENABLE_DRIVES = "ENABLE_DRIVES";
+    public const string DISABLE_DRIVES = "DISABLE_DRIVES";
+    public const string RESET_ALARM = "RESET_ALARM";
+    public const string HOME_ALL = "HOME_ALL";
+    public const string HOME_AXIS = "HOME_AXIS";
+    public const string GET_DRIVE_STATUS = "GET_DRIVE_STATUS";
+    public const string DRIVE_STATUS_CHANGED = "DRIVE_STATUS_CHANGED";
+
+    // V2: STM32 Ethernet Connection
+    public const string STM32_CONNECT = "STM32_CONNECT";
+    public const string STM32_DISCONNECT = "STM32_DISCONNECT";
+    public const string GET_IO_STATE = "GET_IO_STATE";
+    public const string SET_IO_OUTPUT = "SET_IO_OUTPUT";
 
     // Commands
     public const string COMMAND = "COMMAND";

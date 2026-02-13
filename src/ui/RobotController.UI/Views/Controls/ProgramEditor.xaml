@@ -22,7 +22,7 @@
         </Grid.ColumnDefinitions>
 
         <!-- Toolbar -->
-        <Border Grid.Row="0" Grid.ColumnSpan="2" Background="#2D2D30" Padding="8">
+        <Border Grid.Row="0" Grid.ColumnSpan="2" Background="#4E4E4E" Padding="8">
             <StackPanel Orientation="Horizontal">
                 <Button Content="Open" Command="{Binding OpenFileCommand}"
                         Margin="2" Padding="12,6"
@@ -52,11 +52,26 @@
                 <Button Content="Step" Command="{Binding StepProgramCommand}"
                         Margin="2" Padding="12,6"
                         Background="#555555" Foreground="White"
-                        BorderThickness="0" Cursor="Hand"/>
+                        BorderThickness="0" Cursor="Hand"
+                        ToolTip="Execute one statement forward"/>
+                <Button Content="Step Back" Command="{Binding BackwardStepCommand}"
+                        Margin="2" Padding="12,6"
+                        Background="#7B1FA2" Foreground="White"
+                        BorderThickness="0" Cursor="Hand"
+                        ToolTip="Undo last executed statement (BWD)"/>
                 <Button Content="Reset" Command="{Binding ResetProgramCommand}"
                         Margin="2" Padding="12,6"
                         Background="#555555" Foreground="White"
                         BorderThickness="0" Cursor="Hand"/>
+
+                <Separator Margin="15,0" Width="1" Background="#555555"/>
+
+                <!-- Block Select: Jump to caret line -->
+                <Button Content="Block Sel" Command="{Binding BlockSelectCommand}"
+                        Margin="2" Padding="12,6"
+                        Background="#0277BD" Foreground="White"
+                        BorderThickness="0" Cursor="Hand"
+                        ToolTip="Jump execution to current caret line (Satzanwahl)"/>
 
                 <Separator Margin="15,0" Width="1" Background="#555555"/>
 
@@ -78,13 +93,13 @@
         </Border>
 
         <!-- Code Editor -->
-        <Border Grid.Row="1" Grid.Column="0" Background="#1E1E1E" BorderThickness="0">
+        <Border Grid.Row="1" Grid.Column="0" Background="#2A2A2A" BorderThickness="0">
             <Grid>
                 <avalon:TextEditor x:Name="CodeEditor"
                                    FontFamily="Consolas"
                                    FontSize="14"
                                    ShowLineNumbers="True"
-                                   Background="#1E1E1E"
+                                   Background="#2A2A2A"
                                    Foreground="#D4D4D4"
                                    LineNumbersForeground="#858585"
                                    HorizontalScrollBarVisibility="Auto"
@@ -161,9 +176,9 @@
         </Border>
 
         <!-- Point Database + Touch-Up Panel -->
-        <Border Grid.Row="1" Grid.Column="1" Background="#252526">
+        <Border Grid.Row="1" Grid.Column="1" Background="#3E3E3E">
             <DockPanel>
-                <Border DockPanel.Dock="Top" Background="#333337" Padding="10,8">
+                <Border DockPanel.Dock="Top" Background="#525252" Padding="10,8">
                     <TextBlock Text="POINTS" FontWeight="SemiBold" Foreground="#AAAAAA" FontSize="11"/>
                 </Border>
 
@@ -227,6 +242,11 @@
                     <Run Text="Line: " FontWeight="SemiBold"/>
                     <Run Text="{Binding CaretLineNumber}"/>
                 </TextBlock>
+                <TextBlock Foreground="#FFD700" Margin="30,0,0,0"
+                           Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}">
+                    <Run Text="Exec: " FontWeight="SemiBold"/>
+                    <Run Text="{Binding CurrentLine}"/>
+                </TextBlock>
                 <TextBlock Foreground="White" Margin="30,0,0,0">
                     <Run Text="Program: " FontWeight="SemiBold"/>
                     <Run Text="{Binding ProgramName}"/>
@@ -241,9 +261,9 @@
         </Border>
 
         <!-- Errors Panel -->
-        <Border Grid.Row="3" Grid.ColumnSpan="2" Background="#1E1E1E">
+        <Border Grid.Row="3" Grid.ColumnSpan="2" Background="#2A2A2A">
             <DockPanel>
-                <Border DockPanel.Dock="Top" Background="#252526" Padding="10,6">
+                <Border DockPanel.Dock="Top" Background="#3E3E3E" Padding="10,6">
                     <TextBlock Text="ERRORS" Foreground="#F44336" FontWeight="SemiBold" FontSize="11"/>
                 </Border>
                 <ScrollViewer VerticalScrollBarVisibility="Auto">

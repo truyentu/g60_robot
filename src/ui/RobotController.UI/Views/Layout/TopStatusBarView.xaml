@@ -1,0 +1,978 @@
+<UserControl x:Class="RobotController.UI.Views.Layout.TopStatusBarView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DesignHeight="56" d:DesignWidth="1400"
+             SnapsToDevicePixels="True"
+             UseLayoutRounding="True">
+
+    <!-- ================================================================ -->
+    <!-- KUKA SmartHMI Status Bar (KSS 8.3 Manual, Section 4.2.2, p.51) -->
+    <!--                                                                  -->
+    <!-- All 11 items span the FULL width proportionally, just like the  -->
+    <!-- real KUKA smartPAD. No empty spacer — items fill the bar.       -->
+    <!-- ================================================================ -->
+
+    <Border Background="#4E4E4E" BorderBrush="#2A2A2A" BorderThickness="0,0,0,1">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <!-- 1: Main Menu Key — fixed width like KUKA logo -->
+                <ColumnDefinition Width="72"/>
+                <ColumnDefinition Width="1"/>
+                <!-- 2+3: Robot Name (top) + Program Name (bottom) stacked -->
+                <ColumnDefinition Width="3.5*"/>
+                <ColumnDefinition Width="1"/>
+                <!-- 4,5,6: S, O/I, R interpreter indicators -->
+                <ColumnDefinition Width="1*"/>
+                <ColumnDefinition Width="1*"/>
+                <ColumnDefinition Width="1*"/>
+                <ColumnDefinition Width="1"/>
+                <!-- 7: Operating Mode (T1/T2/AUT/EXT) -->
+                <ColumnDefinition Width="1.2*"/>
+                <ColumnDefinition Width="1"/>
+                <!-- 8: POV/HOV Override — needs more space for 2 values -->
+                <ColumnDefinition Width="2.5*"/>
+                <ColumnDefinition Width="1"/>
+                <!-- 9: Program Run Mode -->
+                <ColumnDefinition Width="1.2*"/>
+                <ColumnDefinition Width="1"/>
+                <!-- 10: Tool/Base -->
+                <ColumnDefinition Width="2*"/>
+                <ColumnDefinition Width="1"/>
+                <!-- 11: Incremental Jogging -->
+                <ColumnDefinition Width="1.2*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- ======================================================== -->
+            <!-- 1: MAIN MENU KEY (KUKA logo button)                      -->
+            <!-- KSS 8.3 p.51,54: Press → opens main menu popup          -->
+            <!-- Menu: Display, Configuration, Start-up, Shutdown,        -->
+            <!--        Edit, Commands, Help                              -->
+            <!-- ======================================================== -->
+            <ToggleButton x:Name="MainMenuToggle" Grid.Column="0" Cursor="Hand">
+                <ToggleButton.Template>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="bd" Background="{StaticResource KukaOrangeBrush}"
+                                Padding="20,0" SnapsToDevicePixels="True">
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Rectangle Width="22" Height="3" Fill="White" Margin="0,2.5"/>
+                                <Rectangle Width="22" Height="3" Fill="White" Margin="0,2.5"/>
+                                <Rectangle Width="22" Height="3" Fill="White" Margin="0,2.5"/>
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background">
+                                    <Setter.Value>
+                                        <SolidColorBrush Color="{StaticResource KukaOrangeHover}"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="bd" Property="Background">
+                                    <Setter.Value>
+                                        <SolidColorBrush Color="{StaticResource KukaOrangePressed}"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </ToggleButton.Template>
+            </ToggleButton>
+
+            <!-- KUKA Main Menu Popup (KSS 8.3 Section 4.4, p.54) -->
+            <!-- Multi-column cascading menu: Main → Submenu L1 → Submenu L2 -->
+            <Popup x:Name="MainMenuPopup"
+                   PlacementTarget="{Binding ElementName=MainMenuToggle}"
+                   Placement="Bottom"
+                   StaysOpen="False"
+                   AllowsTransparency="True"
+                   IsOpen="{Binding IsChecked, ElementName=MainMenuToggle, Mode=TwoWay}"
+                   Closed="MainMenuPopup_Closed">
+                <Border Margin="0,0,8,8">
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="16" Opacity="0.6" ShadowDepth="4"/>
+                    </Border.Effect>
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Header -->
+                        <Grid Grid.Row="0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="220"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" Background="#484848" Padding="14,10"
+                                    BorderBrush="#525252" BorderThickness="0,0,0,1">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Main menu" Foreground="#FFFFFF"
+                                               FontSize="15" FontWeight="Bold" FontFamily="Segoe UI"
+                                               VerticalAlignment="Center"/>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                        <Button Content="&#x2302;" FontSize="14"
+                                                Foreground="#888888" Background="Transparent"
+                                                BorderThickness="0" Cursor="Hand"
+                                                Click="MainMenuHome_Click"
+                                                VerticalAlignment="Center" Margin="0,0,4,0"
+                                                ToolTip="Close all submenus"/>
+                                        <Button Content="&#x25C0;" FontSize="12"
+                                                Foreground="#888888" Background="Transparent"
+                                                BorderThickness="0" Cursor="Hand"
+                                                Click="MainMenuBack_Click"
+                                                VerticalAlignment="Center" Margin="0,0,4,0"
+                                                ToolTip="Back"/>
+                                        <Button x:Name="MainMenuCloseBtn" Content="&#x2715;" FontSize="14"
+                                                Foreground="#888888" Background="Transparent"
+                                                BorderThickness="0" Cursor="Hand"
+                                                Click="MainMenuClose_Click"
+                                                VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                            <!-- Submenu L1 header -->
+                            <Border x:Name="SubL1Header" Grid.Column="1" Background="#484848" Padding="14,10"
+                                    BorderBrush="#525252" BorderThickness="1,0,0,1"
+                                    MinWidth="200" Visibility="Collapsed">
+                                <TextBlock x:Name="SubL1HeaderText" Text="" Foreground="#FFFFFF"
+                                           FontSize="15" FontWeight="Bold" FontFamily="Segoe UI"
+                                           VerticalAlignment="Center"/>
+                            </Border>
+                            <!-- Submenu L2 header -->
+                            <Border x:Name="SubL2Header" Grid.Column="2" Background="#484848" Padding="14,10"
+                                    BorderBrush="#525252" BorderThickness="1,0,0,1"
+                                    MinWidth="200" Visibility="Collapsed">
+                                <TextBlock x:Name="SubL2HeaderText" Text="" Foreground="#FFFFFF"
+                                           FontSize="15" FontWeight="Bold" FontFamily="Segoe UI"
+                                           VerticalAlignment="Center"/>
+                            </Border>
+                        </Grid>
+
+                        <!-- Menu Columns -->
+                        <Grid Grid.Row="1">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="220"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- ========================================= -->
+                            <!-- Column 0: MAIN MENU (7 items from KUKA)   -->
+                            <!-- ========================================= -->
+                            <Border Grid.Column="0" Background="#3A3A3A" BorderBrush="#5A5A5A"
+                                    BorderThickness="1,0,1,1">
+                                <StackPanel>
+                                    <!-- File -->
+                                    <Button Tag="File" MouseEnter="MainMenuParent_MouseEnter"
+                                            Style="{StaticResource MainMenuParentItemStyle}"
+                                            IsEnabled="False">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="File" FontSize="14"
+                                                       Foreground="#CCCCCC" VerticalAlignment="Center"
+                                                       FontFamily="Segoe UI"/>
+                                            <TextBlock Grid.Column="1" Text="&#x25B6;" FontSize="10"
+                                                       Foreground="#666666" VerticalAlignment="Center"
+                                                       Margin="8,0"/>
+                                        </Grid>
+                                    </Button>
+
+                                    <!-- Configuration -->
+                                    <Button Tag="Configuration" MouseEnter="MainMenuParent_MouseEnter"
+                                            Style="{StaticResource MainMenuParentItemStyle}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="Configuration" FontSize="14"
+                                                       Foreground="#CCCCCC" VerticalAlignment="Center"
+                                                       FontFamily="Segoe UI"/>
+                                            <TextBlock Grid.Column="1" Text="&#x25B6;" FontSize="10"
+                                                       Foreground="#666666" VerticalAlignment="Center"
+                                                       Margin="8,0"/>
+                                        </Grid>
+                                    </Button>
+
+                                    <!-- Display -->
+                                    <Button Tag="Display" MouseEnter="MainMenuParent_MouseEnter"
+                                            Style="{StaticResource MainMenuParentItemStyle}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="Display" FontSize="14"
+                                                       Foreground="#CCCCCC" VerticalAlignment="Center"
+                                                       FontFamily="Segoe UI"/>
+                                            <TextBlock Grid.Column="1" Text="&#x25B6;" FontSize="10"
+                                                       Foreground="#666666" VerticalAlignment="Center"
+                                                       Margin="8,0"/>
+                                        </Grid>
+                                    </Button>
+
+                                    <!-- Diagnosis -->
+                                    <Button Tag="Diagnosis" MouseEnter="MainMenuParent_MouseEnter"
+                                            Style="{StaticResource MainMenuParentItemStyle}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="Diagnosis" FontSize="14"
+                                                       Foreground="#CCCCCC" VerticalAlignment="Center"
+                                                       FontFamily="Segoe UI"/>
+                                            <TextBlock Grid.Column="1" Text="&#x25B6;" FontSize="10"
+                                                       Foreground="#666666" VerticalAlignment="Center"
+                                                       Margin="8,0"/>
+                                        </Grid>
+                                    </Button>
+
+                                    <!-- Start-up -->
+                                    <Button Tag="Start-up" MouseEnter="MainMenuParent_MouseEnter"
+                                            Style="{StaticResource MainMenuParentItemStyle}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="Start-up" FontSize="14"
+                                                       Foreground="#CCCCCC" VerticalAlignment="Center"
+                                                       FontFamily="Segoe UI"/>
+                                            <TextBlock Grid.Column="1" Text="&#x25B6;" FontSize="10"
+                                                       Foreground="#666666" VerticalAlignment="Center"
+                                                       Margin="8,0"/>
+                                        </Grid>
+                                    </Button>
+
+                                    <Rectangle Height="1" Fill="#525252" Margin="12,2"/>
+
+                                    <!-- Shutdown -->
+                                    <Button Tag="Shutdown" MouseEnter="MainMenuLeaf_MouseEnter"
+                                            Click="LeafMenuItem_Click"
+                                            Style="{StaticResource MainMenuItemStyle}"
+                                            IsEnabled="False">
+                                        <TextBlock Text="Shutdown" FontSize="14"
+                                                   Foreground="#CCCCCC" VerticalAlignment="Center"
+                                                   FontFamily="Segoe UI"/>
+                                    </Button>
+
+                                    <Rectangle Height="1" Fill="#525252" Margin="12,2"/>
+
+                                    <!-- Help -->
+                                    <Button Tag="Help" MouseEnter="MainMenuParent_MouseEnter"
+                                            Style="{StaticResource MainMenuParentItemStyle}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="Help" FontSize="14"
+                                                       Foreground="#CCCCCC" VerticalAlignment="Center"
+                                                       FontFamily="Segoe UI"/>
+                                            <TextBlock Grid.Column="1" Text="&#x25B6;" FontSize="10"
+                                                       Foreground="#666666" VerticalAlignment="Center"
+                                                       Margin="8,0"/>
+                                        </Grid>
+                                    </Button>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- ========================================= -->
+                            <!-- Column 1: SUBMENU LEVEL 1                 -->
+                            <!-- One StackPanel per main menu parent       -->
+                            <!-- ========================================= -->
+                            <Border x:Name="SubL1Panel" Grid.Column="1" Background="#3A3A3A"
+                                    BorderBrush="#5A5A5A" BorderThickness="0,0,1,1"
+                                    MinWidth="200" Visibility="Collapsed">
+                                <Grid>
+                                    <!-- Display submenu -->
+                                    <StackPanel x:Name="Sub_Display" Visibility="Collapsed">
+                                        <Button Tag="Display.Energy consumption" IsEnabled="False"
+                                                Click="LeafMenuItem_Click" MouseEnter="SubL1Leaf_MouseEnter"
+                                                Style="{StaticResource MainMenuItemStyle}">
+                                            <TextBlock Text="Energy consumption" FontSize="13"
+                                                       Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                        </Button>
+                                        <Button Tag="Display.Inputs/outputs" MouseEnter="SubL1Parent_MouseEnter"
+                                                Style="{StaticResource MainMenuParentItemStyle}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Inputs/outputs" FontSize="13"
+                                                           Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                                <TextBlock Grid.Column="1" Text="&#x25B6;" FontSize="10"
+                                                           Foreground="#666666" VerticalAlignment="Center"
+                                                           Margin="8,0"/>
+                                            </Grid>
+                                        </Button>
+                                        <Button Tag="Display.Actual position"
+                                                Click="LeafMenuItem_Click" MouseEnter="SubL1Leaf_MouseEnter"
+                                                Style="{StaticResource MainMenuItemStyle}">
+                                            <TextBlock Text="Actual position" FontSize="13"
+                                                       Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                        </Button>
+                                        <Button Tag="Display.Variable" MouseEnter="SubL1Parent_MouseEnter"
+                                                Style="{StaticResource MainMenuParentItemStyle}"
+                                                IsEnabled="False">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Variable" FontSize="13"
+                                                           Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                                <TextBlock Grid.Column="1" Text="&#x25B6;" FontSize="10"
+                                                           Foreground="#666666" VerticalAlignment="Center"
+                                                           Margin="8,0"/>
+                                            </Grid>
+                                        </Button>
+                                        <Button Tag="Display.Windows" IsEnabled="False"
+                                                Click="LeafMenuItem_Click" MouseEnter="SubL1Leaf_MouseEnter"
+                                                Style="{StaticResource MainMenuItemStyle}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Windows" FontSize="13"
+                                                           Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                                <TextBlock Grid.Column="1" Text="&#x25B6;" FontSize="10"
+                                                           Foreground="#666666" VerticalAlignment="Center"
+                                                           Margin="8,0"/>
+                                            </Grid>
+                                        </Button>
+                                        <Button Tag="Display.Gripper/SpotTech" IsEnabled="False"
+                                                Click="LeafMenuItem_Click" MouseEnter="SubL1Leaf_MouseEnter"
+                                                Style="{StaticResource MainMenuItemStyle}">
+                                            <TextBlock Text="Gripper/SpotTech" FontSize="13"
+                                                       Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                        </Button>
+                                        <Button Tag="Display.ObjectBrowser" IsEnabled="False"
+                                                Click="LeafMenuItem_Click" MouseEnter="SubL1Leaf_MouseEnter"
+                                                Style="{StaticResource MainMenuItemStyle}">
+                                            <TextBlock Text="ObjectBrowser" FontSize="13"
+                                                       Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                        </Button>
+                                    </StackPanel>
+
+                                    <!-- Configuration submenu -->
+                                    <StackPanel x:Name="Sub_Configuration" Visibility="Collapsed">
+                                        <Button Tag="Configuration.User group"
+                                                Click="LeafMenuItem_Click" MouseEnter="SubL1Leaf_MouseEnter"
+                                                Style="{StaticResource MainMenuItemStyle}">
+                                            <TextBlock Text="User group" FontSize="13"
+                                                       Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                        </Button>
+                                        <Button Tag="Configuration.Safety configuration" IsEnabled="False"
+                                                Click="LeafMenuItem_Click" MouseEnter="SubL1Leaf_MouseEnter"
+                                                Style="{StaticResource MainMenuItemStyle}">
+                                            <TextBlock Text="Safety configuration" FontSize="13"
+                                                       Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                        </Button>
+                                        <Button Tag="Configuration.Inputs/outputs" MouseEnter="SubL1Parent_MouseEnter"
+                                                Style="{StaticResource MainMenuParentItemStyle}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Inputs/outputs" FontSize="13"
+                                                           Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                                <TextBlock Grid.Column="1" Text="&#x25B6;" FontSize="10"
+                                                           Foreground="#666666" VerticalAlignment="Center"
+                                                           Margin="8,0"/>
+                                            </Grid>
+                                        </Button>
+                                        <Button Tag="Configuration.Miscellaneous" MouseEnter="SubL1Parent_MouseEnter"
+                                                Style="{StaticResource MainMenuParentItemStyle}"
+                                                IsEnabled="False">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Miscellaneous" FontSize="13"
+                                                           Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                                <TextBlock Grid.Column="1" Text="&#x25B6;" FontSize="10"
+                                                           Foreground="#666666" VerticalAlignment="Center"
+                                                           Margin="8,0"/>
+                                            </Grid>
+                                        </Button>
+                                        <Button Tag="Configuration.SUBMIT interpreter" IsEnabled="False"
+                                                MouseEnter="SubL1Parent_MouseEnter"
+                                                Style="{StaticResource MainMenuParentItemStyle}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="SUBMIT interpreter" FontSize="13"
+                                                           Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                                <TextBlock Grid.Column="1" Text="&#x25B6;" FontSize="10"
+                                                           Foreground="#666666" VerticalAlignment="Center"
+                                                           Margin="8,0"/>
+                                            </Grid>
+                                        </Button>
+                                    </StackPanel>
+
+                                    <!-- Diagnosis submenu -->
+                                    <StackPanel x:Name="Sub_Diagnosis" Visibility="Collapsed">
+                                        <Button Tag="Diagnosis.Logbook" MouseEnter="SubL1Parent_MouseEnter"
+                                                Style="{StaticResource MainMenuParentItemStyle}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Logbook" FontSize="13"
+                                                           Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                                <TextBlock Grid.Column="1" Text="&#x25B6;" FontSize="10"
+                                                           Foreground="#666666" VerticalAlignment="Center"
+                                                           Margin="8,0"/>
+                                            </Grid>
+                                        </Button>
+                                        <Button Tag="Diagnosis.Caller stack" IsEnabled="False"
+                                                Click="LeafMenuItem_Click" MouseEnter="SubL1Leaf_MouseEnter"
+                                                Style="{StaticResource MainMenuItemStyle}">
+                                            <TextBlock Text="Caller stack" FontSize="13"
+                                                       Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                        </Button>
+                                        <Button Tag="Diagnosis.Interrupts" IsEnabled="False"
+                                                Click="LeafMenuItem_Click" MouseEnter="SubL1Leaf_MouseEnter"
+                                                Style="{StaticResource MainMenuItemStyle}">
+                                            <TextBlock Text="Interrupts" FontSize="13"
+                                                       Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                        </Button>
+                                        <Button Tag="Diagnosis.Diagnostic monitor"
+                                                Click="LeafMenuItem_Click" MouseEnter="SubL1Leaf_MouseEnter"
+                                                Style="{StaticResource MainMenuItemStyle}">
+                                            <TextBlock Text="Diagnostic monitor" FontSize="13"
+                                                       Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                        </Button>
+                                        <Button Tag="Diagnosis.KrcDiag" IsEnabled="False"
+                                                Click="LeafMenuItem_Click" MouseEnter="SubL1Leaf_MouseEnter"
+                                                Style="{StaticResource MainMenuItemStyle}">
+                                            <TextBlock Text="KrcDiag" FontSize="13"
+                                                       Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                        </Button>
+                                    </StackPanel>
+
+                                    <!-- Start-up submenu -->
+                                    <StackPanel x:Name="Sub_Startup" Visibility="Collapsed">
+                                        <Button Tag="Start-up.Start-up wizard" IsEnabled="False"
+                                                Click="LeafMenuItem_Click" MouseEnter="SubL1Leaf_MouseEnter"
+                                                Style="{StaticResource MainMenuItemStyle}">
+                                            <TextBlock Text="Start-up wizard" FontSize="13"
+                                                       Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                        </Button>
+                                        <Button Tag="Start-up.Robot data" MouseEnter="SubL1Parent_MouseEnter"
+                                                Style="{StaticResource MainMenuParentItemStyle}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Robot data" FontSize="13"
+                                                           Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                                <TextBlock Grid.Column="1" Text="&#x25B6;" FontSize="10"
+                                                           Foreground="#666666" VerticalAlignment="Center"
+                                                           Margin="8,0"/>
+                                            </Grid>
+                                        </Button>
+                                        <Button Tag="Start-up.Master" IsEnabled="False"
+                                                MouseEnter="SubL1Parent_MouseEnter"
+                                                Style="{StaticResource MainMenuParentItemStyle}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Master" FontSize="13"
+                                                           Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                                <TextBlock Grid.Column="1" Text="&#x25B6;" FontSize="10"
+                                                           Foreground="#666666" VerticalAlignment="Center"
+                                                           Margin="8,0"/>
+                                            </Grid>
+                                        </Button>
+                                        <Button Tag="Start-up.Calibrate" MouseEnter="SubL1Parent_MouseEnter"
+                                                Style="{StaticResource MainMenuParentItemStyle}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Calibrate" FontSize="13"
+                                                           Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                                <TextBlock Grid.Column="1" Text="&#x25B6;" FontSize="10"
+                                                           Foreground="#666666" VerticalAlignment="Center"
+                                                           Margin="8,0"/>
+                                            </Grid>
+                                        </Button>
+                                        <Button Tag="Start-up.Service" IsEnabled="False"
+                                                MouseEnter="SubL1Parent_MouseEnter"
+                                                Style="{StaticResource MainMenuParentItemStyle}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Service" FontSize="13"
+                                                           Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                                <TextBlock Grid.Column="1" Text="&#x25B6;" FontSize="10"
+                                                           Foreground="#666666" VerticalAlignment="Center"
+                                                           Margin="8,0"/>
+                                            </Grid>
+                                        </Button>
+                                        <Button Tag="Start-up.Network configuration"
+                                                Click="LeafMenuItem_Click" MouseEnter="SubL1Leaf_MouseEnter"
+                                                Style="{StaticResource MainMenuItemStyle}">
+                                            <TextBlock Text="Network configuration" FontSize="13"
+                                                       Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                        </Button>
+                                        <Button Tag="Start-up.Station Setup"
+                                                Click="LeafMenuItem_Click" MouseEnter="SubL1Leaf_MouseEnter"
+                                                Style="{StaticResource MainMenuItemStyle}">
+                                            <TextBlock Text="Station Setup" FontSize="13"
+                                                       Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                        </Button>
+                                        <Button Tag="Start-up.Additional software" IsEnabled="False"
+                                                Click="LeafMenuItem_Click" MouseEnter="SubL1Leaf_MouseEnter"
+                                                Style="{StaticResource MainMenuItemStyle}">
+                                            <TextBlock Text="Additional software" FontSize="13"
+                                                       Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                        </Button>
+                                        <Button Tag="Start-up.Software update" IsEnabled="False"
+                                                MouseEnter="SubL1Parent_MouseEnter"
+                                                Style="{StaticResource MainMenuParentItemStyle}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Software update" FontSize="13"
+                                                           Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                                <TextBlock Grid.Column="1" Text="&#x25B6;" FontSize="10"
+                                                           Foreground="#666666" VerticalAlignment="Center"
+                                                           Margin="8,0"/>
+                                            </Grid>
+                                        </Button>
+                                    </StackPanel>
+
+                                    <!-- Help submenu -->
+                                    <StackPanel x:Name="Sub_Help" Visibility="Collapsed">
+                                        <Button Tag="Help.Documentation" IsEnabled="False"
+                                                MouseEnter="SubL1Parent_MouseEnter"
+                                                Style="{StaticResource MainMenuParentItemStyle}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Documentation" FontSize="13"
+                                                           Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                                <TextBlock Grid.Column="1" Text="&#x25B6;" FontSize="10"
+                                                           Foreground="#666666" VerticalAlignment="Center"
+                                                           Margin="8,0"/>
+                                            </Grid>
+                                        </Button>
+                                        <Button Tag="Help.Messages" IsEnabled="False"
+                                                MouseEnter="SubL1Parent_MouseEnter"
+                                                Style="{StaticResource MainMenuParentItemStyle}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Messages" FontSize="13"
+                                                           Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                                <TextBlock Grid.Column="1" Text="&#x25B6;" FontSize="10"
+                                                           Foreground="#666666" VerticalAlignment="Center"
+                                                           Margin="8,0"/>
+                                            </Grid>
+                                        </Button>
+                                        <Button Tag="Help.Info"
+                                                Click="LeafMenuItem_Click" MouseEnter="SubL1Leaf_MouseEnter"
+                                                Style="{StaticResource MainMenuItemStyle}">
+                                            <TextBlock Text="Info" FontSize="13"
+                                                       Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <!-- ========================================= -->
+                            <!-- Column 2: SUBMENU LEVEL 2                 -->
+                            <!-- ========================================= -->
+                            <Border x:Name="SubL2Panel" Grid.Column="2" Background="#3A3A3A"
+                                    BorderBrush="#5A5A5A" BorderThickness="0,0,1,1"
+                                    MinWidth="200" Visibility="Collapsed">
+                                <Grid>
+                                    <!-- Display > Inputs/outputs -->
+                                    <StackPanel x:Name="Sub_Display_IO" Visibility="Collapsed">
+                                        <Button Tag="Display.Inputs/outputs.Digital I/O"
+                                                Click="LeafMenuItem_Click"
+                                                Style="{StaticResource MainMenuItemStyle}">
+                                            <TextBlock Text="Digital I/O" FontSize="13"
+                                                       Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                        </Button>
+                                        <Button Tag="Display.Inputs/outputs.Analog I/O"
+                                                Click="LeafMenuItem_Click"
+                                                Style="{StaticResource MainMenuItemStyle}">
+                                            <TextBlock Text="Analog I/O" FontSize="13"
+                                                       Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                        </Button>
+                                        <Button Tag="Display.Inputs/outputs.Automatic External"
+                                                Click="LeafMenuItem_Click"
+                                                Style="{StaticResource MainMenuItemStyle}">
+                                            <TextBlock Text="Automatic External" FontSize="13"
+                                                       Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                        </Button>
+                                        <Button Tag="Display.Inputs/outputs.I/O drivers" IsEnabled="False"
+                                                Click="LeafMenuItem_Click"
+                                                Style="{StaticResource MainMenuItemStyle}">
+                                            <TextBlock Text="I/O drivers" FontSize="13"
+                                                       Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                        </Button>
+                                    </StackPanel>
+
+                                    <!-- Configuration > Inputs/outputs -->
+                                    <StackPanel x:Name="Sub_Configuration_IO" Visibility="Collapsed">
+                                        <Button Tag="Configuration.Inputs/outputs.I/O drivers"
+                                                Click="LeafMenuItem_Click"
+                                                Style="{StaticResource MainMenuItemStyle}">
+                                            <TextBlock Text="I/O drivers" FontSize="13"
+                                                       Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                        </Button>
+                                        <Button Tag="Configuration.Inputs/outputs.Automatic External"
+                                                Click="LeafMenuItem_Click"
+                                                Style="{StaticResource MainMenuItemStyle}">
+                                            <TextBlock Text="Automatic External" FontSize="13"
+                                                       Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                        </Button>
+                                    </StackPanel>
+
+                                    <!-- Diagnosis > Logbook -->
+                                    <StackPanel x:Name="Sub_Diagnosis_Logbook" Visibility="Collapsed">
+                                        <Button Tag="Diagnosis.Logbook.Display"
+                                                Click="LeafMenuItem_Click"
+                                                Style="{StaticResource MainMenuItemStyle}">
+                                            <TextBlock Text="Display" FontSize="13"
+                                                       Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                        </Button>
+                                        <Button Tag="Diagnosis.Logbook.Configuration" IsEnabled="False"
+                                                Click="LeafMenuItem_Click"
+                                                Style="{StaticResource MainMenuItemStyle}">
+                                            <TextBlock Text="Configuration" FontSize="13"
+                                                       Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                        </Button>
+                                    </StackPanel>
+
+                                    <!-- Start-up > Calibrate -->
+                                    <StackPanel x:Name="Sub_Startup_Calibrate" Visibility="Collapsed">
+                                        <Button Tag="Start-up.Calibrate.Tool"
+                                                Click="LeafMenuItem_Click"
+                                                Style="{StaticResource MainMenuItemStyle}">
+                                            <TextBlock Text="Tool" FontSize="13"
+                                                       Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                        </Button>
+                                        <Button Tag="Start-up.Calibrate.Base" IsEnabled="False"
+                                                Click="LeafMenuItem_Click"
+                                                Style="{StaticResource MainMenuItemStyle}">
+                                            <TextBlock Text="Base" FontSize="13"
+                                                       Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                        </Button>
+                                        <Button Tag="Start-up.Calibrate.Fixed tool" IsEnabled="False"
+                                                Click="LeafMenuItem_Click"
+                                                Style="{StaticResource MainMenuItemStyle}">
+                                            <TextBlock Text="Fixed tool" FontSize="13"
+                                                       Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                        </Button>
+                                        <Button Tag="Start-up.Calibrate.External kinematic system" IsEnabled="False"
+                                                Click="LeafMenuItem_Click"
+                                                Style="{StaticResource MainMenuItemStyle}">
+                                            <TextBlock Text="External kinematic system" FontSize="13"
+                                                       Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                        </Button>
+                                        <Button Tag="Start-up.Calibrate.Supplementary load data" IsEnabled="False"
+                                                Click="LeafMenuItem_Click"
+                                                Style="{StaticResource MainMenuItemStyle}">
+                                            <TextBlock Text="Supplementary load data" FontSize="13"
+                                                       Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                        </Button>
+                                        <Button Tag="Start-up.Calibrate.Tolerances" IsEnabled="False"
+                                                Click="LeafMenuItem_Click"
+                                                Style="{StaticResource MainMenuItemStyle}">
+                                            <TextBlock Text="Tolerances" FontSize="13"
+                                                       Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                        </Button>
+                                        <Button Tag="Start-up.Calibrate.Calibration points" IsEnabled="False"
+                                                Click="LeafMenuItem_Click"
+                                                Style="{StaticResource MainMenuItemStyle}">
+                                            <TextBlock Text="Calibration points" FontSize="13"
+                                                       Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                        </Button>
+                                    </StackPanel>
+
+                                    <!-- Start-up > Robot data -->
+                                    <StackPanel x:Name="Sub_Startup_RobotData" Visibility="Collapsed">
+                                        <Button Tag="Start-up.Robot data.Catalog"
+                                                Click="LeafMenuItem_Click"
+                                                Style="{StaticResource MainMenuItemStyle}">
+                                            <TextBlock Text="Catalog" FontSize="13"
+                                                       Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                        </Button>
+                                        <Button Tag="Start-up.Robot data.URDF Import"
+                                                Click="LeafMenuItem_Click"
+                                                Style="{StaticResource MainMenuItemStyle}">
+                                            <TextBlock Text="URDF Import" FontSize="13"
+                                                       Foreground="#CCCCCC" FontFamily="Segoe UI"/>
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </Grid>
+
+                        <!-- Recent items footer (KSS 8.3 p.54: last 6 items) -->
+                        <Border Grid.Row="2" Background="#323232" Padding="10,6"
+                                BorderBrush="#525252" BorderThickness="1,1,1,1">
+                            <StackPanel>
+                                <TextBlock Text="Recent" Foreground="#555555" FontSize="10"
+                                           FontFamily="Segoe UI" Margin="0,0,0,2"/>
+                                <ItemsControl x:Name="RecentItemsList">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Content="{Binding}" Click="RecentItem_Click"
+                                                    Background="Transparent" BorderThickness="0"
+                                                    Foreground="#888888" FontSize="12"
+                                                    FontFamily="Segoe UI" Cursor="Hand"
+                                                    HorizontalContentAlignment="Left"
+                                                    Padding="4,3"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Border>
+            </Popup>
+
+            <Rectangle Grid.Column="1" Fill="#2A2A2A"/>
+
+            <!-- ======================================================== -->
+            <!-- 2+3: ROBOT NAME (top) + PROGRAM NAME (bottom)           -->
+            <!-- KSS 8.3 p.51: Stacked vertically in one cell           -->
+            <!-- ======================================================== -->
+            <Border Grid.Column="2" Background="#4E4E4E" Padding="10,2">
+                <StackPanel VerticalAlignment="Center">
+                    <!-- 2: Robot Name (top row, bold white) -->
+                    <TextBlock Text="{Binding RobotName, FallbackValue='Robby'}"
+                               Foreground="#FFFFFF" FontSize="16" FontWeight="Bold"
+                               FontFamily="Segoe UI"
+                               TextTrimming="CharacterEllipsis"/>
+                    <!-- 3: Program Name (bottom row, smaller, dim) -->
+                    <Border Background="#363636" Padding="6,2" Margin="0,2,0,0">
+                        <TextBlock Text="{Binding CurrentProgramName, FallbackValue=''}"
+                                   Foreground="#AAAAAA" FontSize="12"
+                                   FontFamily="Consolas"
+                                   TextTrimming="CharacterEllipsis"/>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <Rectangle Grid.Column="3" Fill="#525252"/>
+
+            <!-- ======================================================== -->
+            <!-- 4: SUBMIT INTERPRETER (S)                                -->
+            <!-- KSS 8.3 p.453-454:                                       -->
+            <!--   Green = running, Red = stopped, Gray = deselected     -->
+            <!-- ======================================================== -->
+            <Border Grid.Column="4" Background="#3A3A3A"
+                    ToolTip="Submit Interpreter (SPS.SUB)&#10;Green=Running  Red=Stopped  Gray=Deselected">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                            HorizontalAlignment="Center">
+                    <Ellipse Width="14" Height="14" Margin="0,0,6,0"
+                             Fill="{Binding SubmitInterpreterColor, FallbackValue=#555555}"/>
+                    <TextBlock Text="S" Foreground="#CCCCCC" FontSize="16" FontWeight="Bold"
+                               FontFamily="Consolas" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+
+            <!-- ======================================================== -->
+            <!-- 5: DRIVES STATUS (I/O)                                   -->
+            <!-- KSS 8.3 p.52:                                            -->
+            <!--   I = Drives ON, O = Drives OFF                         -->
+            <!--   Green = can start motion, Gray = cannot               -->
+            <!-- ======================================================== -->
+            <Border Grid.Column="5" Background="#3A3A3A"
+                    ToolTip="Drives Status&#10;I=ON ($PERI_RDY)  O=OFF&#10;Green=Ready  Gray=Not Ready">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                            HorizontalAlignment="Center">
+                    <Ellipse Width="14" Height="14" Margin="0,0,6,0"
+                             Fill="{Binding DrivesStatusColor, FallbackValue=#555555}"/>
+                    <TextBlock Text="{Binding DrivesStatusSymbol, FallbackValue='O'}"
+                               Foreground="#CCCCCC" FontSize="16" FontWeight="Bold"
+                               FontFamily="Consolas" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+
+            <!-- ======================================================== -->
+            <!-- 6: ROBOT INTERPRETER (R)                                 -->
+            <!-- KSS 8.3 p.267:                                           -->
+            <!--   Gray=none Yellow=ready Green=running Red=stopped      -->
+            <!--   Black=at end                                          -->
+            <!-- ======================================================== -->
+            <Border Grid.Column="6" Background="#3A3A3A"
+                    ToolTip="Robot Interpreter&#10;Gray=No program  Yellow=Ready&#10;Green=Running  Red=Stopped  Black=End">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                            HorizontalAlignment="Center">
+                    <Ellipse Width="14" Height="14" Margin="0,0,6,0"
+                             Fill="{Binding RobotInterpreterColor, FallbackValue=#555555}"/>
+                    <TextBlock Text="R" Foreground="#CCCCCC" FontSize="16" FontWeight="Bold"
+                               FontFamily="Consolas" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+
+            <Rectangle Grid.Column="7" Fill="#525252"/>
+
+            <!-- ======================================================== -->
+            <!-- 7: OPERATING MODE (T1/T2/AUT/EXT)                       -->
+            <!-- KSS 8.3 p.63-64                                          -->
+            <!-- ======================================================== -->
+            <Border Grid.Column="8" Background="#3A3A3A" Padding="2,6">
+                <Border Background="{Binding Mode.ModeColor, FallbackValue=#FFAA00}"
+                        Padding="4,2" HorizontalAlignment="Stretch">
+                    <TextBlock Text="{Binding Mode.CurrentMode, FallbackValue='T1'}"
+                               FontWeight="Bold" FontSize="22"
+                               Foreground="Black" VerticalAlignment="Center"
+                               HorizontalAlignment="Center" FontFamily="Segoe UI"/>
+                </Border>
+            </Border>
+
+            <Rectangle Grid.Column="9" Fill="#525252"/>
+
+            <!-- ======================================================== -->
+            <!-- 8: POV/HOV OVERRIDE (combined cell, KUKA style)          -->
+            <!-- KSS 8.3 p.52,71,267                                      -->
+            <!-- ======================================================== -->
+            <Border Grid.Column="10" Background="#3A3A3A" Padding="4,0">
+                <Grid VerticalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="1"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- POV (Program Override) -->
+                    <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                        <TextBlock Foreground="#666666" FontSize="9" FontFamily="Segoe UI"
+                                   HorizontalAlignment="Center">
+                            <Run Text="▶"/>
+                            <Run Text=" POV"/>
+                        </TextBlock>
+                        <TextBlock Text="{Binding Override.ProgramOverride, StringFormat='{}{0}%', FallbackValue='100%'}"
+                                   Foreground="#4EC9B0" FontSize="20" FontWeight="Bold"
+                                   FontFamily="Consolas" HorizontalAlignment="Center"/>
+                    </StackPanel>
+
+                    <Rectangle Grid.Column="1" Fill="#525252" Margin="0,8"/>
+
+                    <!-- HOV (Jog Override) -->
+                    <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                        <TextBlock Foreground="#666666" FontSize="9" FontFamily="Segoe UI"
+                                   HorizontalAlignment="Center">
+                            <Run Text="⚡"/>
+                            <Run Text=" HOV"/>
+                        </TextBlock>
+                        <TextBlock Text="{Binding Override.JogOverride, StringFormat='{}{0}%', FallbackValue='100%'}"
+                                   Foreground="{StaticResource KukaOrangeBrush}" FontSize="20" FontWeight="Bold"
+                                   FontFamily="Consolas" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Rectangle Grid.Column="11" Fill="#525252"/>
+
+            <!-- ======================================================== -->
+            <!-- 9: PROGRAM RUN MODE                                      -->
+            <!-- KSS 8.3 p.263: #GO/#MSTEP/#ISTEP/#BSTEP/#PSTEP/#CSTEP  -->
+            <!-- ======================================================== -->
+            <Border Grid.Column="12" Background="#3A3A3A"
+                    ToolTip="Program Run Mode ($PRO_MODE)&#10;#GO=Continuous  #MSTEP=Motion&#10;#ISTEP=Single Step  #BSTEP=Backward">
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <TextBlock Text="RUN" Foreground="#666666" FontSize="9"
+                               FontFamily="Segoe UI" HorizontalAlignment="Center"/>
+                    <TextBlock Text="{Binding ProgramRunMode, FallbackValue='#GO'}"
+                               Foreground="#FFFFFF" FontSize="16" FontWeight="Bold"
+                               FontFamily="Consolas" HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+
+            <Rectangle Grid.Column="13" Fill="#525252"/>
+
+            <!-- ======================================================== -->
+            <!-- 10: TOOL/BASE STATUS                                     -->
+            <!-- KSS 8.3 p.71: Max 16 TOOL, 32 BASE coordinate systems  -->
+            <!-- ======================================================== -->
+            <Border Grid.Column="14" Background="#3A3A3A" Padding="4,0">
+                <Grid VerticalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="1"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                        <TextBlock Text="Tool" Foreground="#666666" FontSize="9"
+                                   FontFamily="Segoe UI" HorizontalAlignment="Center"/>
+                        <TextBlock Text="{Binding ActiveToolDisplay, FallbackValue='[0]'}"
+                                   Foreground="#FFFFFF" FontSize="16" FontWeight="Bold"
+                                   FontFamily="Consolas" HorizontalAlignment="Center"/>
+                    </StackPanel>
+
+                    <Rectangle Grid.Column="1" Fill="#525252" Margin="0,8"/>
+
+                    <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                        <TextBlock Text="Base" Foreground="#666666" FontSize="9"
+                                   FontFamily="Segoe UI" HorizontalAlignment="Center"/>
+                        <TextBlock Text="{Binding ActiveBaseDisplay, FallbackValue='[0]'}"
+                                   Foreground="#FFFFFF" FontSize="16" FontWeight="Bold"
+                                   FontFamily="Consolas" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Rectangle Grid.Column="15" Fill="#525252"/>
+
+            <!-- ======================================================== -->
+            <!-- 11: INCREMENTAL JOGGING                                  -->
+            <!-- KSS 8.3 p.75: Continuous/100mm/10mm/1mm/0.1mm          -->
+            <!-- ======================================================== -->
+            <Border Grid.Column="16" Background="#3A3A3A"
+                    ToolTip="Incremental Jogging&#10;∞=Continuous  100mm/10°&#10;10mm/3°  1mm/1°  0.1mm/0.005°">
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <TextBlock Text="INC" Foreground="#666666" FontSize="9"
+                               FontFamily="Segoe UI" HorizontalAlignment="Center"/>
+                    <TextBlock Text="{Binding IncrementalJogMode, FallbackValue='∞'}"
+                               Foreground="#FFFFFF" FontSize="16" FontWeight="Bold"
+                               FontFamily="Consolas" HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Border>
+</UserControl>

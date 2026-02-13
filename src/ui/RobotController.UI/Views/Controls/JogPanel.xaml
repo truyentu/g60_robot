@@ -40,7 +40,7 @@
                     <Setter Property="Background" Value="#505050"/>
                 </Trigger>
                 <Trigger Property="IsEnabled" Value="False">
-                    <Setter Property="Background" Value="#303030"/>
+                    <Setter Property="Background" Value="#484848"/>
                     <Setter Property="Foreground" Value="#606060"/>
                 </Trigger>
             </Style.Triggers>
@@ -79,7 +79,7 @@
         </Style>
     </UserControl.Resources>
 
-    <Border Background="#2D2D2D" CornerRadius="8" Padding="12">
+    <Border Background="#4E4E4E" CornerRadius="8" Padding="12">
         <StackPanel>
             <!-- Header -->
             <TextBlock Text="JOG CONTROL"
@@ -243,7 +243,7 @@
             </Grid>
 
             <!-- Keyboard Hint -->
-            <Border Background="#252525" CornerRadius="4"
+            <Border Background="#3E3E3E" CornerRadius="4"
                    Padding="8" Margin="0,16,0,0">
                 <StackPanel>
                     <TextBlock Text="Keyboard Shortcuts:"

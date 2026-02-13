@@ -841,6 +841,33 @@ public class IpcClientService : IIpcClientService
         return null;
     }
 
+    public async Task<BlockSelectResponse?> BlockSelectAsync(int line, CancellationToken cancellationToken = default)
+    {
+        var payload = new { line };
+        var request = IpcMessage.Create(MessageTypes.BLOCK_SELECT, JsonSerializer.SerializeToElement(payload, IpcMessage.CamelCaseOptions));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<BlockSelectResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<BackwardStepResponse?> BackwardStepAsync(CancellationToken cancellationToken = default)
+    {
+        var request = IpcMessage.Create(MessageTypes.BACKWARD_STEP, JsonSerializer.SerializeToElement(new { }, IpcMessage.CamelCaseOptions));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<BackwardStepResponse>();
+        }
+
+        return null;
+    }
+
     // ========================================================================
     // URDF Import Operations (Auto robot package creation)
     // ========================================================================

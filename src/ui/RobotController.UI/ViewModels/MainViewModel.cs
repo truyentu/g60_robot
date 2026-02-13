@@ -12,6 +12,8 @@ using System.Linq;
 using System.Text.Json;
 using System.Windows.Media;
 using System.Windows.Media.Media3D;
+using System.Windows;
+using System.Windows.Input;
 using System.Windows.Threading;
 
 namespace RobotController.UI.ViewModels;
@@ -27,6 +29,124 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     /// <summary>Get IPC client for direct access (used by MainWindow for gizmo IK calls)</summary>
     public IIpcClientService GetIpcClient() => _ipcClient;
+
+    // ====== KUKA SmartHMI Shell Properties ======
+
+    // Navigation Drawer
+    [ObservableProperty]
+    private bool _isNavDrawerOpen = true;
+
+    // Status Bar - Program Info
+    [ObservableProperty]
+    private string _currentProgramName = "";
+
+    // Status Bar - Tool/Base Display
+    [ObservableProperty]
+    private string _activeToolDisplay = "[0]";
+
+    [ObservableProperty]
+    private string _activeBaseDisplay = "[0]";
+
+    // Status Bar - Interpreter State
+    [ObservableProperty]
+    private string _interpreterState = "---";
+
+    // Status Bar - KUKA Interpreter Indicators (KSS 8.3, Section 4.2.2)
+    // Submit Interpreter (S): Green=running, Red=stopped, Gray=deselected
+    [ObservableProperty]
+    private Brush _submitInterpreterColor = Brushes.Gray;
+
+    // Drives Status: Symbol I=ON, O=OFF; Color Green=can start, Gray=cannot
+    [ObservableProperty]
+    private Brush _drivesStatusColor = Brushes.Gray;
+
+    [ObservableProperty]
+    private string _drivesStatusSymbol = "O";
+
+    // Robot Interpreter (R): Gray=none, Yellow=ready, Green=running, Red=stopped, Black=end
+    [ObservableProperty]
+    private Brush _robotInterpreterColor = Brushes.Gray;
+
+    // Program Run Mode: #GO, #MSTEP, #ISTEP, #BSTEP, #PSTEP, #CSTEP
+    [ObservableProperty]
+    private string _programRunMode = "#GO";
+
+    // Incremental Jogging: ∞=Continuous, 100mm, 10mm, 1mm, 0.1mm
+    [ObservableProperty]
+    private string _incrementalJogMode = "∞";
+
+    // Message Window
+    [ObservableProperty]
+    private string _currentMessage = "No active messages";
+
+    [ObservableProperty]
+    private string _messageTimestamp = "";
+
+    // Softkeys (7 context-sensitive buttons)
+    [ObservableProperty]
+    private string _softkey1Text = "Connect";
+
+    [ObservableProperty]
+    private string _softkey2Text = "Disconnect";
+
+    [ObservableProperty]
+    private string _softkey3Text = "Refresh";
+
+    [ObservableProperty]
+    private string _softkey4Text = "Home";
+
+    [ObservableProperty]
+    private string _softkey5Text = "Run";
+
+    [ObservableProperty]
+    private string _softkey6Text = "Stop";
+
+    [ObservableProperty]
+    private string _softkey7Text = "";
+
+    [ObservableProperty]
+    private Visibility _softkey7Visible = Visibility.Collapsed;
+
+    // Dynamic softkey commands (swapped based on nav context)
+    [ObservableProperty]
+    private ICommand? _softkey1Command;
+
+    [ObservableProperty]
+    private ICommand? _softkey2Command;
+
+    [ObservableProperty]
+    private ICommand? _softkey3Command;
+
+    [ObservableProperty]
+    private ICommand? _softkey4Command;
+
+    [ObservableProperty]
+    private ICommand? _softkey5Command;
+
+    [ObservableProperty]
+    private ICommand? _softkey6Command;
+
+    // Navigator dialog state
+    [ObservableProperty]
+    private bool _showNewProgramDialog;
+
+    [ObservableProperty]
+    private string _newProgramName = "";
+
+    [ObservableProperty]
+    private string _newProgramDescription = "";
+
+    [ObservableProperty]
+    private bool _showDeleteConfirmDialog;
+
+    [ObservableProperty]
+    private string _deleteTargetName = "";
+
+    [ObservableProperty]
+    private bool _showRenameDialog;
+
+    [ObservableProperty]
+    private string _renameProgramName = "";
 
     // 3D Jog Mode
     [ObservableProperty]
@@ -153,6 +273,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private ProgramViewModel? _programViewModel;
 
+    /// <summary>Convenience alias for code-behind access</summary>
+    public ProgramViewModel? ProgramVm => ProgramViewModel;
+
     [ObservableProperty]
     private IOViewModel? _ioViewModel;
 
@@ -259,11 +382,200 @@ public partial class MainViewModel : ObservableObject, IDisposable
         // Subscribe to tool change for viewport update
         _ipcClient.ToolChanged += OnToolChangedForViewport;
 
+        // Initialize context-sensitive softkeys
+        InitializeSoftkeys();
+
         // Auto-connect if configured
         if (_configService.Config.Connection.AutoConnect)
         {
             _ = ConnectAsync();
         }
+    }
+
+    // ====== KUKA Shell Commands ======
+
+    [RelayCommand]
+    private void ClosePage()
+    {
+        SelectedNavIndex = 0;
+    }
+
+    [RelayCommand]
+    private void ToggleNavDrawer()
+    {
+        IsNavDrawerOpen = !IsNavDrawerOpen;
+    }
+
+    [RelayCommand]
+    private void AcknowledgeMessage()
+    {
+        CurrentMessage = "No active messages";
+        MessageTimestamp = "";
+    }
+
+    // Softkey commands initialized after constructor
+    private void InitializeSoftkeys()
+    {
+        UpdateSoftkeysForContext(SelectedNavIndex);
+    }
+
+    partial void OnSelectedNavIndexChanged(int value)
+    {
+        UpdateSoftkeysForContext(value);
+
+        // Hide TCP gizmo when not on Teach & Program
+        _viewportService.ShowTcpGizmo(Is3DJogEnabled && value == 0);
+    }
+
+    private void UpdateSoftkeysForContext(int navIndex)
+    {
+        if (navIndex == 0) // Teach & Program → Navigator mode
+        {
+            Softkey1Text = "New";
+            Softkey2Text = "Select";
+            Softkey3Text = "Duplicate";
+            Softkey4Text = "Archive";
+            Softkey5Text = "Delete";
+            Softkey6Text = "Open";
+            Softkey7Text = "Edit";
+            Softkey7Visible = Visibility.Visible;
+
+            Softkey1Command = new RelayCommand(NavNew);
+            Softkey2Command = new AsyncRelayCommand(NavSelectAsync);
+            Softkey3Command = new RelayCommand(NavDuplicate);
+            Softkey4Command = new AsyncRelayCommand(NavArchiveAsync);
+            Softkey5Command = new RelayCommand(NavDelete);
+            Softkey6Command = new RelayCommand(NavOpen);
+        }
+        else // Default mode
+        {
+            Softkey1Text = "Connect";
+            Softkey2Text = "Disconnect";
+            Softkey3Text = "Refresh";
+            Softkey4Text = "Home";
+            Softkey5Text = "Run";
+            Softkey6Text = "Stop";
+            Softkey7Text = "";
+            Softkey7Visible = Visibility.Collapsed;
+
+            Softkey1Command = new AsyncRelayCommand(ConnectAsync);
+            Softkey2Command = new RelayCommand(Disconnect);
+            Softkey3Command = new AsyncRelayCommand(RefreshStatusAsync);
+            Softkey4Command = new RelayCommand(() => { /* Home placeholder */ });
+            Softkey5Command = new RelayCommand(() => { /* Run placeholder */ });
+            Softkey6Command = new RelayCommand(() => { /* Stop placeholder */ });
+        }
+    }
+
+    // ====== Navigator Softkey Actions ======
+
+    private void NavNew()
+    {
+        NewProgramName = "";
+        NewProgramDescription = "";
+        ShowNewProgramDialog = true;
+    }
+
+    [RelayCommand]
+    private void ConfirmNewProgram()
+    {
+        ShowNewProgramDialog = false;
+        var name = string.IsNullOrWhiteSpace(NewProgramName)
+            ? $"NewProgram{(ProgramViewModel?.Programs.Count ?? 0) + 1}"
+            : NewProgramName.Trim();
+        ProgramViewModel?.CreateProgramWithName(name, NewProgramDescription.Trim());
+    }
+
+    [RelayCommand]
+    private void CancelNewProgram()
+    {
+        ShowNewProgramDialog = false;
+    }
+
+    private async Task NavSelectAsync()
+    {
+        if (ProgramViewModel?.SelectedProgram == null) return;
+
+        var program = ProgramViewModel.SelectedProgram;
+        CurrentProgramName = program.Name;
+
+        if (_ipcClient.IsConnected && !string.IsNullOrEmpty(ProgramViewModel.ProgramCode))
+        {
+            await _ipcClient.LoadProgramAsync(ProgramViewModel.ProgramCode);
+        }
+
+        ProgramViewModel.ProgramStatus = "Selected";
+        Log.Information("Program selected: {Name}", program.Name);
+    }
+
+    private void NavDuplicate()
+    {
+        ProgramViewModel?.DuplicateSelectedProgram();
+    }
+
+    private async Task NavArchiveAsync()
+    {
+        if (ProgramViewModel == null) return;
+        await ProgramViewModel.ArchiveProgramsAsync();
+    }
+
+    private void NavDelete()
+    {
+        if (ProgramViewModel?.SelectedProgram == null) return;
+        DeleteTargetName = ProgramViewModel.SelectedProgram.Name;
+        ShowDeleteConfirmDialog = true;
+    }
+
+    [RelayCommand]
+    private void ConfirmDelete()
+    {
+        ShowDeleteConfirmDialog = false;
+        ProgramViewModel?.DeleteProgram();
+        Log.Information("Program deleted: {Name}", DeleteTargetName);
+    }
+
+    [RelayCommand]
+    private void CancelDelete()
+    {
+        ShowDeleteConfirmDialog = false;
+    }
+
+    private void NavOpen()
+    {
+        if (ProgramViewModel?.SelectedProgram == null) return;
+
+        // Load the selected program code into the editor and switch to editor view
+        if (ProgramEditor != null && !string.IsNullOrEmpty(ProgramViewModel.ProgramCode))
+        {
+            ProgramEditor.ProgramSource = ProgramViewModel.ProgramCode;
+            ProgramEditor.ProgramName = ProgramViewModel.SelectedProgram.Name;
+        }
+        Log.Information("Program opened: {Name}", ProgramViewModel.SelectedProgram.Name);
+    }
+
+    // Rename dialog
+    [RelayCommand]
+    private void ShowRenameProgramDialog()
+    {
+        if (ProgramViewModel?.SelectedProgram == null) return;
+        RenameProgramName = ProgramViewModel.SelectedProgram.Name;
+        ShowRenameDialog = true;
+    }
+
+    [RelayCommand]
+    private void ConfirmRename()
+    {
+        ShowRenameDialog = false;
+        if (!string.IsNullOrWhiteSpace(RenameProgramName))
+        {
+            ProgramViewModel?.RenameSelectedProgram(RenameProgramName.Trim());
+        }
+    }
+
+    [RelayCommand]
+    private void CancelRename()
+    {
+        ShowRenameDialog = false;
     }
 
     [RelayCommand]

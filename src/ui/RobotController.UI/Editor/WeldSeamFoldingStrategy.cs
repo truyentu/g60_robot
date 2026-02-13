@@ -32,7 +32,7 @@ public class WeldSeamFoldingStrategy
         var routineStack = new Stack<FoldingStartInfo>();
         var regionStack = new Stack<FoldingStartInfo>();
 
-        // Pre-parse all robtarget coordinates into a lookup
+        // Pre-parse all E6POS coordinates into a lookup
         var coordinateCache = RegexHelper.BuildCoordinateCache(document.Text);
 
         for (int i = 1; i <= document.LineCount; i++)
@@ -40,9 +40,8 @@ public class WeldSeamFoldingStrategy
             var line = document.GetLineByNumber(i);
             string text = document.GetText(line.Offset, line.Length).Trim();
 
-            // Check for ;#REGION ... ;#ENDREGION
-            if (text.StartsWith(";#REGION", StringComparison.OrdinalIgnoreCase) ||
-                text.StartsWith("!#REGION", StringComparison.OrdinalIgnoreCase))
+            // Check for ;#REGION ... ;#ENDREGION (KRL comment style)
+            if (text.StartsWith(";#REGION", StringComparison.OrdinalIgnoreCase))
             {
                 var regionName = text.Length > 8 ? text[8..].Trim() : "Region";
                 regionStack.Push(new FoldingStartInfo
@@ -54,8 +53,7 @@ public class WeldSeamFoldingStrategy
                 continue;
             }
 
-            if ((text.StartsWith(";#ENDREGION", StringComparison.OrdinalIgnoreCase) ||
-                 text.StartsWith("!#ENDREGION", StringComparison.OrdinalIgnoreCase)) &&
+            if (text.StartsWith(";#ENDREGION", StringComparison.OrdinalIgnoreCase) &&
                 regionStack.Count > 0)
             {
                 var startInfo = regionStack.Pop();
@@ -152,9 +150,9 @@ public class WeldSeamFoldingStrategy
             var targetName = RegexHelper.ExtractTargetName(text);
             if (targetName == null) continue;
 
-            // Only count MoveL (linear) for seam length
+            // Only count LIN (linear) for seam length
             var motionType = RegexHelper.ExtractMotionType(text);
-            if (motionType != Models.MotionType.MoveL) continue;
+            if (motionType != Models.MotionType.LIN) continue;
 
             if (coords.TryGetValue(targetName, out var currentPoint))
             {

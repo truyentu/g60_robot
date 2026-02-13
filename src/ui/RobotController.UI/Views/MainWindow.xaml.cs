@@ -552,47 +552,64 @@ public partial class MainWindow : Window
         {
             case "tx":
             {
-                double d = delta.X * translateSensitivity;
                 if (isToolFrame)
                 {
-                    // Transform local X axis to world
-                    targetPose[0] += d * gizmoOri.M11;
-                    targetPose[1] += d * gizmoOri.M21;
-                    targetPose[2] += d * gizmoOri.M31;
+                    // Tool X-axis in world = row 0 of R^T (WPF stores R^T)
+                    var toolAxis = new Vector3D(gizmoOri.M11, gizmoOri.M12, gizmoOri.M13);
+                    double d = ProjectMouseOntoToolAxis(delta, toolAxis) * translateSensitivity;
+
+                    // Diagnostic: log orientation matrix rows for first few drags
+                    if (_projDiagCounter <= 3)
+                    {
+                        Log.Debug("[GizmoDrag TX] gizmoOri row0=({M11:F3},{M12:F3},{M13:F3}) row1=({M21:F3},{M22:F3},{M23:F3}) row2=({M31:F3},{M32:F3},{M33:F3})",
+                            gizmoOri.M11, gizmoOri.M12, gizmoOri.M13,
+                            gizmoOri.M21, gizmoOri.M22, gizmoOri.M23,
+                            gizmoOri.M31, gizmoOri.M32, gizmoOri.M33);
+                        Log.Debug("[GizmoDrag TX] toolAxis=({AX:F3},{AY:F3},{AZ:F3}) d={D:F2} delta=({DX:F1},{DY:F1})",
+                            toolAxis.X, toolAxis.Y, toolAxis.Z, d, delta.X, delta.Y);
+                    }
+
+                    targetPose[0] += d * toolAxis.X;
+                    targetPose[1] += d * toolAxis.Y;
+                    targetPose[2] += d * toolAxis.Z;
                 }
                 else
                 {
-                    targetPose[0] += d;
+                    targetPose[0] += delta.X * translateSensitivity;
                 }
                 break;
             }
             case "ty":
             {
-                double d = -delta.Y * translateSensitivity;
                 if (isToolFrame)
                 {
-                    targetPose[0] += d * gizmoOri.M12;
-                    targetPose[1] += d * gizmoOri.M22;
-                    targetPose[2] += d * gizmoOri.M32;
+                    // Tool Y-axis in world = row 1 of R^T (WPF stores R^T)
+                    var toolAxis = new Vector3D(gizmoOri.M21, gizmoOri.M22, gizmoOri.M23);
+                    double d = ProjectMouseOntoToolAxis(delta, toolAxis) * translateSensitivity;
+                    targetPose[0] += d * toolAxis.X;
+                    targetPose[1] += d * toolAxis.Y;
+                    targetPose[2] += d * toolAxis.Z;
                 }
                 else
                 {
-                    targetPose[1] += d;
+                    targetPose[1] += -delta.Y * translateSensitivity;
                 }
                 break;
             }
             case "tz":
             {
-                double d = delta.Y * translateSensitivity;
                 if (isToolFrame)
                 {
-                    targetPose[0] += d * gizmoOri.M13;
-                    targetPose[1] += d * gizmoOri.M23;
-                    targetPose[2] += d * gizmoOri.M33;
+                    // Tool Z-axis in world = row 2 of R^T (WPF stores R^T)
+                    var toolAxis = new Vector3D(gizmoOri.M31, gizmoOri.M32, gizmoOri.M33);
+                    double d = ProjectMouseOntoToolAxis(delta, toolAxis) * translateSensitivity;
+                    targetPose[0] += d * toolAxis.X;
+                    targetPose[1] += d * toolAxis.Y;
+                    targetPose[2] += d * toolAxis.Z;
                 }
                 else
                 {
-                    targetPose[2] += d;
+                    targetPose[2] += delta.Y * translateSensitivity;
                 }
                 break;
             }
@@ -708,12 +725,30 @@ public partial class MainWindow : Window
             {
                 _ikFailCount = 0; // Reset on success
                 _ghostLastJoints = result.Joints;
+                // Capture targetPose for core TCP update (avoids C#/C++ FK mismatch in trail)
+                var coreTcp = targetPose;
                 _ = Dispatcher.BeginInvoke(() =>
                 {
                     // Live mode: update real robot visual during drag
                     if (_viewModel?.Is3DJogLiveMode == true)
                     {
-                        _viewportService.UpdateJointAngles(result.Joints);
+                        _viewportService.UpdateJointAngles(result.Joints, coreTcp);
+
+                        // Diagnostic: compare C# FK TCP vs core target TCP
+                        var csharpTcp = _viewportService.Robot?.TcpPosition;
+                        if (csharpTcp.HasValue)
+                        {
+                            double dx = csharpTcp.Value.X - coreTcp[0];
+                            double dy = csharpTcp.Value.Y - coreTcp[1];
+                            double dz = csharpTcp.Value.Z - coreTcp[2];
+                            double err = Math.Sqrt(dx*dx + dy*dy + dz*dz);
+                            if (err > 0.1) // Only log if > 0.1mm
+                            {
+                                Log.Warning("[GizmoDrag DIAG] C# FK TCP=[{X:F1},{Y:F1},{Z:F1}] vs Core TCP=[{CX:F1},{CY:F1},{CZ:F1}] err={Err:F2}mm",
+                                    csharpTcp.Value.X, csharpTcp.Value.Y, csharpTcp.Value.Z,
+                                    coreTcp[0], coreTcp[1], coreTcp[2], err);
+                            }
+                        }
                     }
                     else
                     {
@@ -752,6 +787,124 @@ public partial class MainWindow : Window
         {
             GhostRobotVisual.Children.Add(ghostVisual);
         }
+    }
+
+    // ========================================================================
+    // Tool-frame Gizmo Drag: project mouse delta onto screen-projected tool axis
+    // ========================================================================
+
+    /// <summary>
+    /// Projects mouse delta (pixels from drag start) onto the screen-projected tool axis.
+    /// Uses WPF 3D-to-2D projection to determine the screen direction of the tool axis,
+    /// then computes dot product with mouse delta for signed distance.
+    /// </summary>
+    private double ProjectMouseOntoToolAxis(Vector delta, Vector3D toolAxisWorld)
+    {
+        // Get the TCP origin in 3D
+        var tcp3D = new Point3D(_gizmoDragStartTcp[0], _gizmoDragStartTcp[1], _gizmoDragStartTcp[2]);
+        var tip3D = new Point3D(
+            tcp3D.X + toolAxisWorld.X * 200,
+            tcp3D.Y + toolAxisWorld.Y * 200,
+            tcp3D.Z + toolAxisWorld.Z * 200);
+
+        // Use WPF's camera to project 3D to 2D
+        var camera = Viewport3D.Camera as ProjectionCamera;
+        if (camera == null) return delta.X;
+        double vpWidth = Viewport3D.ActualWidth;
+        double vpHeight = Viewport3D.ActualHeight;
+        bool gotP0 = TryProject3DTo2D(camera, vpWidth, vpHeight, tcp3D, out Point p0);
+        bool gotP1 = TryProject3DTo2D(camera, vpWidth, vpHeight, tip3D, out Point p1);
+
+        if (!gotP0 || !gotP1) return delta.X; // fallback
+
+        // Screen direction of the tool axis arrow
+        var screenDir = new Vector(p1.X - p0.X, p1.Y - p0.Y);
+        double screenLen = screenDir.Length;
+        if (screenLen < 0.5) return 0; // axis nearly perpendicular to screen
+
+        // Normalize screen direction
+        screenDir /= screenLen;
+
+        // Dot product: signed projection of mouse delta onto axis screen direction
+        double result = delta.X * screenDir.X + delta.Y * screenDir.Y;
+
+        // Diagnostic: log first few calls
+        _projDiagCounter++;
+        if (_projDiagCounter % 20 == 1)
+        {
+            Log.Debug("[ProjDiag] toolAxis=({TX:F3},{TY:F3},{TZ:F3}) p0=({P0X:F1},{P0Y:F1}) p1=({P1X:F1},{P1Y:F1}) screenDir=({SX:F3},{SY:F3}) delta=({DX:F1},{DY:F1}) result={R:F2}",
+                toolAxisWorld.X, toolAxisWorld.Y, toolAxisWorld.Z,
+                p0.X, p0.Y, p1.X, p1.Y,
+                screenDir.X, screenDir.Y,
+                delta.X, delta.Y, result);
+        }
+
+        return result;
+    }
+    private int _projDiagCounter = 0;
+
+    /// <summary>
+    /// Project a 3D world point to 2D viewport coordinates using WPF camera matrices.
+    /// </summary>
+    private static bool TryProject3DTo2D(ProjectionCamera camera, double vpWidth, double vpHeight, Point3D point3D, out Point point2D)
+    {
+        point2D = new Point(0, 0);
+        if (vpWidth < 1 || vpHeight < 1) return false;
+
+        // View matrix
+        var lookDir = camera.LookDirection;
+        var upDir = camera.UpDirection;
+        var position = camera.Position;
+
+        var zAxis = -lookDir;
+        zAxis.Normalize();
+        var xAxis = Vector3D.CrossProduct(upDir, zAxis);
+        xAxis.Normalize();
+        var yAxis = Vector3D.CrossProduct(zAxis, xAxis);
+
+        double tx = -Vector3D.DotProduct(xAxis, (Vector3D)position);
+        double ty = -Vector3D.DotProduct(yAxis, (Vector3D)position);
+        double tz = -Vector3D.DotProduct(zAxis, (Vector3D)position);
+
+        // Transform point to view space
+        var p = (Vector3D)point3D;
+        double vx = Vector3D.DotProduct(xAxis, p) + tx;
+        double vy = Vector3D.DotProduct(yAxis, p) + ty;
+        double vz = Vector3D.DotProduct(zAxis, p) + tz;
+
+        // Projection
+        double aspect = vpWidth / vpHeight;
+        if (camera is PerspectiveCamera persp)
+        {
+            double fov = persp.FieldOfView * Math.PI / 180.0;
+            double f = 1.0 / Math.Tan(fov / 2.0);
+
+            if (Math.Abs(vz) < 1e-10) return false; // behind or on camera
+
+            double px = (vx * f / aspect) / (-vz);
+            double py = (vy * f) / (-vz);
+
+            // NDC to viewport ([-1,1] → [0, width/height])
+            point2D = new Point(
+                (px + 1.0) * 0.5 * vpWidth,
+                (1.0 - py) * 0.5 * vpHeight  // Y flipped: screen Y increases downward
+            );
+            return true;
+        }
+        else if (camera is OrthographicCamera ortho)
+        {
+            double w = ortho.Width;
+            double px = vx / (w / 2.0 * aspect);
+            double py = vy / (w / 2.0);
+
+            point2D = new Point(
+                (px + 1.0) * 0.5 * vpWidth,
+                (1.0 - py) * 0.5 * vpHeight
+            );
+            return true;
+        }
+
+        return false;
     }
 
     // ========================================================================

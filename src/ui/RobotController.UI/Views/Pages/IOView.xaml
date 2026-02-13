@@ -24,7 +24,7 @@
             </Grid.ColumnDefinitions>
 
             <!-- Digital Inputs -->
-            <Border Grid.Column="0" Background="#2D2D2D" CornerRadius="8" Margin="0,0,8,0">
+            <Border Grid.Column="0" Background="#4E4E4E" CornerRadius="8" Margin="0,0,8,0">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -38,7 +38,7 @@
                         <ItemsControl ItemsSource="{Binding DigitalInputs}" Margin="16,0,16,16">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border Background="#353535" CornerRadius="4" Padding="12,8" Margin="0,2">
+                                    <Border Background="#545454" CornerRadius="4" Padding="12,8" Margin="0,2">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="60"/>
@@ -53,7 +53,7 @@
                                             <Ellipse Grid.Column="2" Width="16" Height="16">
                                                 <Ellipse.Style>
                                                     <Style TargetType="Ellipse">
-                                                        <Setter Property="Fill" Value="#404040"/>
+                                                        <Setter Property="Fill" Value="#5E5E5E"/>
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding Value}" Value="True">
                                                                 <Setter Property="Fill" Value="#00FF00"/>
@@ -72,7 +72,7 @@
             </Border>
 
             <!-- Digital Outputs -->
-            <Border Grid.Column="1" Background="#2D2D2D" CornerRadius="8" Margin="8,0,0,0">
+            <Border Grid.Column="1" Background="#4E4E4E" CornerRadius="8" Margin="8,0,0,0">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -86,7 +86,7 @@
                         <ItemsControl ItemsSource="{Binding DigitalOutputs}" Margin="16,0,16,16">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border Background="#353535" CornerRadius="4" Padding="12,8" Margin="0,2">
+                                    <Border Background="#545454" CornerRadius="4" Padding="12,8" Margin="0,2">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="60"/>
@@ -109,7 +109,7 @@
                                                             <Setter.Value>
                                                                 <ControlTemplate TargetType="ToggleButton">
                                                                     <Border x:Name="border" CornerRadius="12"
-                                                                            Background="#404040">
+                                                                            Background="#5E5E5E">
                                                                         <Grid>
                                                                             <TextBlock x:Name="offText" Text="OFF"
                                                                                        Foreground="#888888"

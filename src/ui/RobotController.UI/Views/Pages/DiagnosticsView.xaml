@@ -31,7 +31,7 @@
             </Grid.ColumnDefinitions>
 
             <!-- Log Viewer -->
-            <Border Grid.Column="0" Background="#2D2D2D" CornerRadius="8" Margin="0,0,16,0">
+            <Border Grid.Column="0" Background="#4E4E4E" CornerRadius="8" Margin="0,0,16,0">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -40,12 +40,12 @@
                     </Grid.RowDefinitions>
 
                     <!-- Log Header -->
-                    <Border Grid.Row="0" Background="#353535" CornerRadius="8,8,0,0" Padding="12">
+                    <Border Grid.Row="0" Background="#545454" CornerRadius="8,8,0,0" Padding="12">
                         <Grid>
                             <TextBlock Text="System Log" FontWeight="Bold" Foreground="#AAAAAA"/>
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                                 <TextBlock Text="Filter:" Foreground="#888888" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                <ComboBox SelectedItem="{Binding LogFilter}" Width="100" Background="#1E1E1E">
+                                <ComboBox SelectedItem="{Binding LogFilter}" Width="100" Background="#363636">
                                     <ComboBoxItem Content="All"/>
                                     <ComboBoxItem Content="Error"/>
                                     <ComboBoxItem Content="Warning"/>
@@ -58,7 +58,7 @@
 
                     <!-- Log Content -->
                     <ListBox Grid.Row="1" ItemsSource="{Binding LogEntries}"
-                             Background="#1E1E1E" BorderThickness="0"
+                             Background="#363636" BorderThickness="0"
                              FontFamily="Consolas" FontSize="12"
                              ScrollViewer.HorizontalScrollBarVisibility="Auto">
                         <ListBox.ItemTemplate>
@@ -103,7 +103,7 @@
                     </ListBox>
 
                     <!-- Log Stats -->
-                    <Border Grid.Row="2" Background="#353535" Padding="12">
+                    <Border Grid.Row="2" Background="#545454" Padding="12">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="Entries: " Foreground="#888888"/>
                             <TextBlock Text="{Binding LogEntries.Count, FallbackValue=0, Mode=OneWay}" Foreground="#888888"/>
@@ -119,7 +119,7 @@
             <!-- System Status -->
             <StackPanel Grid.Column="1">
                 <!-- Core Status -->
-                <Border Background="#2D2D2D" CornerRadius="8" Padding="16" Margin="0,0,0,16">
+                <Border Background="#4E4E4E" CornerRadius="8" Padding="16" Margin="0,0,0,16">
                     <StackPanel>
                         <TextBlock Text="CORE STATUS" FontWeight="Bold" Foreground="#AAAAAA" Margin="0,0,0,12"/>
 
@@ -167,7 +167,7 @@
                 </Border>
 
                 <!-- Communication Stats -->
-                <Border Background="#2D2D2D" CornerRadius="8" Padding="16" Margin="0,0,0,16">
+                <Border Background="#4E4E4E" CornerRadius="8" Padding="16" Margin="0,0,0,16">
                     <StackPanel>
                         <TextBlock Text="COMMUNICATION" FontWeight="Bold" Foreground="#AAAAAA" Margin="0,0,0,12"/>
 
@@ -198,7 +198,7 @@
                 </Border>
 
                 <!-- Quick Actions -->
-                <Border Background="#2D2D2D" CornerRadius="8" Padding="16">
+                <Border Background="#4E4E4E" CornerRadius="8" Padding="16">
                     <StackPanel>
                         <TextBlock Text="QUICK ACTIONS" FontWeight="Bold" Foreground="#AAAAAA" Margin="0,0,0,12"/>
 

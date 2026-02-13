@@ -7,347 +7,357 @@
         xmlns:vm="clr-namespace:RobotController.UI.ViewModels"
         xmlns:controls="clr-namespace:RobotController.UI.Views.Controls"
         xmlns:pages="clr-namespace:RobotController.UI.Views.Pages"
+        xmlns:layout="clr-namespace:RobotController.UI.Views.Layout"
         mc:Ignorable="d"
         Title="Robot Controller"
-        Height="800" Width="1400"
+        Height="900" Width="1400"
         MinHeight="600" MinWidth="1000"
-        Background="{StaticResource PrimaryBackground}"
-        WindowStartupLocation="CenterScreen">
+        Background="#383838"
+        WindowStartupLocation="CenterScreen"
+        SnapsToDevicePixels="True"
+        UseLayoutRounding="True">
 
-    <Window.Resources>
-        <!-- Button Style -->
-        <Style TargetType="Button" x:Key="ToolbarButton">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="{StaticResource ForegroundBrush}"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="10,5"/>
-            <Setter Property="Margin" Value="2"/>
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#3F3F46"/>
-                </Trigger>
-                <Trigger Property="IsEnabled" Value="False">
-                    <Setter Property="Foreground" Value="#666666"/>
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-    </Window.Resources>
-
-    <Grid>
+    <!-- ================================================================ -->
+    <!-- ROOT LAYOUT: 4-Row KUKA SmartHMI Teach Pendant Shell             -->
+    <!--                                                                  -->
+    <!-- Row 0: Top Status Bar (modular UserControl)                      -->
+    <!-- Row 1: Message/Alarm Banner (modular UserControl)                -->
+    <!-- Row 2: Main Workspace (Viewport + Navigator + Pages)             -->
+    <!-- Row 3: Bottom Softkeys (modular UserControl)                     -->
+    <!-- ================================================================ -->
+    <Grid Background="#383838">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>  <!-- Menu -->
-            <RowDefinition Height="Auto"/>  <!-- Toolbar -->
-            <RowDefinition Height="*"/>     <!-- Content -->
-            <RowDefinition Height="Auto"/>  <!-- Status Bar -->
+            <RowDefinition Height="56"/>   <!-- Status Bar -->
+            <RowDefinition Height="40"/>   <!-- Message Banner -->
+            <RowDefinition Height="*"/>    <!-- Main Workspace -->
+            <RowDefinition Height="72"/>   <!-- Bottom Softkeys -->
         </Grid.RowDefinitions>
 
-        <!-- Menu Bar -->
-        <Menu Grid.Row="0" Background="{StaticResource SecondaryBackground}"
-              Foreground="{StaticResource ForegroundBrush}">
-            <MenuItem Header="_File">
-                <MenuItem Header="_New Program" InputGestureText="Ctrl+N"/>
-                <MenuItem Header="_Open Program" InputGestureText="Ctrl+O"/>
-                <MenuItem Header="_Save Program" InputGestureText="Ctrl+S"/>
-                <Separator/>
-                <MenuItem Header="E_xit" Click="MenuItem_Exit_Click" InputGestureText="Alt+F4"/>
-            </MenuItem>
-            <MenuItem Header="_Robot">
-                <MenuItem Header="_Connect" Command="{Binding ConnectCommand}"/>
-                <MenuItem Header="_Disconnect" Command="{Binding DisconnectCommand}"/>
-                <Separator/>
-                <MenuItem Header="_Home All Axes" IsEnabled="False"/>
-                <MenuItem Header="_Enable Motors" IsEnabled="False"/>
-            </MenuItem>
-            <MenuItem Header="_View">
-                <MenuItem Header="Reset _Camera" Click="MenuItem_ResetCamera_Click"/>
-                <MenuItem Header="_Top View" Click="MenuItem_TopView_Click"/>
-                <MenuItem Header="_Front View" Click="MenuItem_FrontView_Click"/>
-                <MenuItem Header="_Side View" Click="MenuItem_SideView_Click"/>
-                <Separator/>
-                <MenuItem Header="Show _Grid" IsCheckable="True" IsChecked="{Binding ShowGrid}"/>
-                <MenuItem Header="Show _Axes" IsCheckable="True" IsChecked="{Binding ShowAxes}"/>
-                <MenuItem Header="Show _TCP" IsCheckable="True" IsChecked="{Binding ShowTcp}"/>
-                <Separator/>
-                <MenuItem Header="Show TCP _Trace" IsCheckable="True" IsChecked="{Binding ShowTcpTrace}"/>
-                <MenuItem Header="Clear TCP Trace" Click="MenuItem_ClearTcpTrace_Click"/>
-            </MenuItem>
-            <MenuItem Header="_Help">
-                <MenuItem Header="_About" Click="MenuItem_About_Click"/>
-            </MenuItem>
-        </Menu>
+        <!-- ============================================================ -->
+        <!-- ROW 0: TOP STATUS BAR (Modular UserControl)                  -->
+        <!-- ============================================================ -->
+        <layout:TopStatusBarView Grid.Row="0"/>
 
-        <!-- Toolbar -->
-        <Border Grid.Row="1" Background="{StaticResource SecondaryBackground}"
-                BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
-            <StackPanel Orientation="Horizontal" Margin="5,3">
-                <Button Content="Connect" Command="{Binding ConnectCommand}" Style="{StaticResource ToolbarButton}"/>
-                <Button Content="Disconnect" Command="{Binding DisconnectCommand}" Style="{StaticResource ToolbarButton}"/>
-                <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="5,0"/>
-                <Button Content="Refresh" Command="{Binding RefreshStatusCommand}" Style="{StaticResource ToolbarButton}"/>
-                <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="5,0"/>
-                <Button Content="Home" Style="{StaticResource ToolbarButton}" IsEnabled="False"/>
-                <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="5,0"/>
-                <Button Content="Run" Style="{StaticResource ToolbarButton}" IsEnabled="False" Foreground="LimeGreen"/>
-                <Button Content="Pause" Style="{StaticResource ToolbarButton}" IsEnabled="False" Foreground="Orange"/>
-                <Button Content="Stop" Style="{StaticResource ToolbarButton}" IsEnabled="False" Foreground="Red"/>
-                <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="5,0"/>
-                <TextBlock Text="Speed:" VerticalAlignment="Center" Foreground="Gray" Margin="5,0"/>
-                <Slider Value="{Binding SpeedOverride}" Minimum="0" Maximum="100" Width="100"
-                        VerticalAlignment="Center"/>
-                <TextBlock Text="{Binding SpeedOverride, StringFormat={}{0:F0}%}" Width="35"
-                           VerticalAlignment="Center" Foreground="{StaticResource ForegroundBrush}"/>
-            </StackPanel>
-        </Border>
+        <!-- ============================================================ -->
+        <!-- ROW 1: MESSAGE BANNER (Modular UserControl)                  -->
+        <!-- ============================================================ -->
+        <layout:MessageBannerView Grid.Row="1"/>
 
-        <!-- Main Content -->
-        <Grid Grid.Row="2">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="200" MinWidth="150"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="260" MinWidth="200"/>
-            </Grid.ColumnDefinitions>
+        <!-- ============================================================ -->
+        <!-- ROW 2: MAIN WORKSPACE                                        -->
+        <!-- ContentControl for dynamic page loading                      -->
+        <!-- Currently hosts: Navigator sidebar + Viewport + Page content -->
+        <!-- ============================================================ -->
+        <Grid Grid.Row="2" Background="#444444">
+            <!-- Content Area: Viewport + Pages -->
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>                   <!-- Viewport + Pages -->
+                    <ColumnDefinition Width="Auto"/>                <!-- Splitter -->
+                    <ColumnDefinition Width="260" MinWidth="200"/>  <!-- Properties Panel -->
+                    <ColumnDefinition Width="Auto"/>                <!-- KUKA Right Status Column -->
+                </Grid.ColumnDefinitions>
 
-            <!-- Navigation Panel -->
-            <Border Grid.Column="0" Background="{StaticResource SecondaryBackground}">
-                <Grid>
+                <!-- Left: 3D Viewport (always present) -->
+                <Grid Grid.Column="0">
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="*"/>    <!-- Viewport -->
                     </Grid.RowDefinitions>
 
-                    <TextBlock Grid.Row="0" Text="Navigation" FontWeight="Bold" Margin="10"
-                               Foreground="{StaticResource ForegroundBrush}"/>
+                    <!-- 3D Viewport -->
+                    <Border Grid.Row="0" Background="#2A2A2A" BorderBrush="#2A2A2A" BorderThickness="0,0,0,1">
+                        <helix:HelixViewport3D x:Name="Viewport3D"
+                                               Background="#2A2A2A"
+                                               ShowCoordinateSystem="True"
+                                               CoordinateSystemLabelForeground="White"
+                                               ZoomExtentsWhenLoaded="True"
+                                               CameraRotationMode="Turntable"
+                                               RotateAroundMouseDownPoint="True"
+                                               ZoomAroundMouseDownPoint="True"
+                                               ZoomSensitivity="0.5"
+                                               MouseLeftButtonDown="Viewport3D_MouseLeftButtonDown"
+                                               MouseMove="Viewport3D_MouseMove"
+                                               MouseLeftButtonUp="Viewport3D_MouseLeftButtonUp"
+                                               IsRotationEnabled="True"
+                                               IsPanEnabled="True"
+                                               IsZoomEnabled="True"
+                                               ShowViewCube="True"
+                                               ViewCubeBackText="Back"
+                                               ViewCubeFrontText="Front"
+                                               ViewCubeLeftText="Left"
+                                               ViewCubeRightText="Right"
+                                               ViewCubeTopText="Top"
+                                               ViewCubeBottomText="Bottom">
+                            <helix:HelixViewport3D.Camera>
+                                <PerspectiveCamera Position="1500,1500,1000"
+                                                   LookDirection="-1,-1,-0.5"
+                                                   UpDirection="0,0,1"
+                                                   FieldOfView="45"/>
+                            </helix:HelixViewport3D.Camera>
+                            <ModelVisual3D x:Name="LightingModel">
+                                <ModelVisual3D.Content>
+                                    <Model3DGroup>
+                                        <AmbientLight Color="#404040"/>
+                                        <DirectionalLight Color="#C8C8C8" Direction="-1,-1,-1"/>
+                                        <DirectionalLight Color="#646464" Direction="1,0.5,0.5"/>
+                                    </Model3DGroup>
+                                </ModelVisual3D.Content>
+                            </ModelVisual3D>
+                            <helix:GridLinesVisual3D x:Name="GridLines"
+                                                     Width="2000" Length="2000"
+                                                     MajorDistance="500" MinorDistance="100"
+                                                     Thickness="1" Fill="#404040"/>
+                            <helix:CoordinateSystemVisual3D x:Name="CoordAxes" ArrowLengths="200"/>
+                            <ModelVisual3D x:Name="RobotModelVisual"/>
+                            <ModelVisual3D x:Name="TcpMarkerVisual"/>
+                            <ModelVisual3D x:Name="TcpTraceVisual"/>
+                            <ModelVisual3D x:Name="SceneObjectsVisual"/>
+                            <ModelVisual3D x:Name="BaseFrameAxesVisual"/>
+                            <ModelVisual3D x:Name="TcpGizmoVisual"/>
+                            <ModelVisual3D x:Name="GhostRobotVisual"/>
+                        </helix:HelixViewport3D>
+                    </Border>
 
-                    <ListBox Grid.Row="1" Background="Transparent" BorderThickness="0"
-                             Foreground="{StaticResource ForegroundBrush}"
-                             SelectedIndex="{Binding SelectedNavIndex}">
-                        <ListBox.ItemContainerStyle>
-                            <Style TargetType="ListBoxItem">
-                                <Setter Property="Padding" Value="10,8"/>
+                    <!-- TCP Pick Mode Banner (overlay on viewport) -->
+                    <Border Grid.Row="0" x:Name="TcpPickBanner" VerticalAlignment="Top" HorizontalAlignment="Stretch"
+                            Background="#CC2196F3" Padding="15,10" Margin="20,10,20,0"
+                            Visibility="Collapsed" SnapsToDevicePixels="True">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <TextBlock Text="Click on the tool mesh to pick TCP point"
+                                       Foreground="White" FontSize="14" FontWeight="SemiBold"
+                                       VerticalAlignment="Center"/>
+                            <Button Content="Cancel" Margin="20,0,0,0" Padding="12,4"
+                                    Click="CancelTcpPick_Click"
+                                    Style="{StaticResource IndustrialButton}"
+                                    Background="#33FFFFFF" Foreground="White"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- E-STOP Button Overlay -->
+                    <Button Grid.Row="0"
+                            Width="100" Height="100"
+                            HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                            Margin="0,0,20,20"
+                            Command="{Binding TriggerEStopCommand}"
+                            Cursor="Hand" Panel.ZIndex="10">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Visibility" Value="Collapsed"/>
                                 <Style.Triggers>
-                                    <Trigger Property="IsSelected" Value="True">
-                                        <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
-                                    </Trigger>
+                                    <DataTrigger Binding="{Binding SelectedNavIndex}" Value="0">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
                                 </Style.Triggers>
                             </Style>
-                        </ListBox.ItemContainerStyle>
-                        <ListBoxItem Content="Teach &amp; Program"/>
-                        <ListBoxItem Content="Program" Visibility="Collapsed"/>
-                        <ListBoxItem Content="I/O"/>
-                        <ListBoxItem Content="Configuration"/>
-                        <ListBoxItem Content="Diagnostics"/>
-                        <ListBoxItem Content="Robot Catalog"/>
-                        <ListBoxItem Content="URDF Import"/>
-                        <ListBoxItem Content="Tool Management"/>
-                        <ListBoxItem Content="Station Setup"/>
-                    </ListBox>
+                        </Button.Style>
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Grid>
+                                    <Ellipse Fill="#40000000" Margin="4,4,-4,-4"/>
+                                    <Ellipse x:Name="ButtonBody" Fill="{Binding EStopButtonColor}">
+                                        <Ellipse.Effect>
+                                            <DropShadowEffect Color="Black" BlurRadius="10" ShadowDepth="3"/>
+                                        </Ellipse.Effect>
+                                    </Ellipse>
+                                    <Ellipse Stroke="#80000000" StrokeThickness="4" Margin="8"/>
+                                    <Ellipse Margin="12">
+                                        <Ellipse.Fill>
+                                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                                <GradientStop Color="#40FFFFFF" Offset="0"/>
+                                                <GradientStop Color="Transparent" Offset="0.5"/>
+                                            </LinearGradientBrush>
+                                        </Ellipse.Fill>
+                                    </Ellipse>
+                                    <TextBlock Text="{Binding EStopButtonText}"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                                               FontWeight="Bold" FontSize="11" Foreground="White"
+                                               TextAlignment="Center" TextWrapping="Wrap" Width="70"/>
+                                </Grid>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="ButtonBody" Property="Fill" Value="#FF6666"/>
+                                    </Trigger>
+                                    <Trigger Property="IsPressed" Value="True">
+                                        <Setter TargetName="ButtonBody" Property="Fill" Value="#CC0000"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+
+                    <!-- Page Content Overlay (covers viewport for non-Teach pages) -->
+                    <Border x:Name="PageContentOverlay" Grid.Row="0" Background="#444444">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedNavIndex}" Value="2">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding SelectedNavIndex}" Value="3">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding SelectedNavIndex}" Value="4">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding SelectedNavIndex}" Value="5">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding SelectedNavIndex}" Value="6">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding SelectedNavIndex}" Value="7">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding SelectedNavIndex}" Value="8">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+
+                        <Grid>
+                            <pages:IOView DataContext="{Binding IoViewModel}">
+                                <pages:IOView.Style>
+                                    <Style TargetType="pages:IOView">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding DataContext.SelectedNavIndex, RelativeSource={RelativeSource AncestorType=Window}}" Value="2">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </pages:IOView.Style>
+                            </pages:IOView>
+
+                            <pages:ConfigurationView DataContext="{Binding ConfigurationViewModel}">
+                                <pages:ConfigurationView.Style>
+                                    <Style TargetType="pages:ConfigurationView">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding DataContext.SelectedNavIndex, RelativeSource={RelativeSource AncestorType=Window}}" Value="3">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </pages:ConfigurationView.Style>
+                            </pages:ConfigurationView>
+
+                            <pages:DiagnosticsView DataContext="{Binding DiagnosticsViewModel}">
+                                <pages:DiagnosticsView.Style>
+                                    <Style TargetType="pages:DiagnosticsView">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding DataContext.SelectedNavIndex, RelativeSource={RelativeSource AncestorType=Window}}" Value="4">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </pages:DiagnosticsView.Style>
+                            </pages:DiagnosticsView>
+
+                            <pages:RobotPackageBrowser DataContext="{Binding RobotCatalogViewModel}">
+                                <pages:RobotPackageBrowser.Style>
+                                    <Style TargetType="pages:RobotPackageBrowser">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding DataContext.SelectedNavIndex, RelativeSource={RelativeSource AncestorType=Window}}" Value="5">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </pages:RobotPackageBrowser.Style>
+                            </pages:RobotPackageBrowser>
+
+                            <pages:UrdfImportPage DataContext="{Binding UrdfImportViewModel}">
+                                <pages:UrdfImportPage.Style>
+                                    <Style TargetType="pages:UrdfImportPage">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding DataContext.SelectedNavIndex, RelativeSource={RelativeSource AncestorType=Window}}" Value="6">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </pages:UrdfImportPage.Style>
+                            </pages:UrdfImportPage>
+
+                            <controls:ToolPanel DataContext="{Binding Tool}">
+                                <controls:ToolPanel.Style>
+                                    <Style TargetType="controls:ToolPanel">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding DataContext.SelectedNavIndex, RelativeSource={RelativeSource AncestorType=Window}}" Value="7">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </controls:ToolPanel.Style>
+                            </controls:ToolPanel>
+                        </Grid>
+                    </Border>
                 </Grid>
-            </Border>
 
-            <!-- Left Splitter -->
-            <GridSplitter Grid.Column="1" Width="3" Background="{StaticResource BorderBrush}"
-                          HorizontalAlignment="Center" VerticalAlignment="Stretch"/>
+                <!-- Right Splitter -->
+                <GridSplitter Grid.Column="1" Width="3" Background="#2A2A2A"
+                              HorizontalAlignment="Center" VerticalAlignment="Stretch"/>
 
-            <!-- 3D Viewport + Page Content -->
-            <Grid Grid.Column="2">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="3*"/>   <!-- Viewport -->
-                    <RowDefinition Height="Auto"/> <!-- Splitter -->
-                    <RowDefinition Height="2*"/>   <!-- Editor / Pages -->
-                </Grid.RowDefinitions>
-
-                <!-- 3D Viewport (Row 0 - always visible when index=0) -->
-                <Border Grid.Row="0" Background="#1A1A1A">
-                    <helix:HelixViewport3D x:Name="Viewport3D"
-                                           Background="#1E1E1E"
-                                           ShowCoordinateSystem="True"
-                                           CoordinateSystemLabelForeground="White"
-                                           ZoomExtentsWhenLoaded="True"
-                                           CameraRotationMode="Turntable"
-                                           RotateAroundMouseDownPoint="True"
-                                           ZoomAroundMouseDownPoint="True"
-                                           ZoomSensitivity="0.5"
-                                           MouseLeftButtonDown="Viewport3D_MouseLeftButtonDown"
-                                           MouseMove="Viewport3D_MouseMove"
-                                           MouseLeftButtonUp="Viewport3D_MouseLeftButtonUp"
-                                           IsRotationEnabled="True"
-                                           IsPanEnabled="True"
-                                           IsZoomEnabled="True"
-                                           ShowViewCube="True"
-                                           ViewCubeBackText="Back"
-                                           ViewCubeFrontText="Front"
-                                           ViewCubeLeftText="Left"
-                                           ViewCubeRightText="Right"
-                                           ViewCubeTopText="Top"
-                                           ViewCubeBottomText="Bottom">
-
-                        <!-- Camera -->
-                        <helix:HelixViewport3D.Camera>
-                            <PerspectiveCamera Position="1500,1500,1000"
-                                               LookDirection="-1,-1,-0.5"
-                                               UpDirection="0,0,1"
-                                               FieldOfView="45"/>
-                        </helix:HelixViewport3D.Camera>
-
-                        <!-- Lighting -->
-                        <ModelVisual3D x:Name="LightingModel">
-                            <ModelVisual3D.Content>
-                                <Model3DGroup>
-                                    <AmbientLight Color="#404040"/>
-                                    <DirectionalLight Color="#C8C8C8" Direction="-1,-1,-1"/>
-                                    <DirectionalLight Color="#646464" Direction="1,0.5,0.5"/>
-                                </Model3DGroup>
-                            </ModelVisual3D.Content>
-                        </ModelVisual3D>
-
-                        <!-- Grid -->
-                        <helix:GridLinesVisual3D x:Name="GridLines"
-                                                 Width="2000" Length="2000"
-                                                 MajorDistance="500" MinorDistance="100"
-                                                 Thickness="1"
-                                                 Fill="#404040"/>
-
-                        <!-- Coordinate Axes -->
-                        <helix:CoordinateSystemVisual3D x:Name="CoordAxes"
-                                                        ArrowLengths="200"/>
-
-                        <!-- Robot Model Container -->
-                        <ModelVisual3D x:Name="RobotModelVisual"/>
-
-                        <!-- TCP Marker Container -->
-                        <ModelVisual3D x:Name="TcpMarkerVisual"/>
-
-                        <!-- TCP Path Trace Container -->
-                        <ModelVisual3D x:Name="TcpTraceVisual"/>
-
-                        <!-- Scene Objects Container (individual ModelVisual3D per object) -->
-                        <ModelVisual3D x:Name="SceneObjectsVisual"/>
-
-                        <!-- Object dragging is handled via mouse events in code-behind -->
-
-                        <!-- Base Frame Axes Container -->
-                        <ModelVisual3D x:Name="BaseFrameAxesVisual"/>
-
-                        <!-- TCP Gizmo (3D Interactive Jogging) -->
-                        <ModelVisual3D x:Name="TcpGizmoVisual"/>
-
-                        <!-- Ghost Robot (3D Jogging Preview) -->
-                        <ModelVisual3D x:Name="GhostRobotVisual"/>
-
-                    </helix:HelixViewport3D>
+                <!-- Properties Panel (right side) — KUKA SmartPAD Style -->
+                <Border Grid.Column="2" Background="#3E3E3E"
+                        BorderBrush="#2A2A2A" BorderThickness="1,0,0,0">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Visible"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SelectedNavIndex}" Value="1">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding SelectedNavIndex}" Value="2">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding SelectedNavIndex}" Value="3">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding SelectedNavIndex}" Value="4">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding SelectedNavIndex}" Value="5">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding SelectedNavIndex}" Value="6">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding SelectedNavIndex}" Value="7">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding SelectedNavIndex}" Value="8">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <controls:KukaJogPanel/>
                 </Border>
 
-                <!-- TCP Pick Mode Banner (overlay on viewport) -->
-                <Border Grid.Row="0" x:Name="TcpPickBanner" VerticalAlignment="Top" HorizontalAlignment="Stretch"
-                        Background="#CC2196F3" Padding="15,10" Margin="20,10,20,0"
-                        CornerRadius="6" Visibility="Collapsed">
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                        <TextBlock Text="Click on the tool mesh to pick TCP point"
-                                   Foreground="White" FontSize="14" FontWeight="SemiBold"
-                                   VerticalAlignment="Center"/>
-                        <Button Content="Cancel" Margin="20,0,0,0" Padding="12,4"
-                                Click="CancelTcpPick_Click"
-                                Background="#33FFFFFF" Foreground="White" BorderBrush="White"
-                                FontSize="12"/>
-                    </StackPanel>
-                </Border>
-
-                <!-- E-STOP Button Overlay (viewport area only, Row 0) -->
-                <Button Grid.Row="0"
-                        Width="100" Height="100"
-                        HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                        Margin="0,0,20,20"
-                        Command="{Binding TriggerEStopCommand}"
-                        Cursor="Hand"
-                        Panel.ZIndex="10">
-                    <Button.Style>
-                        <Style TargetType="Button">
+                <!-- Station Setup Panel (Index 8) -->
+                <pages:StationSetupPage Grid.Column="2" DataContext="{Binding StationSetup}">
+                    <pages:StationSetupPage.Style>
+                        <Style TargetType="pages:StationSetupPage">
                             <Setter Property="Visibility" Value="Collapsed"/>
                             <Style.Triggers>
-                                <DataTrigger Binding="{Binding SelectedNavIndex}" Value="0">
+                                <DataTrigger Binding="{Binding DataContext.SelectedNavIndex, RelativeSource={RelativeSource AncestorType=Window}}" Value="8">
                                     <Setter Property="Visibility" Value="Visible"/>
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
-                    </Button.Style>
-                    <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                            <Grid>
-                                <!-- Shadow -->
-                                <Ellipse Fill="#40000000" Margin="4,4,-4,-4"/>
+                    </pages:StationSetupPage.Style>
+                </pages:StationSetupPage>
 
-                                <!-- Button Body -->
-                                <Ellipse x:Name="ButtonBody" Fill="{Binding EStopButtonColor}">
-                                    <Ellipse.Effect>
-                                        <DropShadowEffect Color="Black" BlurRadius="10" ShadowDepth="3"/>
-                                    </Ellipse.Effect>
-                                </Ellipse>
-
-                                <!-- Inner Ring -->
-                                <Ellipse Stroke="#80000000" StrokeThickness="4" Margin="8"/>
-
-                                <!-- Highlight -->
-                                <Ellipse Margin="12">
-                                    <Ellipse.Fill>
-                                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                            <GradientStop Color="#40FFFFFF" Offset="0"/>
-                                            <GradientStop Color="Transparent" Offset="0.5"/>
-                                        </LinearGradientBrush>
-                                    </Ellipse.Fill>
-                                </Ellipse>
-
-                                <!-- Text -->
-                                <TextBlock Text="{Binding EStopButtonText}"
-                                           HorizontalAlignment="Center" VerticalAlignment="Center"
-                                           FontWeight="Bold" FontSize="11" Foreground="White"
-                                           TextAlignment="Center" TextWrapping="Wrap" Width="70"/>
-                            </Grid>
-
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="ButtonBody" Property="Fill" Value="#FF6666"/>
-                                </Trigger>
-                                <Trigger Property="IsPressed" Value="True">
-                                    <Setter TargetName="ButtonBody" Property="Fill" Value="#CC0000"/>
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Button.Template>
-                </Button>
-
-                <!-- GridSplitter between viewport and editor (only visible on Teach & Program page) -->
-                <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch"
-                              Background="#007ACC" Cursor="SizeNS">
-                    <GridSplitter.Style>
-                        <Style TargetType="GridSplitter">
-                            <Setter Property="Visibility" Value="Collapsed"/>
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding SelectedNavIndex}" Value="0">
-                                    <Setter Property="Visibility" Value="Visible"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </GridSplitter.Style>
-                </GridSplitter>
-
-                <!-- Program Editor (Row 2 - only visible on Teach & Program page, index=0) -->
-                <pages:ProgramView Grid.Row="2">
-                    <pages:ProgramView.Style>
-                        <Style TargetType="pages:ProgramView">
-                            <Setter Property="Visibility" Value="Collapsed"/>
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding DataContext.SelectedNavIndex, RelativeSource={RelativeSource AncestorType=Window}}" Value="0">
-                                    <Setter Property="Visibility" Value="Visible"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </pages:ProgramView.Style>
-                </pages:ProgramView>
-
-                <!-- Page Content Overlay (covers all 3 rows for non-Teach pages) -->
-                <Border x:Name="PageContentOverlay" Grid.Row="0" Grid.RowSpan="3" Background="#1E1E1E">
+                <!-- ======================================================== -->
+                <!-- KUKA Right Status Column (Column 3)                       -->
+                <!-- Status indicators + Close (X) button — KUKA KSS 8.3 §4.2 -->
+                <!-- ======================================================== -->
+                <Border Grid.Column="3" Background="#4E4E4E" BorderBrush="#2A2A2A" BorderThickness="1,0,0,0" Width="48">
                     <Border.Style>
                         <Style TargetType="Border">
                             <Setter Property="Visibility" Value="Collapsed"/>
@@ -376,473 +386,314 @@
                             </Style.Triggers>
                         </Style>
                     </Border.Style>
+                    <StackPanel VerticalAlignment="Top">
+                        <!-- Robot Status Icon -->
+                        <Border Background="#5A5A5A" BorderBrush="#2A2A2A" BorderThickness="0,0,0,1"
+                                Height="44" Margin="2,2,2,0" ToolTip="Robot Status">
+                            <TextBlock Text="🤖" FontSize="20" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
 
-                    <Grid>
-                        <!-- I/O View (Index 2) -->
-                        <pages:IOView DataContext="{Binding IoViewModel}">
-                            <pages:IOView.Style>
-                                <Style TargetType="pages:IOView">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding DataContext.SelectedNavIndex, RelativeSource={RelativeSource AncestorType=Window}}" Value="2">
-                                            <Setter Property="Visibility" Value="Visible"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </pages:IOView.Style>
-                        </pages:IOView>
+                        <!-- Drives Status -->
+                        <Border Background="#5A5A5A" BorderBrush="#2A2A2A" BorderThickness="0,0,0,1"
+                                Height="44" Margin="2,1,2,0" ToolTip="Drives Status">
+                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <Ellipse Width="10" Height="10" Fill="{Binding DrivesStatusColor}" HorizontalAlignment="Center"/>
+                                <TextBlock Text="{Binding DrivesStatusSymbol}" Foreground="White" FontSize="10"
+                                           FontWeight="Bold" HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                            </StackPanel>
+                        </Border>
 
-                        <!-- Configuration View (Index 3) -->
-                        <pages:ConfigurationView DataContext="{Binding ConfigurationViewModel}">
-                            <pages:ConfigurationView.Style>
-                                <Style TargetType="pages:ConfigurationView">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding DataContext.SelectedNavIndex, RelativeSource={RelativeSource AncestorType=Window}}" Value="3">
-                                            <Setter Property="Visibility" Value="Visible"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </pages:ConfigurationView.Style>
-                        </pages:ConfigurationView>
+                        <!-- Interpreter Status -->
+                        <Border Background="#5A5A5A" BorderBrush="#2A2A2A" BorderThickness="0,0,0,1"
+                                Height="44" Margin="2,1,2,0" ToolTip="Robot Interpreter">
+                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <Ellipse Width="10" Height="10" Fill="{Binding RobotInterpreterColor}" HorizontalAlignment="Center"/>
+                                <TextBlock Text="R" Foreground="White" FontSize="10"
+                                           FontWeight="Bold" HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                            </StackPanel>
+                        </Border>
 
-                        <!-- Diagnostics View (Index 4) -->
-                        <pages:DiagnosticsView DataContext="{Binding DiagnosticsViewModel}">
-                            <pages:DiagnosticsView.Style>
-                                <Style TargetType="pages:DiagnosticsView">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding DataContext.SelectedNavIndex, RelativeSource={RelativeSource AncestorType=Window}}" Value="4">
-                                            <Setter Property="Visibility" Value="Visible"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </pages:DiagnosticsView.Style>
-                        </pages:DiagnosticsView>
+                        <!-- Separator -->
+                        <Rectangle Fill="#2A2A2A" Height="2" Margin="4,4,4,4"/>
 
-                        <!-- Robot Catalog View (Index 5) -->
-                        <pages:RobotPackageBrowser DataContext="{Binding RobotCatalogViewModel}">
-                            <pages:RobotPackageBrowser.Style>
-                                <Style TargetType="pages:RobotPackageBrowser">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding DataContext.SelectedNavIndex, RelativeSource={RelativeSource AncestorType=Window}}" Value="5">
-                                            <Setter Property="Visibility" Value="Visible"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </pages:RobotPackageBrowser.Style>
-                        </pages:RobotPackageBrowser>
+                        <!-- CLOSE PAGE BUTTON (Orange X) — KUKA Style -->
+                        <Button Command="{Binding ClosePageCommand}" Cursor="Hand"
+                                ToolTip="Close Window" Height="44" Margin="2,0,2,2">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="XBtnBorder" Background="#EB6A0A" SnapsToDevicePixels="True">
+                                        <TextBlock Text="✕" FontSize="22" FontWeight="Bold"
+                                                   Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="XBtnBorder" Property="Background" Value="#FF7B1B"/>
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True">
+                                            <Setter TargetName="XBtnBorder" Property="Background" Value="#CC5500"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
 
-                        <!-- URDF Import View (Index 6) -->
-                        <pages:UrdfImportPage DataContext="{Binding UrdfImportViewModel}">
-                            <pages:UrdfImportPage.Style>
-                                <Style TargetType="pages:UrdfImportPage">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding DataContext.SelectedNavIndex, RelativeSource={RelativeSource AncestorType=Window}}" Value="6">
-                                            <Setter Property="Visibility" Value="Visible"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </pages:UrdfImportPage.Style>
-                        </pages:UrdfImportPage>
+                        <!-- Separator -->
+                        <Rectangle Fill="#2A2A2A" Height="2" Margin="4,2,4,4"/>
 
-                        <!-- Tool Management View (Index 7) -->
-                        <controls:ToolPanel DataContext="{Binding Tool}">
-                            <controls:ToolPanel.Style>
-                                <Style TargetType="controls:ToolPanel">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding DataContext.SelectedNavIndex, RelativeSource={RelativeSource AncestorType=Window}}" Value="7">
-                                            <Setter Property="Visibility" Value="Visible"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </controls:ToolPanel.Style>
-                        </controls:ToolPanel>
-                    </Grid>
+                        <!-- Tool/Base Indicator -->
+                        <Border Background="#5A5A5A" BorderBrush="#2A2A2A" BorderThickness="0,0,0,1"
+                                Height="44" Margin="2,0,2,1" ToolTip="Active Tool">
+                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <TextBlock Text="T" Foreground="#EB6A0A" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center"/>
+                                <TextBlock Text="{Binding ActiveToolDisplay}" Foreground="White" FontSize="9"
+                                           HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Background="#5A5A5A" BorderBrush="#2A2A2A" BorderThickness="0,0,0,1"
+                                Height="44" Margin="2,0,2,1" ToolTip="Active Base">
+                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <TextBlock Text="B" Foreground="#4EC9B0" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center"/>
+                                <TextBlock Text="{Binding ActiveBaseDisplay}" Foreground="White" FontSize="9"
+                                           HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Override Indicator -->
+                        <Border Background="#5A5A5A" BorderBrush="#2A2A2A" BorderThickness="0,0,0,1"
+                                Height="44" Margin="2,0,2,1" ToolTip="Speed Override">
+                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <TextBlock Text="OV" Foreground="#AAAAAA" FontSize="9" HorizontalAlignment="Center"/>
+                                <TextBlock Foreground="White" FontSize="11" FontWeight="Bold"
+                                           HorizontalAlignment="Center" Margin="0,1,0,0">
+                                    <TextBlock.Text>
+                                        <MultiBinding StringFormat="{}{0:F0}%">
+                                            <Binding Path="SpeedOverride"/>
+                                        </MultiBinding>
+                                    </TextBlock.Text>
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Incremental Jog Mode -->
+                        <Border Background="#5A5A5A" BorderBrush="#2A2A2A" BorderThickness="0,0,0,1"
+                                Height="44" Margin="2,0,2,1" ToolTip="Incremental Jog">
+                            <TextBlock Text="{Binding IncrementalJogMode}" Foreground="White" FontSize="14"
+                                       FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </StackPanel>
                 </Border>
             </Grid>
-
-            <!-- Right Splitter -->
-            <GridSplitter Grid.Column="3" Width="3" Background="{StaticResource BorderBrush}"
-                          HorizontalAlignment="Center" VerticalAlignment="Stretch"/>
-
-            <!-- Properties Panel -->
-            <Border Grid.Column="4" Background="{StaticResource SecondaryBackground}">
-                <Border.Style>
-                    <Style TargetType="Border">
-                        <Setter Property="Visibility" Value="Visible"/>
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding SelectedNavIndex}" Value="1">
-                                <Setter Property="Visibility" Value="Collapsed"/>
-                            </DataTrigger>
-                            <DataTrigger Binding="{Binding SelectedNavIndex}" Value="2">
-                                <Setter Property="Visibility" Value="Collapsed"/>
-                            </DataTrigger>
-                            <DataTrigger Binding="{Binding SelectedNavIndex}" Value="3">
-                                <Setter Property="Visibility" Value="Collapsed"/>
-                            </DataTrigger>
-                            <DataTrigger Binding="{Binding SelectedNavIndex}" Value="4">
-                                <Setter Property="Visibility" Value="Collapsed"/>
-                            </DataTrigger>
-                            <DataTrigger Binding="{Binding SelectedNavIndex}" Value="5">
-                                <Setter Property="Visibility" Value="Collapsed"/>
-                            </DataTrigger>
-                            <DataTrigger Binding="{Binding SelectedNavIndex}" Value="6">
-                                <Setter Property="Visibility" Value="Collapsed"/>
-                            </DataTrigger>
-                            <DataTrigger Binding="{Binding SelectedNavIndex}" Value="7">
-                                <Setter Property="Visibility" Value="Collapsed"/>
-                            </DataTrigger>
-                            <DataTrigger Binding="{Binding SelectedNavIndex}" Value="8">
-                                <Setter Property="Visibility" Value="Collapsed"/>
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </Border.Style>
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Margin="10">
-                        <!-- Connection Status -->
-                        <TextBlock Text="Connection" FontWeight="Bold" Margin="0,0,0,5"
-                                   Foreground="{StaticResource ForegroundBrush}"/>
-                        <Border Background="#333333" CornerRadius="3" Padding="10" Margin="0,0,0,15">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <StackPanel>
-                                    <TextBlock Text="{Binding ConnectionStatus}"
-                                               Foreground="{Binding ConnectionStatusColor}"
-                                               FontWeight="Bold" FontSize="14"/>
-                                    <TextBlock Text="{Binding CoreVersion, StringFormat=Core v{0}}"
-                                               Foreground="Gray" FontSize="10"
-                                               Visibility="{Binding IsConnected, Converter={StaticResource BoolToVisibility}}"/>
-                                </StackPanel>
-                                <Ellipse Grid.Column="1" Width="12" Height="12"
-                                         Fill="{Binding ConnectionStatusColor}"
-                                         VerticalAlignment="Center"/>
-                            </Grid>
-                        </Border>
-
-                        <!-- Robot Status -->
-                        <TextBlock Text="Robot Status" FontWeight="Bold" Margin="0,0,0,5"
-                                   Foreground="{StaticResource ForegroundBrush}"/>
-                        <Border Background="#333333" CornerRadius="3" Padding="10" Margin="0,0,0,15">
-                            <Grid>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition/>
-                                    <RowDefinition/>
-                                </Grid.RowDefinitions>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-
-                                <StackPanel Grid.Row="0" Grid.Column="0">
-                                    <TextBlock Text="State" Foreground="Gray" FontSize="10"/>
-                                    <TextBlock Text="{Binding RobotState}" FontWeight="Bold"
-                                               Foreground="{StaticResource ForegroundBrush}"/>
-                                </StackPanel>
-                                <StackPanel Grid.Row="0" Grid.Column="1">
-                                    <TextBlock Text="Mode" Foreground="Gray" FontSize="10"/>
-                                    <TextBlock Text="{Binding RobotMode}"
-                                               Foreground="{StaticResource ForegroundBrush}"/>
-                                </StackPanel>
-                                <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,8,0,0">
-                                    <TextBlock Text="Homed" Foreground="Gray" FontSize="10"/>
-                                    <TextBlock Text="{Binding IsHomed}"
-                                               Foreground="{Binding IsHomed, Converter={StaticResource BoolToColor}}"/>
-                                </StackPanel>
-                                <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,8,0,0">
-                                    <TextBlock Text="Enabled" Foreground="Gray" FontSize="10"/>
-                                    <TextBlock Text="{Binding IsEnabled}"
-                                               Foreground="{Binding IsEnabled, Converter={StaticResource BoolToColor}}"/>
-                                </StackPanel>
-                            </Grid>
-                        </Border>
-
-                        <!-- Position Display (KUKA-style with mode switch) -->
-                        <controls:PositionDisplay DataContext="{Binding PositionDisplay}"
-                                                  Margin="0,0,0,15"/>
-
-                        <!-- Joint Positions -->
-                        <TextBlock Text="Joint Positions" FontWeight="Bold" Margin="0,0,0,5"
-                                   Foreground="{StaticResource ForegroundBrush}"/>
-                        <Border Background="#333333" CornerRadius="3" Padding="10" Margin="0,0,0,15">
-                            <ItemsControl ItemsSource="{Binding JointPositions}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Grid Margin="0,3">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="35"/>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="70"/>
-                                            </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="{Binding Name}"
-                                                       Foreground="Gray" FontWeight="Bold"/>
-                                            <ProgressBar Grid.Column="1"
-                                                         Value="{Binding Value}" Minimum="-180" Maximum="180"
-                                                         Height="6" Margin="5,0"
-                                                         Background="#222222" Foreground="{StaticResource AccentBrush}"/>
-                                            <TextBlock Grid.Column="2" Text="{Binding Value, StringFormat={}{0:F2}°}"
-                                                       Foreground="{StaticResource ForegroundBrush}"
-                                                       HorizontalAlignment="Right"/>
-                                        </Grid>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </Border>
-
-                        <!-- TCP Position -->
-                        <TextBlock Text="TCP Position" FontWeight="Bold" Margin="0,0,0,5"
-                                   Foreground="{StaticResource ForegroundBrush}"/>
-                        <Border Background="#333333" CornerRadius="3" Padding="10" Margin="0,0,0,15">
-                            <Grid>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition/>
-                                    <RowDefinition/>
-                                </Grid.RowDefinitions>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition/>
-                                    <ColumnDefinition/>
-                                    <ColumnDefinition/>
-                                </Grid.ColumnDefinitions>
-
-                                <!-- Position -->
-                                <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,5,5">
-                                    <TextBlock Text="X" Foreground="Red" FontSize="10" FontWeight="Bold"/>
-                                    <TextBlock Text="{Binding TcpX, StringFormat={}{0:F1}}"
-                                               Foreground="{StaticResource ForegroundBrush}"/>
-                                </StackPanel>
-                                <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,0,5,5">
-                                    <TextBlock Text="Y" Foreground="LimeGreen" FontSize="10" FontWeight="Bold"/>
-                                    <TextBlock Text="{Binding TcpY, StringFormat={}{0:F1}}"
-                                               Foreground="{StaticResource ForegroundBrush}"/>
-                                </StackPanel>
-                                <StackPanel Grid.Row="0" Grid.Column="2" Margin="0,0,0,5">
-                                    <TextBlock Text="Z" Foreground="DodgerBlue" FontSize="10" FontWeight="Bold"/>
-                                    <TextBlock Text="{Binding TcpZ, StringFormat={}{0:F1}}"
-                                               Foreground="{StaticResource ForegroundBrush}"/>
-                                </StackPanel>
-
-                                <!-- Orientation -->
-                                <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,5,0">
-                                    <TextBlock Text="Rx" Foreground="Gray" FontSize="10"/>
-                                    <TextBlock Text="{Binding TcpRx, StringFormat={}{0:F1}°}"
-                                               Foreground="{StaticResource ForegroundBrush}"/>
-                                </StackPanel>
-                                <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,0,5,0">
-                                    <TextBlock Text="Ry" Foreground="Gray" FontSize="10"/>
-                                    <TextBlock Text="{Binding TcpRy, StringFormat={}{0:F1}°}"
-                                               Foreground="{StaticResource ForegroundBrush}"/>
-                                </StackPanel>
-                                <StackPanel Grid.Row="1" Grid.Column="2">
-                                    <TextBlock Text="Rz" Foreground="Gray" FontSize="10"/>
-                                    <TextBlock Text="{Binding TcpRz, StringFormat={}{0:F1}°}"
-                                               Foreground="{StaticResource ForegroundBrush}"/>
-                                </StackPanel>
-                            </Grid>
-                        </Border>
-
-                        <!-- Override Control (KUKA-inspired) -->
-                        <controls:OverridePanel DataContext="{Binding Override}"
-                                               Margin="0,0,0,15"/>
-
-                        <!-- Manual Jog -->
-                        <TextBlock Text="Motion Control" FontWeight="Bold" Margin="0,0,0,5"
-                                   Foreground="{StaticResource ForegroundBrush}"/>
-                        <controls:MotionControlPanel DataContext="{Binding MotionControl}"
-                                                     Margin="0,0,0,10"/>
-
-                        <controls:JogPanel DataContext="{Binding MotionControl}"
-                                           Margin="0,0,0,15"/>
-
-                        <!-- 3D Jog Controls (only visible on Manual Jog page) -->
-                        <Border Background="#333333" CornerRadius="3" Padding="10" Margin="0,0,0,15">
-                            <Border.Style>
-                                <Style TargetType="Border">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding SelectedNavIndex}" Value="0">
-                                            <Setter Property="Visibility" Value="Visible"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Border.Style>
-                            <StackPanel>
-                                <TextBlock Text="3D JOG MODE" FontWeight="Bold" Margin="0,0,0,8"
-                                           Foreground="{StaticResource ForegroundBrush}"/>
-
-                                <!-- Enable toggle -->
-                                <CheckBox Content="Enable 3D Gizmo"
-                                          IsChecked="{Binding Is3DJogEnabled}"
-                                          Foreground="{StaticResource ForegroundBrush}" Margin="0,0,0,8"/>
-
-                                <!-- Frame selector -->
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8"
-                                            IsEnabled="{Binding Is3DJogEnabled}">
-                                    <TextBlock Text="Frame:" Foreground="Gray" VerticalAlignment="Center"
-                                               Margin="0,0,8,0"/>
-                                    <RadioButton Content="World" GroupName="GizmoFrame"
-                                                 IsChecked="{Binding IsGizmoWorldFrame}"
-                                                 Foreground="{StaticResource ForegroundBrush}" Margin="0,0,12,0"/>
-                                    <RadioButton Content="Tool" GroupName="GizmoFrame"
-                                                 IsChecked="{Binding IsGizmoWorldFrame, Converter={StaticResource InverseBool}}"
-                                                 Foreground="{StaticResource ForegroundBrush}"/>
-                                </StackPanel>
-
-                                <!-- Live mode -->
-                                <CheckBox Content="Live Mode (move during drag)"
-                                          IsChecked="{Binding Is3DJogLiveMode}"
-                                          IsEnabled="{Binding Is3DJogEnabled}"
-                                          Foreground="{StaticResource ForegroundBrush}" Margin="0,0,0,8"/>
-
-                                <!-- Drag status -->
-                                <TextBlock Text="{Binding GizmoDragStatus}"
-                                           Foreground="#00FF88" FontSize="12" FontWeight="Bold"
-                                           Visibility="{Binding GizmoDragStatus, Converter={StaticResource StringToVisibilityConverter}}"/>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- Teach & Insert Section (only visible on Teach & Program page) -->
-                        <Border Background="#333333" CornerRadius="3" Padding="10" Margin="0,0,0,15">
-                            <Border.Style>
-                                <Style TargetType="Border">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding SelectedNavIndex}" Value="0">
-                                            <Setter Property="Visibility" Value="Visible"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Border.Style>
-                            <StackPanel>
-                                <TextBlock Text="TEACH &amp; INSERT" FontWeight="Bold" Margin="0,0,0,8"
-                                           Foreground="{StaticResource ForegroundBrush}" FontSize="11"/>
-
-                                <!-- Motion Type -->
-                                <TextBlock Text="Motion Type" Foreground="Gray" FontSize="10" Margin="0,0,0,4"/>
-                                <ComboBox ItemsSource="{Binding ProgramEditor.AvailableMotionTypes}"
-                                          SelectedItem="{Binding ProgramEditor.TeachMotionType}"
-                                          Margin="0,0,0,8" FontSize="12"/>
-
-                                <!-- Velocity ($VEL.CP m/s) -->
-                                <TextBlock Text="Velocity (m/s)" Foreground="Gray" FontSize="10" Margin="0,0,0,4"/>
-                                <TextBox Text="{Binding ProgramEditor.TeachVelocity, StringFormat=F2}"
-                                         Margin="0,0,0,8" FontSize="12"/>
-
-                                <!-- Approximation -->
-                                <TextBlock Text="Approximation" Foreground="Gray" FontSize="10" Margin="0,0,0,4"/>
-                                <ComboBox ItemsSource="{Binding ProgramEditor.AvailableApproximations}"
-                                          SelectedItem="{Binding ProgramEditor.TeachApproximation}"
-                                          Margin="0,0,0,10" FontSize="12"/>
-
-                                <!-- Teach Button -->
-                                <Button Content="TEACH &amp; INSERT"
-                                        Command="{Binding ProgramEditor.TeachAndInsertCommand}"
-                                        Padding="10,10" FontWeight="Bold" FontSize="13"
-                                        Background="#4CAF50" Foreground="White"
-                                        BorderThickness="0" Cursor="Hand">
-                                    <Button.Template>
-                                        <ControlTemplate TargetType="Button">
-                                            <Border Background="{TemplateBinding Background}"
-                                                    CornerRadius="4" Padding="{TemplateBinding Padding}">
-                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                            </Border>
-                                        </ControlTemplate>
-                                    </Button.Template>
-                                </Button>
-                            </StackPanel>
-                        </Border>
-
-                    </StackPanel>
-                </ScrollViewer>
-            </Border>
-
-            <!-- Station Setup Panel (Index 8) - replaces Properties panel -->
-            <pages:StationSetupPage Grid.Column="4" DataContext="{Binding StationSetup}">
-                <pages:StationSetupPage.Style>
-                    <Style TargetType="pages:StationSetupPage">
-                        <Setter Property="Visibility" Value="Collapsed"/>
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding DataContext.SelectedNavIndex, RelativeSource={RelativeSource AncestorType=Window}}" Value="8">
-                                <Setter Property="Visibility" Value="Visible"/>
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </pages:StationSetupPage.Style>
-            </pages:StationSetupPage>
         </Grid>
 
-        <!-- Status Bar -->
-        <Border Grid.Row="3" Background="{StaticResource SecondaryBackground}"
-                BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0">
-            <Grid Margin="5,3">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
+        <!-- ============================================================ -->
+        <!-- ROW 3: BOTTOM SOFTKEYS (Modular UserControl)                 -->
+        <!-- ============================================================ -->
+        <layout:BottomSoftkeyBarView Grid.Row="3"/>
 
-                <StackPanel Grid.Column="0" Orientation="Horizontal">
-                    <Ellipse Width="10" Height="10" Fill="{Binding ConnectionStatusColor}" Margin="0,0,5,0"/>
-                    <TextBlock Text="{Binding ConnectionStatus}" Foreground="{StaticResource ForegroundBrush}"/>
-                </StackPanel>
-
-                <TextBlock Grid.Column="1" Text="|" Foreground="Gray" Margin="10,0"/>
-
-                <!-- Operation Mode Indicator -->
-                <Border Grid.Column="2"
-                        Background="{Binding Mode.ModeColor}"
-                        CornerRadius="3"
-                        Padding="8,2"
-                        Margin="0,0,10,0">
-                    <TextBlock Text="{Binding Mode.CurrentMode}"
-                               FontWeight="SemiBold"
-                               Foreground="Black"/>
-                </Border>
-
-                <TextBlock Grid.Column="3" Text="{Binding RobotState}" Foreground="{StaticResource ForegroundBrush}"/>
-
-                <TextBlock Grid.Column="4" Text="Robot Controller v1.0.0" Foreground="Gray" HorizontalAlignment="Right"/>
-            </Grid>
-        </Border>
-
-        <!-- E-STOP Reset Confirmation Dialog -->
+        <!-- ============================================================ -->
+        <!-- DIALOG: New Program (overlay)                                -->
+        <!-- ============================================================ -->
         <Border Grid.Row="0" Grid.RowSpan="4"
                 Background="#80000000"
-                Visibility="{Binding ShowEStopConfirmDialog, Converter={StaticResource BoolToVisibility}}">
-            <Border Background="#2D2D2D" CornerRadius="8"
-                    Width="350" Height="180"
-                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                Visibility="{Binding ShowNewProgramDialog, Converter={StaticResource BoolToVisibility}}">
+            <Border Background="#4E4E4E" BorderBrush="#2A2A2A" BorderThickness="2"
+                    Width="400" Height="260"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    SnapsToDevicePixels="True">
+                <Grid Margin="20">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="New Program"
+                               FontSize="18" FontWeight="Bold"
+                               Foreground="White" Margin="0,0,0,12" FontFamily="Segoe UI"/>
+                    <Grid Grid.Row="1" Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="80"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Name:" Foreground="#AAAAAA" FontSize="13"
+                                   VerticalAlignment="Center" FontFamily="Segoe UI"/>
+                        <TextBox Grid.Column="1"
+                                 Text="{Binding NewProgramName, UpdateSourceTrigger=PropertyChanged}"
+                                 Background="#363636" Foreground="White" BorderBrush="#5A5A5A"
+                                 FontSize="14" Padding="6,4" FontFamily="Consolas"/>
+                    </Grid>
+                    <Grid Grid.Row="2" Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="80"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Desc:" Foreground="#AAAAAA" FontSize="13"
+                                   VerticalAlignment="Center" FontFamily="Segoe UI"/>
+                        <TextBox Grid.Column="1"
+                                 Text="{Binding NewProgramDescription, UpdateSourceTrigger=PropertyChanged}"
+                                 Background="#363636" Foreground="White" BorderBrush="#5A5A5A"
+                                 FontSize="14" Padding="6,4" FontFamily="Consolas"/>
+                    </Grid>
+                    <StackPanel Grid.Row="4" Orientation="Horizontal"
+                                HorizontalAlignment="Right" Margin="0,10,0,0">
+                        <Button Content="Cancel" Width="80" Height="36"
+                                Margin="0,0,10,0"
+                                Style="{StaticResource IndustrialButton}"
+                                Command="{Binding CancelNewProgramCommand}"/>
+                        <Button Content="Create" Width="100" Height="36"
+                                Background="#0078D7" Foreground="White"
+                                BorderThickness="0" FontWeight="Bold" Cursor="Hand"
+                                Command="{Binding ConfirmNewProgramCommand}"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Border>
+
+        <!-- ============================================================ -->
+        <!-- DIALOG: Delete Program Confirmation (overlay)                -->
+        <!-- ============================================================ -->
+        <Border Grid.Row="0" Grid.RowSpan="4"
+                Background="#80000000"
+                Visibility="{Binding ShowDeleteConfirmDialog, Converter={StaticResource BoolToVisibility}}">
+            <Border Background="#4E4E4E" BorderBrush="#2A2A2A" BorderThickness="2"
+                    Width="380" Height="180"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    SnapsToDevicePixels="True">
                 <Grid Margin="20">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="Delete Program?"
+                               FontSize="18" FontWeight="Bold"
+                               Foreground="White" Margin="0,0,0,10" FontFamily="Segoe UI"/>
+                    <TextBlock Grid.Row="1" TextWrapping="Wrap" Foreground="#AAAAAA" FontFamily="Segoe UI">
+                        <Run Text="Are you sure you want to delete "/>
+                        <Run Text="{Binding DeleteTargetName, Mode=OneWay}" Foreground="#FFAA00" FontWeight="Bold"/>
+                        <Run Text="? This action cannot be undone."/>
+                    </TextBlock>
+                    <StackPanel Grid.Row="2" Orientation="Horizontal"
+                                HorizontalAlignment="Right" Margin="0,15,0,0">
+                        <Button Content="Cancel" Width="80" Height="36"
+                                Margin="0,0,10,0"
+                                Style="{StaticResource IndustrialButton}"
+                                Command="{Binding CancelDeleteCommand}"/>
+                        <Button Content="Delete" Width="100" Height="36"
+                                Background="#CC0000" Foreground="White"
+                                BorderThickness="0" FontWeight="Bold" Cursor="Hand"
+                                Command="{Binding ConfirmDeleteCommand}"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Border>
 
+        <!-- ============================================================ -->
+        <!-- DIALOG: Rename Program (overlay)                             -->
+        <!-- ============================================================ -->
+        <Border Grid.Row="0" Grid.RowSpan="4"
+                Background="#80000000"
+                Visibility="{Binding ShowRenameDialog, Converter={StaticResource BoolToVisibility}}">
+            <Border Background="#4E4E4E" BorderBrush="#2A2A2A" BorderThickness="2"
+                    Width="380" Height="180"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    SnapsToDevicePixels="True">
+                <Grid Margin="20">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="Rename Program"
+                               FontSize="18" FontWeight="Bold"
+                               Foreground="White" Margin="0,0,0,12" FontFamily="Segoe UI"/>
+                    <Grid Grid.Row="1" Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="60"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Name:" Foreground="#AAAAAA" FontSize="13"
+                                   VerticalAlignment="Center" FontFamily="Segoe UI"/>
+                        <TextBox Grid.Column="1"
+                                 Text="{Binding RenameProgramName, UpdateSourceTrigger=PropertyChanged}"
+                                 Background="#363636" Foreground="White" BorderBrush="#5A5A5A"
+                                 FontSize="14" Padding="6,4" FontFamily="Consolas"/>
+                    </Grid>
+                    <StackPanel Grid.Row="3" Orientation="Horizontal"
+                                HorizontalAlignment="Right" Margin="0,10,0,0">
+                        <Button Content="Cancel" Width="80" Height="36"
+                                Margin="0,0,10,0"
+                                Style="{StaticResource IndustrialButton}"
+                                Command="{Binding CancelRenameCommand}"/>
+                        <Button Content="Rename" Width="100" Height="36"
+                                Background="#0078D7" Foreground="White"
+                                BorderThickness="0" FontWeight="Bold" Cursor="Hand"
+                                Command="{Binding ConfirmRenameCommand}"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Border>
+
+        <!-- E-STOP Reset Confirmation Dialog (overlay) -->
+        <Border Grid.Row="0" Grid.RowSpan="4"
+                Background="#80000000"
+                Visibility="{Binding ShowEStopConfirmDialog, Converter={StaticResource BoolToVisibility}}">
+            <Border Background="#4E4E4E" BorderBrush="#2A2A2A" BorderThickness="2"
+                    Width="380" Height="200"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    SnapsToDevicePixels="True">
+                <Grid Margin="20">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
                     <TextBlock Grid.Row="0" Text="Reset E-STOP?"
                                FontSize="18" FontWeight="Bold"
-                               Foreground="White" Margin="0,0,0,10"/>
-
-                    <TextBlock Grid.Row="1" TextWrapping="Wrap" Foreground="#AAAAAA">
+                               Foreground="White" Margin="0,0,0,10" FontFamily="Segoe UI"/>
+                    <TextBlock Grid.Row="1" TextWrapping="Wrap" Foreground="#AAAAAA" FontFamily="Segoe UI">
                         <Run Text="E-STOP is currently active. "/>
                         <Run Text="Please verify all hazards are clear before resetting." Foreground="#FFAA00"/>
                     </TextBlock>
-
                     <StackPanel Grid.Row="2" Orientation="Horizontal"
                                 HorizontalAlignment="Right" Margin="0,15,0,0">
-                        <Button Content="Cancel" Width="80" Height="32" Margin="0,0,10,0"
+                        <Button Content="Cancel" Width="80" Height="36"
+                                Margin="0,0,10,0"
+                                Style="{StaticResource IndustrialButton}"
                                 Command="{Binding CancelEStopResetCommand}"/>
-                        <Button Content="Reset E-STOP" Width="100" Height="32"
-                                Background="#008800" Foreground="White"
-                                Command="{Binding ResetEStopCommand}"/>
+                        <Button Content="Reset E-STOP" Width="120" Height="36"
+                                Command="{Binding ResetEStopCommand}">
+                            <Button.Style>
+                                <Style TargetType="Button">
+                                    <Setter Property="Background" Value="#008800"/>
+                                    <Setter Property="Foreground" Value="White"/>
+                                    <Setter Property="BorderThickness" Value="0"/>
+                                    <Setter Property="FontWeight" Value="Bold"/>
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border x:Name="bd" Background="{TemplateBinding Background}"
+                                                        Padding="8,4" SnapsToDevicePixels="True">
+                                                    <ContentPresenter HorizontalAlignment="Center"
+                                                                      VerticalAlignment="Center"/>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="bd" Property="Background" Value="#00AA00"/>
+                                                    </Trigger>
+                                                    <Trigger Property="IsPressed" Value="True">
+                                                        <Setter TargetName="bd" Property="Background" Value="#006600"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </Button.Style>
+                        </Button>
                     </StackPanel>
                 </Grid>
             </Border>

@@ -428,7 +428,6 @@ public class ViewportService : IViewportService
         // Update TCP marker position and orientation
         if (_tcpMarker != null)
         {
-            var tcpPos = _robot.TcpPosition;
             var tcpOri = _robot.TcpOrientation;
 
             var rotOnly = new Matrix3D(
@@ -437,9 +436,16 @@ public class ViewportService : IViewportService
                 tcpOri.M31, tcpOri.M32, tcpOri.M33, 0,
                 0, 0, 0, 1);
 
+            // Use core TCP position (authoritative) when available, fallback to C# FK
+            Point3D markerPos;
+            if (_coreTcpPose != null && _coreTcpPose.Length >= 3)
+                markerPos = new Point3D(_coreTcpPose[0], _coreTcpPose[1], _coreTcpPose[2]);
+            else
+                markerPos = _robot.TcpPosition;
+
             var transformGroup = new Transform3DGroup();
             transformGroup.Children.Add(new MatrixTransform3D(rotOnly));
-            transformGroup.Children.Add(new TranslateTransform3D(tcpPos.X, tcpPos.Y, tcpPos.Z));
+            transformGroup.Children.Add(new TranslateTransform3D(markerPos.X, markerPos.Y, markerPos.Z));
             _tcpMarker.Transform = transformGroup;
         }
 
@@ -452,7 +458,18 @@ public class ViewportService : IViewportService
         // Record TCP path trace point
         if (_tcpTraceEnabled && _robot != null)
         {
-            RecordTracePoint(_robot.TcpPosition);
+            // Use C++ Core TCP pose (authoritative) if available,
+            // falling back to C# FK TCP position.
+            // Core TCP matches IK target exactly; C# FK may have small
+            // mismatch that accumulates into visible arc during linear jog.
+            if (_coreTcpPose != null && _coreTcpPose.Length >= 3)
+            {
+                RecordTracePoint(new Point3D(_coreTcpPose[0], _coreTcpPose[1], _coreTcpPose[2]));
+            }
+            else
+            {
+                RecordTracePoint(_robot.TcpPosition);
+            }
         }
 
         ModelUpdated?.Invoke(this, EventArgs.Empty);
@@ -1447,7 +1464,12 @@ public class ViewportService : IViewportService
 
         System.Windows.Application.Current.Dispatcher.Invoke(() =>
         {
-            var tcpPos = _robot.TcpPosition;
+            // Use core TCP position (authoritative) when available, fallback to C# FK
+            Point3D tcpPos;
+            if (_coreTcpPose != null && _coreTcpPose.Length >= 3)
+                tcpPos = new Point3D(_coreTcpPose[0], _coreTcpPose[1], _coreTcpPose[2]);
+            else
+                tcpPos = _robot.TcpPosition;
 
             var transformGroup = new Transform3DGroup();
 
@@ -1632,9 +1654,9 @@ public class ViewportService : IViewportService
     {
         return motionType.ToUpperInvariant() switch
         {
-            "PTP" or "MOVEJ" or "MOVJ" => Color.FromRgb(60, 140, 255),    // Blue - joint move
-            "LIN" or "MOVEL" or "MOVL" => Color.FromRgb(80, 255, 80),     // Green - linear
-            "CIRC" or "MOVEC" or "MOVC" => Color.FromRgb(255, 100, 50),   // Orange-red - circular
+            "PTP" => Color.FromRgb(60, 140, 255),     // Blue - joint move
+            "LIN" => Color.FromRgb(80, 255, 80),     // Green - linear
+            "CIRC" => Color.FromRgb(255, 100, 50),   // Orange-red - circular
             _ => Color.FromRgb(200, 200, 200)                              // Gray - unknown
         };
     }

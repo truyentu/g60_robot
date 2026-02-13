@@ -32,7 +32,7 @@
                                Text="{Binding Objects.Count, StringFormat='{}{0} object(s) in scene'}"/>
 
                     <!-- Robot Base Height Info -->
-                    <Border Background="#2A2A2A" CornerRadius="4" Padding="8,5" Margin="0,8,0,0">
+                    <Border Background="#484848" CornerRadius="4" Padding="8,5" Margin="0,8,0,0">
                         <TextBlock Text="{Binding RobotBaseHeightInfo}" Foreground="#4FC3F7"
                                    FontSize="11" FontWeight="SemiBold"/>
                     </Border>

@@ -11,22 +11,22 @@
     <UserControl.Resources>
         <!-- Dark theme TextBox style -->
         <Style x:Key="DarkTextBox" TargetType="TextBox">
-            <Setter Property="Background" Value="#2D2D2D"/>
+            <Setter Property="Background" Value="#4E4E4E"/>
             <Setter Property="Foreground" Value="#E0E0E0"/>
-            <Setter Property="BorderBrush" Value="#404040"/>
+            <Setter Property="BorderBrush" Value="#5E5E5E"/>
             <Setter Property="CaretBrush" Value="#E0E0E0"/>
             <Setter Property="Padding" Value="5,3"/>
         </Style>
 
         <!-- Dark theme DataGrid style -->
         <Style x:Key="DarkDataGrid" TargetType="DataGrid">
-            <Setter Property="Background" Value="#2D2D2D"/>
+            <Setter Property="Background" Value="#4E4E4E"/>
             <Setter Property="Foreground" Value="#E0E0E0"/>
-            <Setter Property="BorderBrush" Value="#404040"/>
-            <Setter Property="RowBackground" Value="#2D2D2D"/>
-            <Setter Property="AlternatingRowBackground" Value="#363636"/>
+            <Setter Property="BorderBrush" Value="#5E5E5E"/>
+            <Setter Property="RowBackground" Value="#4E4E4E"/>
+            <Setter Property="AlternatingRowBackground" Value="#545454"/>
             <Setter Property="GridLinesVisibility" Value="Horizontal"/>
-            <Setter Property="HorizontalGridLinesBrush" Value="#404040"/>
+            <Setter Property="HorizontalGridLinesBrush" Value="#5E5E5E"/>
         </Style>
 
         <!-- Dark theme TextBlock style for labels -->
@@ -37,14 +37,14 @@
         <!-- Dark theme GroupBox style -->
         <Style TargetType="GroupBox">
             <Setter Property="Foreground" Value="#E0E0E0"/>
-            <Setter Property="BorderBrush" Value="#404040"/>
+            <Setter Property="BorderBrush" Value="#5E5E5E"/>
         </Style>
 
         <!-- Dark theme Button style -->
         <Style TargetType="Button">
-            <Setter Property="Background" Value="#404040"/>
+            <Setter Property="Background" Value="#5E5E5E"/>
             <Setter Property="Foreground" Value="#E0E0E0"/>
-            <Setter Property="BorderBrush" Value="#505050"/>
+            <Setter Property="BorderBrush" Value="#6A6A6A"/>
             <Setter Property="Padding" Value="12,6"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -57,13 +57,13 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#505050"/>
+                                <Setter TargetName="border" Property="Background" Value="#6A6A6A"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#606060"/>
+                                <Setter TargetName="border" Property="Background" Value="#787878"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="border" Property="Background" Value="#2A2A2A"/>
+                                <Setter TargetName="border" Property="Background" Value="#484848"/>
                                 <Setter Property="Foreground" Value="#666666"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -166,10 +166,10 @@
                           Margin="5">
                     <DataGrid.ColumnHeaderStyle>
                         <Style TargetType="DataGridColumnHeader">
-                            <Setter Property="Background" Value="#404040"/>
+                            <Setter Property="Background" Value="#5E5E5E"/>
                             <Setter Property="Foreground" Value="#E0E0E0"/>
                             <Setter Property="Padding" Value="8,4"/>
-                            <Setter Property="BorderBrush" Value="#505050"/>
+                            <Setter Property="BorderBrush" Value="#6A6A6A"/>
                             <Setter Property="BorderThickness" Value="0,0,1,1"/>
                         </Style>
                     </DataGrid.ColumnHeaderStyle>

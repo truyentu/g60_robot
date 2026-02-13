@@ -23,7 +23,7 @@
         <TabControl Grid.Row="1" Background="Transparent" BorderThickness="0">
             <TabControl.Resources>
                 <Style TargetType="TabItem">
-                    <Setter Property="Background" Value="#2D2D2D"/>
+                    <Setter Property="Background" Value="#4E4E4E"/>
                     <Setter Property="Foreground" Value="#888888"/>
                     <Setter Property="Padding" Value="16,8"/>
                     <Setter Property="Template">
@@ -35,7 +35,7 @@
                                 </Border>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsSelected" Value="True">
-                                        <Setter Property="Background" Value="#353535"/>
+                                        <Setter Property="Background" Value="#545454"/>
                                         <Setter Property="Foreground" Value="White"/>
                                     </Trigger>
                                 </ControlTemplate.Triggers>
@@ -47,7 +47,7 @@
 
             <!-- Connection Settings -->
             <TabItem Header="Connection">
-                <Border Background="#2D2D2D" CornerRadius="0,8,8,8" Padding="24">
+                <Border Background="#4E4E4E" CornerRadius="0,8,8,8" Padding="24">
                     <StackPanel MaxWidth="500" HorizontalAlignment="Left">
                         <TextBlock Text="Core Connection" FontWeight="Bold" Foreground="White"
                                    FontSize="14" Margin="0,0,0,16"/>
@@ -59,7 +59,7 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="Request Address:" Foreground="#888888" VerticalAlignment="Center"/>
                             <TextBox Grid.Column="1" Text="{Binding RepAddress}"
-                                     Background="#1E1E1E" Foreground="White" Padding="8"/>
+                                     Background="#363636" Foreground="White" Padding="8"/>
                         </Grid>
 
                         <Grid Margin="0,0,0,12">
@@ -69,13 +69,13 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="Subscribe Address:" Foreground="#888888" VerticalAlignment="Center"/>
                             <TextBox Grid.Column="1" Text="{Binding SubAddress}"
-                                     Background="#1E1E1E" Foreground="White" Padding="8"/>
+                                     Background="#363636" Foreground="White" Padding="8"/>
                         </Grid>
 
                         <CheckBox Content="Auto-connect on startup" Foreground="White"
                                   IsChecked="{Binding AutoConnect}" Margin="0,8,0,0"/>
 
-                        <Separator Margin="0,24,0,24" Background="#404040"/>
+                        <Separator Margin="0,24,0,24" Background="#5E5E5E"/>
 
                         <TextBlock Text="Serial Port (Firmware)" FontWeight="Bold" Foreground="White"
                                    FontSize="14" Margin="0,0,0,16"/>
@@ -89,7 +89,7 @@
                             <TextBlock Text="COM Port:" Foreground="#888888" VerticalAlignment="Center"/>
                             <ComboBox Grid.Column="1" ItemsSource="{Binding AvailablePorts}"
                                       SelectedItem="{Binding SelectedPort}"
-                                      Background="#1E1E1E"/>
+                                      Background="#363636"/>
                             <Button Grid.Column="2" Content="Refresh" Margin="8,0,0,0" Width="70"
                                     Command="{Binding RefreshPortsCommand}"/>
                         </Grid>
@@ -102,7 +102,7 @@
                             <TextBlock Text="Baud Rate:" Foreground="#888888" VerticalAlignment="Center"/>
                             <ComboBox Grid.Column="1" ItemsSource="{Binding BaudRates}"
                                       SelectedItem="{Binding SelectedBaudRate}"
-                                      Background="#1E1E1E"/>
+                                      Background="#363636"/>
                         </Grid>
                     </StackPanel>
                 </Border>
@@ -110,7 +110,7 @@
 
             <!-- Robot Catalog -->
             <TabItem Header="Robot Catalog">
-                <Border Background="#2D2D2D" CornerRadius="0,8,8,8" Padding="24">
+                <Border Background="#4E4E4E" CornerRadius="0,8,8,8" Padding="24">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="380"/>
@@ -122,14 +122,14 @@
                                                     DataContext="{Binding DataContext.RobotCatalog, RelativeSource={RelativeSource AncestorType=Window}}"/>
 
                         <!-- Selected Robot Details -->
-                        <Border Grid.Column="1" Background="#252525" CornerRadius="8" Margin="16,0,0,0" Padding="16">
+                        <Border Grid.Column="1" Background="#3E3E3E" CornerRadius="8" Margin="16,0,0,0" Padding="16">
                             <ScrollViewer VerticalScrollBarVisibility="Auto">
                                 <StackPanel>
                                     <TextBlock Text="SELECTED ROBOT DETAILS" FontSize="14" FontWeight="Bold"
                                                Foreground="#AAAAAA" Margin="0,0,0,16"/>
 
                                     <!-- Model Info -->
-                                    <Border Background="#353535" CornerRadius="6" Padding="12" Margin="0,0,0,12">
+                                    <Border Background="#545454" CornerRadius="6" Padding="12" Margin="0,0,0,12">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="120"/>
@@ -178,7 +178,7 @@
                                     <!-- Specifications -->
                                     <TextBlock Text="Specifications" Foreground="#888888" FontWeight="SemiBold"
                                                Margin="0,8,0,8"/>
-                                    <Border Background="#353535" CornerRadius="6" Padding="12" Margin="0,0,0,12">
+                                    <Border Background="#545454" CornerRadius="6" Padding="12" Margin="0,0,0,12">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*"/>
@@ -216,28 +216,28 @@
 
             <!-- Homing -->
             <TabItem Header="Homing">
-                <Border Background="#2D2D2D" CornerRadius="0,8,8,8">
+                <Border Background="#4E4E4E" CornerRadius="0,8,8,8">
                     <controls:HomingPanel DataContext="{Binding DataContext.Homing, RelativeSource={RelativeSource AncestorType=Window}}"/>
                 </Border>
             </TabItem>
 
             <!-- Tools -->
             <TabItem Header="Tools">
-                <Border Background="#2D2D2D" CornerRadius="0,8,8,8">
+                <Border Background="#4E4E4E" CornerRadius="0,8,8,8">
                     <controls:ToolPanel DataContext="{Binding DataContext.Tool, RelativeSource={RelativeSource AncestorType=Window}}"/>
                 </Border>
             </TabItem>
 
             <!-- Base Frames -->
             <TabItem Header="Base Frames">
-                <Border Background="#2D2D2D" CornerRadius="0,8,8,8">
+                <Border Background="#4E4E4E" CornerRadius="0,8,8,8">
                     <controls:BaseFramePanel DataContext="{Binding DataContext.BaseFrame, RelativeSource={RelativeSource AncestorType=Window}}"/>
                 </Border>
             </TabItem>
 
             <!-- Robot Settings -->
             <TabItem Header="Robot">
-                <Border Background="#2D2D2D" CornerRadius="0,8,8,8" Padding="24">
+                <Border Background="#4E4E4E" CornerRadius="0,8,8,8" Padding="24">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel MaxWidth="600" HorizontalAlignment="Left">
                             <TextBlock Text="Robot Information" FontWeight="Bold" Foreground="White"
@@ -250,7 +250,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="Robot Name:" Foreground="#888888" VerticalAlignment="Center"/>
                                 <TextBox Grid.Column="1" Text="{Binding RobotName}"
-                                         Background="#1E1E1E" Foreground="White" Padding="8"/>
+                                         Background="#363636" Foreground="White" Padding="8"/>
                             </Grid>
 
                             <Grid Margin="0,0,0,12">
@@ -260,10 +260,10 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="Model:" Foreground="#888888" VerticalAlignment="Center"/>
                                 <TextBox Grid.Column="1" Text="{Binding RobotModel}"
-                                         Background="#1E1E1E" Foreground="White" Padding="8" IsReadOnly="True"/>
+                                         Background="#363636" Foreground="White" Padding="8" IsReadOnly="True"/>
                             </Grid>
 
-                            <Separator Margin="0,16,0,16" Background="#404040"/>
+                            <Separator Margin="0,16,0,16" Background="#5E5E5E"/>
 
                             <TextBlock Text="Joint Limits" FontWeight="Bold" Foreground="White"
                                        FontSize="14" Margin="0,0,0,16"/>
@@ -284,19 +284,19 @@
                                             <TextBlock Grid.Column="1" Text="Min:" Foreground="#888888"
                                                        HorizontalAlignment="Right" Margin="0,0,8,0"/>
                                             <TextBox Grid.Column="2" Text="{Binding MinLimit}"
-                                                     Background="#1E1E1E" Foreground="White"
+                                                     Background="#363636" Foreground="White"
                                                      Padding="4" TextAlignment="Right"/>
                                             <TextBlock Grid.Column="3" Text="Max:" Foreground="#888888"
                                                        HorizontalAlignment="Right" Margin="0,0,8,0"/>
                                             <TextBox Grid.Column="4" Text="{Binding MaxLimit}"
-                                                     Background="#1E1E1E" Foreground="White"
+                                                     Background="#363636" Foreground="White"
                                                      Padding="4" TextAlignment="Right"/>
                                         </Grid>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
 
-                            <Separator Margin="0,16,0,16" Background="#404040"/>
+                            <Separator Margin="0,16,0,16" Background="#5E5E5E"/>
 
                             <TextBlock Text="TCP Offset" FontWeight="Bold" Foreground="White"
                                        FontSize="14" Margin="0,0,0,16"/>
@@ -309,17 +309,17 @@
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Margin="0,0,8,0">
                                     <TextBlock Text="X (mm)" Foreground="#888888"/>
-                                    <TextBox Text="{Binding TcpOffsetX}" Background="#1E1E1E"
+                                    <TextBox Text="{Binding TcpOffsetX}" Background="#363636"
                                              Foreground="White" Padding="8"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" Margin="4,0">
                                     <TextBlock Text="Y (mm)" Foreground="#888888"/>
-                                    <TextBox Text="{Binding TcpOffsetY}" Background="#1E1E1E"
+                                    <TextBox Text="{Binding TcpOffsetY}" Background="#363636"
                                              Foreground="White" Padding="8"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="2" Margin="8,0,0,0">
                                     <TextBlock Text="Z (mm)" Foreground="#888888"/>
-                                    <TextBox Text="{Binding TcpOffsetZ}" Background="#1E1E1E"
+                                    <TextBox Text="{Binding TcpOffsetZ}" Background="#363636"
                                              Foreground="White" Padding="8"/>
                                 </StackPanel>
                             </Grid>
@@ -330,7 +330,7 @@
 
             <!-- Safety Settings -->
             <TabItem Header="Safety">
-                <Border Background="#2D2D2D" CornerRadius="0,8,8,8" Padding="24">
+                <Border Background="#4E4E4E" CornerRadius="0,8,8,8" Padding="24">
                     <StackPanel MaxWidth="500" HorizontalAlignment="Left">
                         <TextBlock Text="Safety Settings" FontWeight="Bold" Foreground="White"
                                    FontSize="14" Margin="0,0,0,16"/>
@@ -349,7 +349,7 @@
                         <CheckBox Content="Enable Velocity Monitoring" Foreground="White"
                                   IsChecked="{Binding VelocityMonitorEnabled}" Margin="0,0,0,16"/>
 
-                        <Separator Margin="0,8,0,16" Background="#404040"/>
+                        <Separator Margin="0,8,0,16" Background="#5E5E5E"/>
 
                         <Grid Margin="0,0,0,12">
                             <Grid.ColumnDefinitions>
@@ -382,7 +382,7 @@
 
             <!-- Welding Settings -->
             <TabItem Header="Welding">
-                <Border Background="#2D2D2D" CornerRadius="0,8,8,8" Padding="24">
+                <Border Background="#4E4E4E" CornerRadius="0,8,8,8" Padding="24">
                     <StackPanel MaxWidth="500" HorizontalAlignment="Left">
                         <TextBlock Text="Welding Configuration" FontWeight="Bold" Foreground="White"
                                    FontSize="14" Margin="0,0,0,16"/>
@@ -393,7 +393,7 @@
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="Welder Type:" Foreground="#888888" VerticalAlignment="Center"/>
-                            <ComboBox Grid.Column="1" SelectedItem="{Binding WelderType}" Background="#1E1E1E">
+                            <ComboBox Grid.Column="1" SelectedItem="{Binding WelderType}" Background="#363636">
                                 <ComboBoxItem Content="MIG/MAG"/>
                                 <ComboBoxItem Content="TIG"/>
                                 <ComboBoxItem Content="Spot"/>
@@ -406,7 +406,7 @@
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="Wire Feed Unit:" Foreground="#888888" VerticalAlignment="Center"/>
-                            <ComboBox Grid.Column="1" SelectedItem="{Binding WireFeeder}" Background="#1E1E1E">
+                            <ComboBox Grid.Column="1" SelectedItem="{Binding WireFeeder}" Background="#363636">
                                 <ComboBoxItem Content="Integrated"/>
                                 <ComboBoxItem Content="External"/>
                             </ComboBox>

@@ -132,6 +132,10 @@ public interface IIpcClientService : IDisposable
 
     Task<GetPointsResponse?> GetPointsAsync(CancellationToken cancellationToken = default);
 
+    Task<BlockSelectResponse?> BlockSelectAsync(int line, CancellationToken cancellationToken = default);
+
+    Task<BackwardStepResponse?> BackwardStepAsync(CancellationToken cancellationToken = default);
+
     // URDF Import operations (Auto robot package creation)
     Task<ParseUrdfResponse?> ParseUrdfAsync(string urdfContent, bool isFilePath = false, CancellationToken cancellationToken = default);
 

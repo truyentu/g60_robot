@@ -7,7 +7,7 @@
              d:DesignWidth="500" d:DesignHeight="40">
 
     <!-- KUKA-Style Inline Form: appears below the current command line -->
-    <Border Background="#2D2D30" BorderBrush="#007ACC" BorderThickness="1"
+    <Border Background="#4E4E4E" BorderBrush="#007ACC" BorderThickness="1"
             CornerRadius="4" Padding="8,4" Margin="0,2,0,0">
         <Border.Effect>
             <DropShadowEffect Color="Black" BlurRadius="8" ShadowDepth="2" Opacity="0.4"/>
@@ -24,8 +24,8 @@
                 <ComboBox ItemsSource="{Binding MotionTypes}"
                           SelectedItem="{Binding MotionType, Mode=TwoWay}"
                           Width="70" FontSize="11"
-                          Background="#3C3C3C" Foreground="White"
-                          BorderBrush="#555555"/>
+                          Background="#4A4A4A" Foreground="White"
+                          BorderBrush="#5A5A5A"/>
 
                 <!-- Target (read-only label) -->
                 <TextBlock Foreground="#CE9178" VerticalAlignment="Center"
@@ -42,8 +42,8 @@
                 <ComboBox ItemsSource="{Binding AvailableApproximations}"
                           SelectedItem="{Binding Approximation, Mode=TwoWay}"
                           Width="85" FontSize="11"
-                          Background="#3C3C3C" Foreground="White"
-                          BorderBrush="#555555"/>
+                          Background="#4A4A4A" Foreground="White"
+                          BorderBrush="#5A5A5A"/>
             </StackPanel>
 
             <!-- ArcStart Form -->
@@ -55,8 +55,8 @@
                 <ComboBox ItemsSource="{Binding AvailableJobs}"
                           SelectedItem="{Binding SelectedJob, Mode=TwoWay}"
                           Width="200" FontSize="11"
-                          Background="#3C3C3C" Foreground="White"
-                          BorderBrush="#555555">
+                          Background="#4A4A4A" Foreground="White"
+                          BorderBrush="#5A5A5A">
                     <ComboBox.ItemTemplate>
                         <DataTemplate>
                             <TextBlock>

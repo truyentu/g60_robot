@@ -766,15 +766,21 @@ public class RobotModel3D
         var jointRotation = CreateRotationAroundAxis(axis, jointAngle);
 
         // Combine: Translation → Fixed Rotation → Joint Rotation
+        // WPF row-vector: Multiply(A,B) means p*A*B
+        // This gives: p * jointRot * rpy * trans
         return Matrix3D.Multiply(jointRotation, Matrix3D.Multiply(rotation, translation));
     }
 
     /// <summary>
     /// Create rotation matrix from Roll-Pitch-Yaw angles
+    /// WPF uses row-vector convention: p' = p * M
+    /// Standard robotics RPY = Rz(yaw)*Ry(pitch)*Rx(roll) is column-vector.
+    /// For WPF we must store the TRANSPOSE so that p*M gives the same result as R*p.
     /// </summary>
     private Matrix3D CreateRotationFromRPY(double roll, double pitch, double yaw)
     {
-        // Rz(yaw) * Ry(pitch) * Rx(roll)
+        // Standard column-vector: Rz(yaw) * Ry(pitch) * Rx(roll)
+        // R[row][col] stored, then TRANSPOSED for WPF row-vector convention
         double cr = Math.Cos(roll);
         double sr = Math.Sin(roll);
         double cp = Math.Cos(pitch);
@@ -782,20 +788,21 @@ public class RobotModel3D
         double cy = Math.Cos(yaw);
         double sy = Math.Sin(yaw);
 
+        // Transposed: M(i,j) = R_standard(j,i)
         return new Matrix3D(
-            cy * cp,  cy * sp * sr - sy * cr,  cy * sp * cr + sy * sr,  0,
-            sy * cp,  sy * sp * sr + cy * cr,  sy * sp * cr - cy * sr,  0,
-            -sp,      cp * sr,                 cp * cr,                 0,
-            0,        0,                       0,                       1
+            cy * cp,                 sy * cp,                -sp,      0,
+            cy * sp * sr - sy * cr,  sy * sp * sr + cy * cr,  cp * sr,  0,
+            cy * sp * cr + sy * sr,  sy * sp * cr - cy * sr,  cp * cr,  0,
+            0,                       0,                       0,        1
         );
     }
 
     /// <summary>
-    /// Create rotation matrix around arbitrary axis
+    /// Create rotation matrix around arbitrary axis (Rodrigues' formula)
+    /// TRANSPOSED for WPF row-vector convention: p' = p * M
     /// </summary>
     private Matrix3D CreateRotationAroundAxis(double[] axis, double angle)
     {
-        // Rodrigues' rotation formula
         double x = axis[0], y = axis[1], z = axis[2];
         double len = Math.Sqrt(x * x + y * y + z * z);
         if (len < 1e-6) return Matrix3D.Identity;
@@ -806,10 +813,12 @@ public class RobotModel3D
         double s = Math.Sin(angle);
         double t = 1 - c;
 
+        // Standard Rodrigues R[row][col], then TRANSPOSED: M(i,j) = R(j,i)
+        // Off-diagonal: swap (i,j) ↔ (j,i), which flips sign of s terms
         return new Matrix3D(
-            t * x * x + c,      t * x * y - s * z,  t * x * z + s * y,  0,
-            t * x * y + s * z,  t * y * y + c,      t * y * z - s * x,  0,
-            t * x * z - s * y,  t * y * z + s * x,  t * z * z + c,      0,
+            t * x * x + c,      t * x * y + s * z,  t * x * z - s * y,  0,
+            t * x * y - s * z,  t * y * y + c,      t * y * z + s * x,  0,
+            t * x * z + s * y,  t * y * z - s * x,  t * z * z + c,      0,
             0,                  0,                  0,                  1
         );
     }
@@ -829,10 +838,15 @@ public class RobotModel3D
 
         if (TcpOrientation.IsAffine)
         {
-            rz = Math.Atan2(TcpOrientation.M21, TcpOrientation.M11) * 180 / Math.PI;
-            ry = Math.Atan2(-TcpOrientation.M31,
-                Math.Sqrt(TcpOrientation.M32 * TcpOrientation.M32 + TcpOrientation.M33 * TcpOrientation.M33)) * 180 / Math.PI;
-            rx = Math.Atan2(TcpOrientation.M32, TcpOrientation.M33) * 180 / Math.PI;
+            // TcpOrientation stores R^T (WPF row-vector convention)
+            // Standard R[i][j] = M(j,i), so extract from transposed positions:
+            // rz = atan2(R[1][0], R[0][0]) = atan2(M12, M11)
+            // ry = atan2(-R[2][0], sqrt(R[2][1]²+R[2][2]²)) = atan2(-M13, sqrt(M23²+M33²))
+            // rx = atan2(R[2][1], R[2][2]) = atan2(M23, M33)
+            rz = Math.Atan2(TcpOrientation.M12, TcpOrientation.M11) * 180 / Math.PI;
+            ry = Math.Atan2(-TcpOrientation.M13,
+                Math.Sqrt(TcpOrientation.M23 * TcpOrientation.M23 + TcpOrientation.M33 * TcpOrientation.M33)) * 180 / Math.PI;
+            rx = Math.Atan2(TcpOrientation.M23, TcpOrientation.M33) * 180 / Math.PI;
         }
 
         return new[] { x, y, z, rx, ry, rz };
