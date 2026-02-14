@@ -132,9 +132,14 @@ std::string JogController::startContinuousJog(int mode, int axis, int direction,
     LOG_DEBUG("JogController: Continuous jog J{} dir={} speed={}% -> V2 jogStart(axis={}, dir={}, speed={})",
               axis, direction, speedPercent, axis, direction, speedStepsPerMs);
 
-    m_firmwareDriver->jogStart(static_cast<uint8_t>(axis),
+    bool ok = m_firmwareDriver->jogStart(static_cast<uint8_t>(axis),
                                static_cast<int8_t>(direction),
                                speedStepsPerMs);
+
+    if (!ok) {
+        LOG_ERROR("JogController: jogStart failed (drives not enabled?)");
+        return "Drives not enabled";
+    }
 
     m_isJogging = true;
     m_currentAxis = axis;

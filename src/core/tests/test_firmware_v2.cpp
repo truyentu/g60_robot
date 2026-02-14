@@ -20,7 +20,8 @@ protected:
     FirmwareSimulator sim;
 
     void SetUp() override {
-        // Simulator starts in DISABLED state (V2)
+        // Simulator auto-enables drives (no physical hardware)
+        // Initial state is IDLE
     }
 };
 
@@ -28,15 +29,16 @@ protected:
 // Initial State
 // ============================================================================
 
-TEST_F(FirmwareSimV2Test, InitialState_IsDisabled) {
-    EXPECT_EQ(sim.getSystemState(), SystemState::STATE_DISABLED);
-    EXPECT_EQ(sim.getStateString(), "Disabled");
+TEST_F(FirmwareSimV2Test, InitialState_IsIdle) {
+    // Simulator auto-enables drives, starts in IDLE
+    EXPECT_EQ(sim.getSystemState(), SystemState::STATE_IDLE);
+    EXPECT_EQ(sim.getStateString(), "Idle");
 }
 
 TEST_F(FirmwareSimV2Test, InitialState_StatusPacket) {
     auto sp = sim.getStatusPacket();
-    EXPECT_EQ(sp.state, static_cast<uint8_t>(SystemState::STATE_DISABLED));
-    // drive_ready = 0x3F (physically ready) even when disabled
+    EXPECT_EQ(sp.state, static_cast<uint8_t>(SystemState::STATE_IDLE));
+    // drive_ready = 0x3F (physically ready)
     EXPECT_EQ(sp.drive_ready, 0x3F);
     EXPECT_EQ(sp.drive_alarm, 0);
     EXPECT_EQ(sp.home_status, 0);
@@ -87,12 +89,13 @@ TEST_F(FirmwareSimV2Test, DisableDrives_Partial) {
 // ============================================================================
 
 TEST_F(FirmwareSimV2Test, JogStart_RequiresEnabled) {
-    // Drives not enabled — jog should fail
+    // Explicitly disable drives first, then jog should fail
+    sim.disableDrives(0x3F);
     EXPECT_FALSE(sim.jogStart(0, 1, 1000));
 }
 
 TEST_F(FirmwareSimV2Test, JogStart_Success) {
-    sim.enableDrives(0x3F);
+    // Simulator auto-enabled, jog should work directly
     EXPECT_TRUE(sim.jogStart(0, 1, 1000));
     EXPECT_EQ(sim.getSystemState(), SystemState::STATE_JOGGING);
 }
@@ -119,17 +122,17 @@ TEST_F(FirmwareSimV2Test, StopMotion) {
 // ============================================================================
 
 TEST_F(FirmwareSimV2Test, HomeStart_RequiresEnabled) {
+    sim.disableDrives(0x3F);
     EXPECT_FALSE(sim.homeStart(0x3F, 0, 0));
 }
 
 TEST_F(FirmwareSimV2Test, HomeStart_Success) {
-    sim.enableDrives(0x3F);
+    // Simulator auto-enabled
     EXPECT_TRUE(sim.homeStart(0x3F, 0, 0));
     EXPECT_EQ(sim.getSystemState(), SystemState::STATE_HOMING);
 }
 
 TEST_F(FirmwareSimV2Test, HomeStop) {
-    sim.enableDrives(0x3F);
     sim.homeStart(0x3F, 0, 0);
     EXPECT_EQ(sim.getSystemState(), SystemState::STATE_HOMING);
 

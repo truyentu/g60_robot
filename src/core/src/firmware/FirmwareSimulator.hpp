@@ -83,7 +83,7 @@ private:
     void updateHomingSimulation(double dt);
 
     enum class State { IDLE, JOG, RUN, HOLD, ALARM, DISABLED, HOMING };
-    std::atomic<State> m_state{State::DISABLED};  // V2: start DISABLED until drives enabled
+    std::atomic<State> m_state{State::IDLE};  // Simulator: auto-enabled, start IDLE
 
     mutable std::mutex m_mutex;
     std::array<double, SIM_NUM_AXES> m_positions{};
@@ -103,8 +103,8 @@ private:
     std::unique_ptr<jog::RuckigSmoother> m_smoother;
     std::array<double, SIM_NUM_AXES> m_currentVelocities{};
 
-    // V2: Drive state
-    bool m_drivesEnabled{false};
+    // V2: Drive state (simulator auto-enables)
+    bool m_drivesEnabled{true};
     uint8_t m_driveReadyMask{0x3F};   // All drives physically ready (simulated)
     uint8_t m_driveAlarmMask{0x00};
 

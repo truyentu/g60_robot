@@ -25,7 +25,11 @@ FirmwareSimulator::FirmwareSimulator() {
     }
     m_smoother->setAllLimits(maxVel, maxAccel, maxJerk);
 
-    LOG_INFO("FirmwareSimulator created with Ruckig S-curve");
+    // Simulator: auto-enable drives (no physical hardware to power up)
+    m_drivesEnabled = true;
+    m_state = State::IDLE;
+
+    LOG_INFO("FirmwareSimulator created with Ruckig S-curve (drives auto-enabled)");
 }
 
 bool FirmwareSimulator::sendCommand(const std::string& gcode) {
