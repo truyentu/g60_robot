@@ -31,6 +31,7 @@ public class WeldSeamFoldingStrategy
         var seamStack = new Stack<FoldingStartInfo>();
         var routineStack = new Stack<FoldingStartInfo>();
         var regionStack = new Stack<FoldingStartInfo>();
+        var foldStack = new Stack<FoldingStartInfo>();
 
         // Pre-parse all E6POS coordinates into a lookup
         var coordinateCache = RegexHelper.BuildCoordinateCache(document.Text);
@@ -62,6 +63,38 @@ public class WeldSeamFoldingStrategy
                 {
                     Name = startInfo.Label,
                     DefaultClosed = false
+                };
+                newFoldings.Add(folding);
+                continue;
+            }
+
+            // Check for ;FOLD ... ;ENDFOLD (KUKA KSS fold blocks)
+            if (text.StartsWith(";FOLD ", StringComparison.OrdinalIgnoreCase) ||
+                text.Equals(";FOLD", StringComparison.OrdinalIgnoreCase))
+            {
+                var foldLabel = text.Length > 6 ? text[6..].Trim() : "FOLD";
+                foldStack.Push(new FoldingStartInfo
+                {
+                    Offset = line.Offset,
+                    LineNumber = i,
+                    Label = foldLabel
+                });
+                continue;
+            }
+
+            if (text.Equals(";ENDFOLD", StringComparison.OrdinalIgnoreCase) && foldStack.Count > 0)
+            {
+                var startInfo = foldStack.Pop();
+                int endOffset = line.Offset + line.Length;
+
+                // INI folds are collapsed by default
+                bool isIniFold = startInfo.Label.StartsWith("INI", StringComparison.OrdinalIgnoreCase) ||
+                                 startInfo.Label.StartsWith("BASISTECH", StringComparison.OrdinalIgnoreCase);
+
+                var folding = new NewFolding(startInfo.Offset, endOffset)
+                {
+                    Name = startInfo.Label,
+                    DefaultClosed = isIniFold
                 };
                 newFoldings.Add(folding);
                 continue;
@@ -127,6 +160,11 @@ public class WeldSeamFoldingStrategy
         if (seamStack.Count > 0)
         {
             firstErrorOffset = seamStack.Peek().Offset;
+        }
+
+        if (foldStack.Count > 0 && firstErrorOffset < 0)
+        {
+            firstErrorOffset = foldStack.Peek().Offset;
         }
 
         newFoldings.Sort((a, b) => a.StartOffset.CompareTo(b.StartOffset));
