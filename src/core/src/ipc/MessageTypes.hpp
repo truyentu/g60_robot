@@ -145,6 +145,9 @@ enum class MessageType {
     GET_IO_STATE,
     SET_IO_OUTPUT,
 
+    // V2: Firmware Packet Logging
+    FIRMWARE_PACKET_LOG,
+
     // Commands
     COMMAND,
     COMMAND_ACK,
@@ -256,6 +259,7 @@ inline std::string messageTypeToString(MessageType type) {
         case MessageType::STM32_DISCONNECT:   return "STM32_DISCONNECT";
         case MessageType::GET_IO_STATE:       return "GET_IO_STATE";
         case MessageType::SET_IO_OUTPUT:      return "SET_IO_OUTPUT";
+        case MessageType::FIRMWARE_PACKET_LOG: return "FIRMWARE_PACKET_LOG";
         case MessageType::COMMAND:             return "COMMAND";
         case MessageType::COMMAND_ACK:         return "COMMAND_ACK";
         case MessageType::ERROR:               return "ERROR";
@@ -362,6 +366,7 @@ inline MessageType stringToMessageType(const std::string& str) {
     if (str == "STM32_DISCONNECT")   return MessageType::STM32_DISCONNECT;
     if (str == "GET_IO_STATE")       return MessageType::GET_IO_STATE;
     if (str == "SET_IO_OUTPUT")      return MessageType::SET_IO_OUTPUT;
+    if (str == "FIRMWARE_PACKET_LOG") return MessageType::FIRMWARE_PACKET_LOG;
     if (str == "COMMAND")             return MessageType::COMMAND;
     if (str == "COMMAND_ACK")         return MessageType::COMMAND_ACK;
     if (str == "ERROR")               return MessageType::ERROR;

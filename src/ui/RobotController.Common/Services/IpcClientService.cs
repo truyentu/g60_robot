@@ -29,6 +29,7 @@ public class IpcClientService : IIpcClientService
     public event EventHandler<OperationModeChangedEvent>? OperationModeChanged;
     public event EventHandler<BaseChangedEvent>? BaseChanged;
     public event EventHandler<OverrideChangedEvent>? OverrideChanged;
+    public event EventHandler<FirmwarePacketLogEntry>? FirmwarePacketLogged;
 
     public IpcClientService(ILogger<IpcClientService> logger)
     {
@@ -1088,6 +1089,37 @@ public class IpcClientService : IIpcClientService
         return null;
     }
 
+    // ========================================================================
+    // STM32 Ethernet Connection
+    // ========================================================================
+
+    public async Task<Stm32ConnectResponse?> ConnectStm32Async(string ip = "192.168.1.100", int port = 5001, CancellationToken cancellationToken = default)
+    {
+        var payload = new Stm32ConnectRequest { Ip = ip, Port = port };
+        var request = IpcMessage.Create(MessageTypes.STM32_CONNECT, JsonSerializer.SerializeToElement(payload, IpcMessage.CamelCaseOptions));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<Stm32ConnectResponse>();
+        }
+
+        return null;
+    }
+
+    public async Task<Stm32ConnectResponse?> DisconnectStm32Async(CancellationToken cancellationToken = default)
+    {
+        var request = IpcMessage.Create(MessageTypes.STM32_DISCONNECT, JsonSerializer.SerializeToElement(new { }, IpcMessage.CamelCaseOptions));
+        var response = await SendRequestAsync(request, cancellationToken);
+
+        if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)
+        {
+            return response.Payload.Deserialize<Stm32ConnectResponse>();
+        }
+
+        return null;
+    }
+
     private async Task<IpcMessage?> SendRequestAsync(IpcMessage request, CancellationToken cancellationToken)
     {
         if (!_isConnected || _requestSocket == null)
@@ -1192,6 +1224,14 @@ public class IpcClientService : IIpcClientService
                     if (overrideChanged != null)
                     {
                         OverrideChanged?.Invoke(this, overrideChanged);
+                    }
+                }
+                else if (message.Type == MessageTypes.FIRMWARE_PACKET_LOG)
+                {
+                    var entry = message.Payload.Deserialize<FirmwarePacketLogEntry>();
+                    if (entry != null)
+                    {
+                        FirmwarePacketLogged?.Invoke(this, entry);
                     }
                 }
             }

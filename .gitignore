@@ -82,6 +82,15 @@ CLAUDE.md
 /test_*.xml
 /verify_*.py
 
+# Python cache
+__pycache__/
+*.pyc
+
+# Misc
+promt.txt
+tests/firmware_sim.py
+tests/send_test_cmds.py
+
 # Config files that are generated
 config/robots/
 src/config/robots/*/robot_dh_backup.yaml

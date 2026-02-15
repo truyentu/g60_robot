@@ -8,8 +8,19 @@
  */
 
 #include "main.h"
+#include "board_config.h"
+#include "board_gpio.h"
+#include "motion_task.h"
+#include "protocol_defs.h"
 #include "FreeRTOS.h"
 #include "task.h"
+
+#ifndef SIMULATION_MODE
+#include "board_timers.h"
+#endif
+
+/* FreeRTOS SysTick handler — declared in portable/GCC/ARM_CM7/port.c */
+extern void xPortSysTickHandler(void);
 
 /* External handles (if needed) */
 extern ETH_HandleTypeDef heth;
@@ -83,9 +94,37 @@ void ETH_IRQHandler(void)
  */
 
 /* ========================================================================= */
-/*  E-Stop EXTI (placeholder)                                                */
+/*  E-Stop EXTI                                                              */
 /* ========================================================================= */
 
-/* TODO: Add when E-stop hardware is wired.
- * void EXTI0_IRQHandler(void) { HAL_GPIO_EXTI_IRQHandler(ESTOP_PIN); }
+/**
+ * E-Stop EXTI interrupt handler.
+ * NVIC priority 0 — above FreeRTOS configMAX_SYSCALL_INTERRUPT_PRIORITY.
+ * Must NOT call any FreeRTOS API functions (FromISR or otherwise).
+ * Direct GPIO manipulation only.
  */
+void EXTI0_IRQHandler(void)
+{
+    HAL_GPIO_EXTI_IRQHandler(ESTOP_PIN);
+}
+
+/**
+ * HAL GPIO EXTI callback — called from HAL_GPIO_EXTI_IRQHandler.
+ */
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+    if (GPIO_Pin == ESTOP_PIN) {
+        /* Stop all motion immediately */
+#ifndef SIMULATION_MODE
+        StepTimer_StopAll();
+#endif
+        /* Set E-stop state (atomic write, no RTOS API) */
+        Motion_SetState(SYSTEM_STATE_ESTOP);
+
+        /* Disable all drives and engage all brakes — direct GPIO, no RTOS */
+        for (uint8_t i = 0; i < PROTO_NUM_AXES; i++) {
+            GPIO_DriveEnable(i, 0);
+            GPIO_BrakeRelease(i, 0);
+        }
+    }
+}

@@ -98,3 +98,27 @@ public class CommandPayload
     [JsonPropertyName("parameters")]
     public JsonElement Parameters { get; set; }
 }
+
+/// <summary>
+/// Firmware packet log entry (from STM32EthernetDriver)
+/// </summary>
+public class FirmwarePacketLogEntry
+{
+    [JsonPropertyName("dir")]
+    public string Dir { get; set; } = "";
+
+    [JsonPropertyName("type")]
+    public int Type { get; set; }
+
+    [JsonPropertyName("seq")]
+    public int Seq { get; set; }
+
+    [JsonPropertyName("len")]
+    public int Len { get; set; }
+
+    [JsonPropertyName("hex")]
+    public string Hex { get; set; } = "";
+
+    [JsonPropertyName("ts")]
+    public long Ts { get; set; }
+}

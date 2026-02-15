@@ -29,4 +29,10 @@ void ethernetif_input(struct netif *netif);
  */
 void ethernet_link_check(struct netif *netif);
 
+/**
+ * Periodic link check using internal gnetif.
+ * Call this from a task (e.g., StatusTask) every ~1s.
+ */
+void ethernet_link_periodic(void);
+
 #endif /* ETHERNETIF_H */

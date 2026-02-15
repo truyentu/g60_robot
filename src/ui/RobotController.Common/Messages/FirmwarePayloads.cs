@@ -32,3 +32,19 @@ public class ScanPortsResponse
     [JsonPropertyName("ports")] public List<string> Ports { get; set; } = new();
     [JsonPropertyName("count")] public int Count { get; set; }
 }
+
+public class Stm32ConnectRequest
+{
+    [JsonPropertyName("ip")] public string Ip { get; set; } = "192.168.1.100";
+    [JsonPropertyName("port")] public int Port { get; set; } = 5001;
+}
+
+public class Stm32ConnectResponse
+{
+    [JsonPropertyName("success")] public bool Success { get; set; }
+    [JsonPropertyName("mode")] public string Mode { get; set; } = "SIM";
+    [JsonPropertyName("ip")] public string Ip { get; set; } = "";
+    [JsonPropertyName("port")] public int Port { get; set; }
+    [JsonPropertyName("driver_name")] public string DriverName { get; set; } = "";
+    [JsonPropertyName("error")] public string Error { get; set; } = "";
+}

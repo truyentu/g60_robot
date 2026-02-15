@@ -516,6 +516,16 @@ public partial class MainWindow : Window
         _viewportService.ClearTcpTrace();
     }
 
+    private void UdpFilterCombo_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.ComboBox combo &&
+            combo.SelectedItem is System.Windows.Controls.ComboBoxItem item &&
+            _viewModel?.DiagnosticsViewModel is { } diag)
+        {
+            diag.PacketFilter = item.Content?.ToString() ?? "All";
+        }
+    }
+
     // ========================================================================
     // TCP Gizmo (3D Interactive Jogging)
     // ========================================================================

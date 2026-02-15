@@ -15,6 +15,7 @@ public interface IIpcClientService : IDisposable
     event EventHandler<OperationModeChangedEvent>? OperationModeChanged;
     event EventHandler<BaseChangedEvent>? BaseChanged;
     event EventHandler<OverrideChangedEvent>? OverrideChanged;
+    event EventHandler<FirmwarePacketLogEntry>? FirmwarePacketLogged;
 
     Task<bool> ConnectAsync(string requestAddress, string subscribeAddress, CancellationToken cancellationToken = default);
 
@@ -163,4 +164,9 @@ public interface IIpcClientService : IDisposable
     Task<FirmwareModeResponse?> GetFirmwareModeAsync(CancellationToken cancellationToken = default);
 
     Task<ScanPortsResponse?> ScanPortsAsync(CancellationToken cancellationToken = default);
+
+    // STM32 Ethernet Connection
+    Task<Stm32ConnectResponse?> ConnectStm32Async(string ip = "192.168.1.100", int port = 5001, CancellationToken cancellationToken = default);
+
+    Task<Stm32ConnectResponse?> DisconnectStm32Async(CancellationToken cancellationToken = default);
 }

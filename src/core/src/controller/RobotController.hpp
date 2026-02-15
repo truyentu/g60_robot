@@ -22,6 +22,7 @@
 #include <array>
 #include <atomic>
 #include <thread>
+#include <queue>
 
 namespace robot_controller {
 
@@ -175,6 +176,10 @@ private:
     std::atomic<bool> m_running{false};
     int m_cycleTimeMs = 4;  // 250 Hz
     int m_statusPublishHz = 10;
+
+    // Packet log queue (thread-safe: IO thread pushes, control loop publishes)
+    std::queue<ipc::Message> m_packetLogQueue;
+    std::mutex m_packetLogMutex;
 };
 
 } // namespace robot_controller

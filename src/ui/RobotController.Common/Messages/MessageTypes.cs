@@ -136,6 +136,9 @@ public static class MessageTypes
     public const string GET_IO_STATE = "GET_IO_STATE";
     public const string SET_IO_OUTPUT = "SET_IO_OUTPUT";
 
+    // V2: Firmware Packet Logging
+    public const string FIRMWARE_PACKET_LOG = "FIRMWARE_PACKET_LOG";
+
     // Commands
     public const string COMMAND = "COMMAND";
     public const string COMMAND_ACK = "COMMAND_ACK";

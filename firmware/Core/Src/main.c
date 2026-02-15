@@ -8,6 +8,10 @@
 #include "task.h"
 #include "ethernetif.h"
 #include "app_tasks.h"
+#include "cmd_handler.h"
+#include "net_task.h"
+#include "drive_control.h"
+#include "safety_monitor.h"
 
 #include <string.h>
 
@@ -148,6 +152,7 @@ int main(void)
 
     /* 4. System clock configuration */
     SystemClock_Config();
+    SystemCoreClockUpdate();
 
     /* 5. Board-level init (LED, debug UART) */
     Board_Init();
@@ -156,14 +161,20 @@ int main(void)
     /* 6. LwIP stack initialization */
     MX_LWIP_Init();
 
-    /* 7. Create FreeRTOS tasks */
+    /* 7. Command handler initialization */
+    CmdHandler_Init();
+    DriveControl_Init();
+    SafetyMonitor_Init();
+    NetTask_RegisterHandler(CmdHandler_Dispatch);
+
+    /* 8. Create FreeRTOS tasks */
     xTaskCreate(NetTask,    "NetTask",    TASK_STACK_NET,    NULL, TASK_PRIORITY_NET,    NULL);
     xTaskCreate(MotionTask, "MotionTask", TASK_STACK_MOTION, NULL, TASK_PRIORITY_MOTION, NULL);
     xTaskCreate(StatusTask, "StatusTask", TASK_STACK_STATUS, NULL, TASK_PRIORITY_STATUS, NULL);
 
     Board_Debug_Print("[FW] Tasks created. Starting scheduler...\r\n");
 
-    /* 8. Start FreeRTOS scheduler — does not return */
+    /* 9. Start FreeRTOS scheduler — does not return */
     vTaskStartScheduler();
 
     /* Should never reach here */

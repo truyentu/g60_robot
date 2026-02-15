@@ -112,9 +112,12 @@ public:
     // Callback for async events
     using AlarmCallback = std::function<void(const protocol::AlarmPacket&)>;
     using HomeCompleteCallback = std::function<void(const protocol::HomeCompletePacket&)>;
+    using PacketLogCallback = std::function<void(const std::string& direction,
+        uint8_t type, uint8_t seq, const uint8_t* payload, uint16_t len)>;
 
     void setAlarmCallback(AlarmCallback cb);
     void setHomeCompleteCallback(HomeCompleteCallback cb);
+    void setPacketLogCallback(PacketLogCallback cb);
 
 private:
     // Network I/O (implementation in .cpp with Boost.Asio)
@@ -146,6 +149,7 @@ private:
     // Callbacks
     AlarmCallback m_alarmCallback;
     HomeCompleteCallback m_homeCompleteCallback;
+    PacketLogCallback m_packetLogCallback;
 
     // Helpers
     bool sendPacket(protocol::CommandType type,

@@ -1,9 +1,19 @@
 /**
  * @file board_init.c
- * @brief Board-level initialization (LED, debug UART)
+ * @brief Board-level initialization (LED, debug UART, timers)
  */
 
 #include "board_config.h"
+#include "board_gpio.h"
+#include "board_watchdog.h"
+#include <string.h>
+
+#ifndef SIMULATION_MODE
+extern void Board_InitTimers(void);
+#endif
+
+/* Forward declaration */
+void Board_Debug_Print(const char *msg);
 
 static UART_HandleTypeDef huart_debug;
 
@@ -24,6 +34,9 @@ void Board_Init(void)
     HAL_GPIO_Init(LED_STATUS_PORT, &gpio);
 
     HAL_GPIO_WritePin(LED_STATUS_PORT, LED_STATUS_PIN, GPIO_PIN_RESET);
+
+    /* GPIO: drive signals, DIO, safety inputs */
+    Board_InitGPIO();
 
     /* Debug UART */
     DEBUG_UART_CLK_ENABLE();
@@ -49,6 +62,20 @@ void Board_Init(void)
     huart_debug.Init.HwFlowCtl    = UART_HWCONTROL_NONE;
     huart_debug.Init.OverSampling = UART_OVERSAMPLING_16;
     HAL_UART_Init(&huart_debug);
+
+    /* Hardware timers for step pulse generation */
+#ifdef SIMULATION_MODE
+    Board_Debug_Print("Board Init: SIMULATION MODE ACTIVE\r\n");
+#else
+    Board_InitTimers();
+    Board_Debug_Print("Board Init: REAL MODE — Timers initialized\r\n");
+#endif
+
+    /* E-Stop EXTI interrupt */
+    Board_InitEstopEXTI();
+
+    /* Independent Watchdog (~1s timeout) */
+    Board_InitWatchdog();
 }
 
 void Board_LED_On(void)

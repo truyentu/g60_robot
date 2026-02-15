@@ -148,6 +148,22 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _renameProgramName = "";
 
+    // STM32 Connection Dialog
+    [ObservableProperty]
+    private bool _showStm32ConnectDialog;
+
+    [ObservableProperty]
+    private string _stm32IpAddress = "127.0.0.1";
+
+    [ObservableProperty]
+    private int _stm32Port = 5001;
+
+    [ObservableProperty]
+    private bool _isStm32Connected;
+
+    [ObservableProperty]
+    private string _stm32StatusText = "Disconnected";
+
     // 3D Jog Mode
     [ObservableProperty]
     private bool _is3DJogEnabled;
@@ -286,6 +302,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private DiagnosticsViewModel? _diagnosticsViewModel;
 
     [ObservableProperty]
+    private bool _showUdpMonitor;
+
+    [ObservableProperty]
     private RobotPackageBrowserViewModel? _robotCatalogViewModel;
 
     [ObservableProperty]
@@ -404,6 +423,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private void ToggleNavDrawer()
     {
         IsNavDrawerOpen = !IsNavDrawerOpen;
+    }
+
+    [RelayCommand]
+    private void ToggleUdpMonitor()
+    {
+        ShowUdpMonitor = !ShowUdpMonitor;
     }
 
     [RelayCommand]
@@ -576,6 +601,56 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private void CancelRename()
     {
         ShowRenameDialog = false;
+    }
+
+    // ====== STM32 Connection Commands ======
+
+    [RelayCommand]
+    private void ShowStm32Dialog()
+    {
+        ShowStm32ConnectDialog = true;
+    }
+
+    [RelayCommand]
+    private void CancelStm32Connect()
+    {
+        ShowStm32ConnectDialog = false;
+    }
+
+    [RelayCommand]
+    private async Task ConfirmStm32ConnectAsync()
+    {
+        ShowStm32ConnectDialog = false;
+        Stm32StatusText = "Connecting...";
+
+        var result = await _ipcClient.ConnectStm32Async(Stm32IpAddress, Stm32Port);
+        if (result != null && result.Success)
+        {
+            IsStm32Connected = true;
+            Stm32StatusText = $"STM32: {Stm32IpAddress}:{Stm32Port}";
+            // Reset jog state so next jog press re-sends JOG_START to new driver
+            if (MotionControl != null)
+                MotionControl.IsJogEnabled = false;
+            Log.Information("STM32 connected: {Ip}:{Port} driver={Driver}", result.Ip, result.Port, result.DriverName);
+        }
+        else
+        {
+            IsStm32Connected = false;
+            Stm32StatusText = $"Failed: {result?.Error ?? "No response"}";
+            Log.Warning("STM32 connect failed: {Error}", result?.Error ?? "No response");
+        }
+    }
+
+    [RelayCommand]
+    private async Task DisconnectStm32Async()
+    {
+        var result = await _ipcClient.DisconnectStm32Async();
+        IsStm32Connected = false;
+        Stm32StatusText = "Disconnected";
+        // Reset jog state so next jog press re-sends JOG_START to sim driver
+        if (MotionControl != null)
+            MotionControl.IsJogEnabled = false;
+        Log.Information("STM32 disconnected");
     }
 
     [RelayCommand]

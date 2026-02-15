@@ -642,10 +642,9 @@ std::vector<double> RobotController::getPoint(const std::string& name) const {
 bool RobotController::switchToSimMode() {
     LOG_INFO("Switching to SIM mode...");
 
-    // Stop any active jog
+    // Stop any active jog motion (but keep jog mode enabled)
     if (m_jogController) {
         m_jogController->stopJog();
-        m_jogController->disable();
     }
 
     // Disconnect real driver if connected
@@ -681,10 +680,9 @@ std::string RobotController::getFirmwareMode() const {
 bool RobotController::switchToSTM32Mode(const std::string& ip, uint16_t port) {
     LOG_INFO("Switching to STM32 mode, ip={}:{}", ip, port);
 
-    // Stop any active jog
+    // Stop any active jog motion (but keep jog mode enabled)
     if (m_jogController) {
         m_jogController->stopJog();
-        m_jogController->disable();
     }
 
     // Create STM32 driver
@@ -693,6 +691,45 @@ bool RobotController::switchToSTM32Mode(const std::string& ip, uint16_t port) {
         LOG_ERROR("Failed to connect to STM32 at {}:{}", ip, port);
         return false;
     }
+
+    // Set packet log callback for UDP monitor
+    // NOTE: Callback runs on IO thread — must NOT call m_ipcServer->publish() directly
+    //       (ZMQ sockets are not thread-safe). Queue messages for control loop to publish.
+    stm32Driver->setPacketLogCallback(
+        [this](const std::string& dir, uint8_t type, uint8_t seq,
+               const uint8_t* payload, uint16_t len) {
+            std::string hexStr;
+            uint16_t hexLen = std::min(len, static_cast<uint16_t>(32));
+            hexStr.reserve(hexLen * 2);
+            for (uint16_t i = 0; i < hexLen; i++) {
+                char buf[3];
+                snprintf(buf, sizeof(buf), "%02X", payload[i]);
+                hexStr += buf;
+            }
+            if (len > 32) hexStr += "...";
+
+            auto now = std::chrono::system_clock::now();
+            auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                now.time_since_epoch()).count();
+
+            nlohmann::json log = {
+                {"dir", dir},
+                {"type", type},
+                {"seq", seq},
+                {"len", len},
+                {"hex", hexStr},
+                {"ts", ms}
+            };
+
+            // Thread-safe queue — control loop will drain and publish
+            {
+                std::lock_guard<std::mutex> lock(m_packetLogMutex);
+                if (m_packetLogQueue.size() < 100) { // Cap queue size
+                    m_packetLogQueue.push(ipc::Message::create(
+                        ipc::MessageType::FIRMWARE_PACKET_LOG, log));
+                }
+            }
+        });
 
     // Switch to STM32 driver
     m_realDriver = stm32Driver;
@@ -754,6 +791,15 @@ void RobotController::controlLoop() {
         // Update jog controller and firmware simulator
         if (m_jogController) {
             m_jogController->update(m_cycleTimeMs / 1000.0);
+        }
+
+        // Drain packet log queue (thread-safe publish on control loop thread)
+        {
+            std::lock_guard<std::mutex> lock(m_packetLogMutex);
+            while (!m_packetLogQueue.empty()) {
+                m_ipcServer->publish(m_packetLogQueue.front());
+                m_packetLogQueue.pop();
+            }
         }
 
         // Calculate sleep time to maintain cycle rate

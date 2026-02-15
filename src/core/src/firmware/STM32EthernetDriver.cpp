@@ -186,6 +186,16 @@ bool STM32EthernetDriver::sendPacket(CommandType type,
     try {
         m_impl->cmdSocket->send_to(
             boost::asio::buffer(packet), m_impl->remoteEndpoint);
+
+        if (m_packetLogCallback) {
+            try {
+                m_packetLogCallback("TX", static_cast<uint8_t>(type),
+                    static_cast<uint8_t>(m_txSeq - 1), payload, payloadLen);
+            } catch (...) {
+                // Don't let callback exceptions affect send
+            }
+        }
+
         return true;
     } catch (const std::exception& e) {
         LOG_ERROR("STM32EthernetDriver: Send failed: {}", e.what());
@@ -204,6 +214,19 @@ void STM32EthernetDriver::processReceivedPacket(const uint8_t* data, size_t len)
 
     if (!parsePacket(data, len, header, &payloadData, &payloadLen)) {
         return;
+    }
+
+    // Log received packet (rate-limit RSP_STATUS: only every 50th)
+    if (m_packetLogCallback) {
+        try {
+            static int rxStatusSkip = 0;
+            bool isStatus = (header.type == static_cast<uint8_t>(ResponseType::RSP_STATUS));
+            if (!isStatus || (++rxStatusSkip % 50 == 0)) {
+                m_packetLogCallback("RX", header.type, header.seq, payloadData, payloadLen);
+            }
+        } catch (...) {
+            // Don't let callback exceptions kill the receive loop
+        }
     }
 
     auto rspType = static_cast<ResponseType>(header.type);
@@ -514,6 +537,10 @@ void STM32EthernetDriver::setAlarmCallback(AlarmCallback cb) {
 
 void STM32EthernetDriver::setHomeCompleteCallback(HomeCompleteCallback cb) {
     m_homeCompleteCallback = std::move(cb);
+}
+
+void STM32EthernetDriver::setPacketLogCallback(PacketLogCallback cb) {
+    m_packetLogCallback = std::move(cb);
 }
 
 } // namespace firmware

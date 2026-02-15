@@ -14,6 +14,14 @@
 #include "stm32h7xx_hal.h"
 
 /* ========================================================================= */
+/*  SIMULATION MODE                                                          */
+/* ========================================================================= */
+/* Comment this out to enable Real Hardware Timers for step pulse generation. */
+/* When defined: MotionTask uses printf simulation, timers are NOT initialized. */
+/* When undefined: MotionTask drives real TIM hardware for step/dir output.    */
+#define SIMULATION_MODE 1
+
+/* ========================================================================= */
 /*  SYSTEM CLOCK                                                             */
 /* ========================================================================= */
 
@@ -227,8 +235,8 @@
 #define NET_GW_ADDR2                1
 #define NET_GW_ADDR3                1
 
-#define NET_UDP_CMD_PORT            5000        /* PC -> STM32 commands */
-#define NET_UDP_STATUS_PORT         5001        /* STM32 -> PC status  */
+#define NET_UDP_CMD_PORT            5001        /* PC -> STM32 commands (must match Core STM32EthernetDriver) */
+#define NET_UDP_STATUS_PORT         5002        /* STM32 -> PC status  (Core listens on cmd_port + 1)       */
 
 /* ========================================================================= */
 /*  FREERTOS TASK PRIORITIES                                                 */
@@ -259,5 +267,101 @@
 #define DEFAULT_MAX_PULSE_FREQ      200000      /* 200 kHz max pulse rate */
 #define PULSE_MIN_WIDTH_US          3           /* Minimum pulse width (us) */
 #define DIR_SETUP_TIME_US           5           /* Direction setup time (us) */
+
+/* ========================================================================= */
+/*  DIGITAL INPUTS — 16 channels (general purpose)                          */
+/* ========================================================================= */
+
+#define DIN_LO_PORT                 GPIOH       /* DIN0-7 on GPIOH */
+#define DIN_LO_PIN0                 GPIO_PIN_0
+#define DIN_LO_PIN1                 GPIO_PIN_1
+#define DIN_LO_PIN2                 GPIO_PIN_2
+#define DIN_LO_PIN3                 GPIO_PIN_3
+#define DIN_LO_PIN4                 GPIO_PIN_4
+#define DIN_LO_PIN5                 GPIO_PIN_5
+#define DIN_LO_PIN6                 GPIO_PIN_6
+#define DIN_LO_PIN7                 GPIO_PIN_7
+#define DIN_LO_PINS                 (GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | \
+                                     GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7)
+#define DIN_LO_CLK_ENABLE()         __HAL_RCC_GPIOH_CLK_ENABLE()
+
+#define DIN_HI_PORT                 GPIOI       /* DIN8-15 on GPIOI */
+#define DIN_HI_PIN0                 GPIO_PIN_0
+#define DIN_HI_PIN1                 GPIO_PIN_1
+#define DIN_HI_PIN2                 GPIO_PIN_2
+#define DIN_HI_PIN3                 GPIO_PIN_3
+#define DIN_HI_PIN4                 GPIO_PIN_4
+#define DIN_HI_PIN5                 GPIO_PIN_5
+#define DIN_HI_PIN6                 GPIO_PIN_6
+#define DIN_HI_PIN7                 GPIO_PIN_7
+#define DIN_HI_PINS                 (GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | \
+                                     GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7)
+#define DIN_HI_CLK_ENABLE()         __HAL_RCC_GPIOI_CLK_ENABLE()
+
+/* ========================================================================= */
+/*  DIGITAL OUTPUTS — 16 channels (general purpose)                         */
+/* ========================================================================= */
+
+#define DOUT_LO_PORT                GPIOJ       /* DOUT0-7 on GPIOJ */
+#define DOUT_LO_PINS                (GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | \
+                                     GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7)
+#define DOUT_LO_CLK_ENABLE()        __HAL_RCC_GPIOJ_CLK_ENABLE()
+
+#define DOUT_HI_PORT                GPIOK       /* DOUT8-15 on GPIOK */
+#define DOUT_HI_PINS                (GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | \
+                                     GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7)
+#define DOUT_HI_CLK_ENABLE()        __HAL_RCC_GPIOK_CLK_ENABLE()
+
+/* ========================================================================= */
+/*  SAFETY SIGNALS                                                          */
+/* ========================================================================= */
+
+#define DEADMAN_PORT                GPIOE       /* 3-position deadman switch */
+#define DEADMAN_PIN                 GPIO_PIN_1
+#define DEADMAN_CLK_ENABLE()        __HAL_RCC_GPIOE_CLK_ENABLE()
+
+#define SAFETY_FENCE_PORT           GPIOE       /* Safety fence interlock (NC) */
+#define SAFETY_FENCE_PIN            GPIO_PIN_2
+
+#define MODE_SEL_PORT               GPIOE       /* Operating mode selector */
+#define MODE_SEL_PIN0               GPIO_PIN_3  /* bit 0 */
+#define MODE_SEL_PIN1               GPIO_PIN_4  /* bit 1 */
+/* Mode encoding: 00=T1, 01=T2, 10=AUT */
+
+/* ========================================================================= */
+/*  COMMUNICATION WATCHDOG                                                  */
+/* ========================================================================= */
+
+#define COMM_TIMEOUT_MS             500         /* Heartbeat timeout (ms) */
+#define COMM_TIMEOUT_COUNT          3           /* Consecutive misses before alarm */
+
+/* ========================================================================= */
+/*  HOMING DEFAULTS                                                         */
+/* ========================================================================= */
+
+#define HOME_DEFAULT_FAST_SPEED     5000        /* steps/ms */
+#define HOME_DEFAULT_SLOW_SPEED     500         /* steps/ms */
+#define HOME_DEFAULT_BACKOFF        1000        /* steps */
+#define HOME_DEBOUNCE_MS            10          /* switch debounce (ms) */
+
+/* ========================================================================= */
+/*  BRAKE TIMING                                                            */
+/* ========================================================================= */
+
+#define BRAKE_ENGAGE_DELAY_MS       100         /* Time for brake to engage */
+#define BRAKE_RELEASE_DELAY_MS      200         /* Time for brake to open */
+
+/* ========================================================================= */
+/*  WATCHDOG (IWDG)                                                         */
+/* ========================================================================= */
+
+#define IWDG_TIMEOUT_MS             1000        /* Independent watchdog timeout */
+
+/* ========================================================================= */
+/*  MOTION CONTROL CONSTANTS                                                */
+/* ========================================================================= */
+
+#define MOTION_LOOP_PERIOD_MS       4           /* Motion task period (ms) */
+#define MOTION_LOOP_PERIOD_US       4000        /* Motion task period (us) */
 
 #endif /* BOARD_CONFIG_H */

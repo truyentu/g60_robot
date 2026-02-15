@@ -106,6 +106,16 @@ typedef struct {
 } VersionPacket;
 _Static_assert(sizeof(VersionPacket) == 23, "VersionPacket must be 23 bytes");
 
+/* ========================================================================= */
+/*  Buffer Status Packet (for RSP_BUFFER_LOW)                                */
+/* ========================================================================= */
+
+typedef struct {
+    uint16_t level;      /* Current buffer fill level (number of points)  */
+    uint16_t capacity;   /* Total buffer capacity                         */
+} BufferStatusPacket;
+_Static_assert(sizeof(BufferStatusPacket) == 4, "BufferStatusPacket must be 4 bytes");
+
 #pragma pack(pop)
 
 #endif /* PROTOCOL_STATUS_H */

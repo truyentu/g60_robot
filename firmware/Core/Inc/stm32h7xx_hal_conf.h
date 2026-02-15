@@ -31,11 +31,12 @@ extern "C" {
 #define HAL_TIM_MODULE_ENABLED
 #define HAL_UART_MODULE_ENABLED
 
+#define HAL_IWDG_MODULE_ENABLED
+
 /* Modules to enable later:
  * #define HAL_ADC_MODULE_ENABLED
  * #define HAL_DAC_MODULE_ENABLED
  * #define HAL_I2C_MODULE_ENABLED
- * #define HAL_IWDG_MODULE_ENABLED
  * #define HAL_SPI_MODULE_ENABLED
  * #define HAL_WWDG_MODULE_ENABLED
  */
@@ -88,7 +89,7 @@ extern "C" {
 
 #define VDD_VALUE                       3300UL  /* mV */
 #define TICK_INT_PRIORITY               15UL    /* Lowest priority for SysTick */
-#define USE_RTOS                        1
+#define USE_RTOS                        0
 #define PREFETCH_ENABLE                 0       /* Not available on Cortex-M7 */
 #define ART_ACCELERATOR_ENABLE          0
 
@@ -96,7 +97,8 @@ extern "C" {
 /*  HAL Tick Source — TIM6 (SysTick reserved for FreeRTOS)                   */
 /* ========================================================================= */
 
-#define HAL_TICK_FREQ_1KHZ              1000UL
+/* HAL tick frequency — use default HAL_TICK_FREQ_1KHZ enum value (= 1U)
+ * from stm32h7xx_hal.h. Do NOT redefine here. */
 
 /* Use TIM6 as HAL timebase instead of SysTick.
  * SysTick is used by FreeRTOS for its scheduler tick.
@@ -154,6 +156,20 @@ extern "C" {
 #endif
 #ifdef HAL_UART_MODULE_ENABLED
   #include "stm32h7xx_hal_uart.h"
+#endif
+#ifdef HAL_IWDG_MODULE_ENABLED
+  #include "stm32h7xx_hal_iwdg.h"
+#endif
+
+/* ========================================================================= */
+/*  Assert Macro                                                             */
+/* ========================================================================= */
+
+#ifdef USE_FULL_ASSERT
+  #define assert_param(expr) ((expr) ? (void)0U : assert_failed((uint8_t *)__FILE__, __LINE__))
+  void assert_failed(uint8_t *file, uint32_t line);
+#else
+  #define assert_param(expr) ((void)0U)
 #endif
 
 #ifdef __cplusplus
