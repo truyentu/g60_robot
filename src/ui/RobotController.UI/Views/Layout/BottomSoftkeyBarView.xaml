@@ -155,6 +155,65 @@
                                            FontFamily="Segoe UI"/>
                             </Grid>
                         </Button>
+
+                        <Rectangle Height="1" Fill="#999999" Margin="8,2"/>
+
+                        <Button Tag="ArchiveAll" Click="EditMenuItem_Click"
+                                Style="{StaticResource MainMenuItemStyle}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="30"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="&#x1F4E6;" FontSize="14" Foreground="#FF9500"
+                                           VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="1" Text="Archive All" FontSize="13"
+                                           Foreground="#333333" VerticalAlignment="Center"
+                                           FontFamily="Segoe UI"/>
+                            </Grid>
+                        </Button>
+                        <Button Tag="ArchiveSelected" Click="EditMenuItem_Click"
+                                Style="{StaticResource MainMenuItemStyle}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="30"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="&#x1F4E5;" FontSize="14" Foreground="#FF9500"
+                                           VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="1" Text="Archive Selected" FontSize="13"
+                                           Foreground="#333333" VerticalAlignment="Center"
+                                           FontFamily="Segoe UI"/>
+                            </Grid>
+                        </Button>
+                        <Button Tag="Restore" Click="EditMenuItem_Click"
+                                Style="{StaticResource MainMenuItemStyle}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="30"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="&#x1F4E4;" FontSize="14" Foreground="#4EC9B0"
+                                           VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="1" Text="Restore" FontSize="13"
+                                           Foreground="#333333" VerticalAlignment="Center"
+                                           FontFamily="Segoe UI"/>
+                            </Grid>
+                        </Button>
+                        <Button Tag="Compare" Click="EditMenuItem_Click"
+                                Style="{StaticResource MainMenuItemStyle}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="30"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="&#x1F50D;" FontSize="14" Foreground="#7EAEF1"
+                                           VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="1" Text="Compare" FontSize="13"
+                                           Foreground="#333333" VerticalAlignment="Center"
+                                           FontFamily="Segoe UI"/>
+                            </Grid>
+                        </Button>
                     </StackPanel>
                 </Border>
             </Popup>
