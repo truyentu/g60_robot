@@ -54,8 +54,8 @@ public partial class ProgramViewModel : ObservableObject
         var programsDir = _workspace.ProgramsDir;
         if (!Directory.Exists(programsDir)) return;
 
-        // Recursively find all .program files
-        foreach (var programFile in Directory.EnumerateFiles(programsDir, "*.program", SearchOption.AllDirectories))
+        // Recursively find all .src files (KRL source modules)
+        foreach (var programFile in Directory.EnumerateFiles(programsDir, "*.src", SearchOption.AllDirectories))
         {
             var name = Path.GetFileNameWithoutExtension(programFile);
             var comment = "";
@@ -83,7 +83,7 @@ public partial class ProgramViewModel : ObservableObject
         Log.Information("Loaded {Count} programs from workspace", Programs.Count);
     }
 
-    /// <summary>Open a .program file from disk into the editor</summary>
+    /// <summary>Open a .src file from disk into the editor</summary>
     public void OpenProgramFile(string programPath)
     {
         if (_workspace == null) return;
@@ -203,31 +203,43 @@ public partial class ProgramViewModel : ObservableObject
         Log.Information("Program duplicated: {Source} -> {Copy}", baseName, copyName);
     }
 
-    /// <summary>Archive all programs to JSON file</summary>
+    /// <summary>Archive all programs to ZIP (preferred) or JSON (fallback) file</summary>
     public async Task ArchiveProgramsAsync()
     {
         var dlg = new SaveFileDialog
         {
             Title = "Archive Programs",
-            Filter = "JSON Archive (*.json)|*.json|All Files (*.*)|*.*",
-            FileName = $"programs_archive_{DateTime.Now:yyyyMMdd_HHmmss}.json"
+            Filter = "ZIP Archive (*.zip)|*.zip|JSON Archive (*.json)|*.json",
+            FileName = $"programs_archive_{DateTime.Now:yyyyMMdd_HHmmss}.zip"
         };
 
         if (dlg.ShowDialog() != true) return;
 
         try
         {
-            var archive = Programs.Select(p => new
+            if (dlg.FileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
             {
-                p.Name,
-                p.Description,
-                Code = p == SelectedProgram ? ProgramCode : ""
-            }).ToList();
+                if (_workspace != null)
+                {
+                    var archiveService = new ArchiveService(_workspace);
+                    await Task.Run(() => archiveService.ArchiveAll(dlg.FileName));
+                    ProgramStatus = $"Archived workspace to {Path.GetFileName(dlg.FileName)}";
+                }
+            }
+            else
+            {
+                var archive = Programs.Select(p => new
+                {
+                    p.Name,
+                    p.Description,
+                    Code = p == SelectedProgram ? ProgramCode : ""
+                }).ToList();
 
-            var json = JsonSerializer.Serialize(archive, new JsonSerializerOptions { WriteIndented = true });
-            await File.WriteAllTextAsync(dlg.FileName, json);
+                var json = JsonSerializer.Serialize(archive, new JsonSerializerOptions { WriteIndented = true });
+                await File.WriteAllTextAsync(dlg.FileName, json);
+                ProgramStatus = $"Archived {Programs.Count} programs (JSON)";
+            }
 
-            ProgramStatus = $"Archived {Programs.Count} programs";
             Log.Information("Programs archived to: {Path}", dlg.FileName);
         }
         catch (Exception ex)
@@ -358,11 +370,11 @@ public partial class ProgramViewModel : ObservableObject
         // Delete actual files on disk if workspace available
         if (_workspace != null)
         {
-            var programPath = Path.Combine(_workspace.ProgramsDir, SelectedProgram.Name + ".program");
+            var programPath = Path.Combine(_workspace.ProgramsDir, SelectedProgram.Name + ".src");
             // Also search subdirectories for the file
             if (!File.Exists(programPath))
             {
-                var found = Directory.EnumerateFiles(_workspace.ProgramsDir, SelectedProgram.Name + ".program", SearchOption.AllDirectories).FirstOrDefault();
+                var found = Directory.EnumerateFiles(_workspace.ProgramsDir, SelectedProgram.Name + ".src", SearchOption.AllDirectories).FirstOrDefault();
                 if (found != null) programPath = found;
             }
             if (File.Exists(programPath))
