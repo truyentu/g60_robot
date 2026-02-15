@@ -4,7 +4,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
-             d:DesignHeight="40" d:DesignWidth="1400"
+             d:DesignHeight="28" d:DesignWidth="1024"
              SnapsToDevicePixels="True"
              UseLayoutRounding="True">
 
@@ -14,11 +14,11 @@
     <!-- Reference: Directly below status bar on KUKA smartPAD            -->
     <!-- Shows: Warning icon | Timestamp | Message text | OK | Confirm All-->
     <!--                                                                  -->
-    <!-- Background: Dark red (#4A0000) for active alarms                 -->
-    <!--             Dark grey (#2D2D2D) when idle                        -->
+    <!-- Background: Light pink (#FFCCCC) for active alarms               -->
+    <!--             KUKA light grey theme                                -->
     <!-- ================================================================ -->
 
-    <Border BorderBrush="#2A2A2A" BorderThickness="0,0,0,1">
+    <Border BorderBrush="#999999" BorderThickness="0,0,0,1">
         <Border.Background>
             <SolidColorBrush Color="{StaticResource AlarmRed}"/>
         </Border.Background>
@@ -37,28 +37,28 @@
             <Border Grid.Column="0" Width="5" Background="#CC2222"/>
 
             <!-- Warning icon -->
-            <TextBlock Grid.Column="1" Text="&#x26A0;" FontSize="16"
-                       Foreground="#FF6B6B" VerticalAlignment="Center"
-                       Margin="10,0,6,0"/>
+            <TextBlock Grid.Column="1" Text="&#x26A0;" FontSize="14"
+                       Foreground="#CC0000" VerticalAlignment="Center"
+                       Margin="6,0,4,0"/>
 
             <!-- Timestamp -->
             <TextBlock Grid.Column="2"
                        Text="{Binding MessageTimestamp, FallbackValue=''}"
-                       Foreground="#886666" FontSize="10" FontFamily="Consolas"
+                       Foreground="#996666" FontSize="10" FontFamily="Consolas"
                        VerticalAlignment="Center" Margin="0,0,8,0"
                        MinWidth="60"/>
 
             <!-- Message text -->
             <TextBlock Grid.Column="3"
                        Text="{Binding CurrentMessage, FallbackValue='No active messages'}"
-                       Foreground="#DDAAAA" FontSize="13" FontFamily="Segoe UI"
+                       Foreground="#882222" FontSize="11" FontFamily="Segoe UI"
                        VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                        Margin="4,0"/>
 
             <!-- Message count badge -->
-            <Border Grid.Column="4" Background="#661111" Padding="8,2" Margin="4,8"
+            <Border Grid.Column="4" Background="#FFAAAA" Padding="6,1" Margin="2,4"
                     VerticalAlignment="Center">
-                <TextBlock Text="1" Foreground="#FF8888" FontSize="11"
+                <TextBlock Text="1" Foreground="#CC0000" FontSize="11"
                            FontWeight="Bold" FontFamily="Consolas"
                            HorizontalAlignment="Center"/>
             </Border>
@@ -75,10 +75,10 @@
                     Padding="14,0" Margin="0">
                 <Button.Style>
                     <Style TargetType="Button" BasedOn="{StaticResource AckButton}">
-                        <Setter Property="Background" Value="#552222"/>
+                        <Setter Property="Background" Value="#FF9999"/>
                     </Style>
                 </Button.Style>
-                <TextBlock Text="Confirm All" FontSize="11" Foreground="#FF8888"/>
+                <TextBlock Text="Confirm All" FontSize="11" Foreground="#CC0000"/>
             </Button>
         </Grid>
     </Border>

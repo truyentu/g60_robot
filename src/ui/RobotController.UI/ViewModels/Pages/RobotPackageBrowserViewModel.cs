@@ -55,6 +55,7 @@ public partial class RobotPackageBrowserViewModel : ObservableObject
     private readonly IUrdfImportService _urdfImportService;
     private readonly IRobotPackageGenerator _packageGenerator;
     private readonly IConfigService? _configService;
+    private WorkspaceService? _workspaceService;
 
     [ObservableProperty]
     private ObservableCollection<RobotPackageInfoViewModel> _availablePackages = new();
@@ -83,6 +84,12 @@ public partial class RobotPackageBrowserViewModel : ObservableObject
         _urdfImportService = urdfImportService;
         _packageGenerator = packageGenerator;
         _configService = configService;
+    }
+
+    /// <summary>Set workspace service for catalog → Mada copy</summary>
+    public void SetWorkspaceService(WorkspaceService workspace)
+    {
+        _workspaceService = workspace;
     }
 
     /// <summary>
@@ -158,13 +165,35 @@ public partial class RobotPackageBrowserViewModel : ObservableObject
             {
                 var pkg = response.Package;
 
-                // Build package path from ID - UI meshes are in config/robots/<id>/
-                // Core returns relative path like "../../config/robots/rx160" which doesn't work for UI
-                // So we construct the path ourselves based on package ID
-                var packagePath = System.IO.Path.GetFullPath(
-                    System.IO.Path.Combine(
-                        AppDomain.CurrentDomain.BaseDirectory,
-                        "config", "robots", pkg.Id));
+                // Resolve package path for mesh loading
+                // Priority: workspace/Catalog/<id> → bin/config/robots/<id>
+                string packagePath;
+                if (_workspaceService != null)
+                {
+                    var wsCatalogPath = System.IO.Path.Combine(
+                        _workspaceService.CatalogDir, pkg.Id);
+                    var wsMeshDir = System.IO.Path.Combine(wsCatalogPath, "meshes", "visual");
+                    if (System.IO.Directory.Exists(wsMeshDir) &&
+                        System.IO.Directory.GetFiles(wsMeshDir).Length > 0)
+                    {
+                        packagePath = wsCatalogPath;
+                    }
+                    else
+                    {
+                        // Fallback to bin/config/robots/ (original path)
+                        packagePath = System.IO.Path.GetFullPath(
+                            System.IO.Path.Combine(
+                                AppDomain.CurrentDomain.BaseDirectory,
+                                "config", "robots", pkg.Id));
+                    }
+                }
+                else
+                {
+                    packagePath = System.IO.Path.GetFullPath(
+                        System.IO.Path.Combine(
+                            AppDomain.CurrentDomain.BaseDirectory,
+                            "config", "robots", pkg.Id));
+                }
 
                 Log.Information("Package {Id} path resolved to: {Path}", pkg.Id, packagePath);
 
@@ -239,6 +268,17 @@ public partial class RobotPackageBrowserViewModel : ObservableObject
                     _configService.Config.LastActivePackageId = pkg.Id;
                     _configService.Save();
                     Log.Information("Saved last active package: {Id}", pkg.Id);
+                }
+
+                // Copy robot to workspace R1/Mada/ as active robot
+                try
+                {
+                    _workspaceService?.ActivateRobotFromCatalog(pkg.Id);
+                    Log.Information("Activated robot {Id} in workspace Mada/", pkg.Id);
+                }
+                catch (Exception wsEx)
+                {
+                    Log.Warning(wsEx, "Failed to activate robot in workspace (non-fatal)");
                 }
 
                 StatusMessage = $"Loaded: {LoadedPackage.Name}";

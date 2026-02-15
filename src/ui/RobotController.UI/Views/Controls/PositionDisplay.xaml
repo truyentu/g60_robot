@@ -13,8 +13,8 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="RadioButton">
                         <Border x:Name="border"
-                                Background="#353535"
-                                BorderBrush="#454545"
+                                Background="#C8C8C8"
+                                BorderBrush="#999999"
                                 BorderThickness="1"
                                 CornerRadius="3"
                                 Padding="10,4"
@@ -33,25 +33,25 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
-            <Setter Property="Foreground" Value="#AAAAAA"/>
+            <Setter Property="Foreground" Value="#555555"/>
             <Setter Property="FontSize" Value="11"/>
         </Style>
 
         <!-- Position Row Style -->
         <Style x:Key="PositionRowStyle" TargetType="Border">
-            <Setter Property="Background" Value="#353535"/>
+            <Setter Property="Background" Value="#C8C8C8"/>
             <Setter Property="CornerRadius" Value="3"/>
             <Setter Property="Padding" Value="8,4"/>
             <Setter Property="Margin" Value="0,1"/>
         </Style>
     </UserControl.Resources>
 
-    <Border Background="#2D2D2D" CornerRadius="8" Padding="12">
+    <Border Background="#D0D0D0" CornerRadius="8" Padding="12">
         <StackPanel>
             <!-- Header with mode buttons -->
             <Grid Margin="0,0,0,8">
                 <TextBlock Text="POSITION" FontSize="12" FontWeight="Bold"
-                          Foreground="#AAAAAA" VerticalAlignment="Center"/>
+                          Foreground="#555555" VerticalAlignment="Center"/>
 
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <RadioButton Content="Joint"
@@ -72,12 +72,12 @@
             </Grid>
 
             <!-- Active frame info -->
-            <Border Background="#252525" CornerRadius="3" Padding="6,3" Margin="0,0,0,8">
+            <Border Background="#B8B8B8" CornerRadius="3" Padding="6,3" Margin="0,0,0,8">
                 <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="Base: " Foreground="#666666" FontSize="10"/>
-                    <TextBlock Text="{Binding ActiveBaseId}" Foreground="#AAAAAA" FontSize="10" Margin="0,0,12,0"/>
-                    <TextBlock Text="Tool: " Foreground="#666666" FontSize="10"/>
-                    <TextBlock Text="{Binding ActiveToolId}" Foreground="#AAAAAA" FontSize="10"/>
+                    <TextBlock Text="Base: " Foreground="#555555" FontSize="10"/>
+                    <TextBlock Text="{Binding ActiveBaseId}" Foreground="#333333" FontSize="10" Margin="0,0,12,0"/>
+                    <TextBlock Text="Tool: " Foreground="#555555" FontSize="10"/>
+                    <TextBlock Text="{Binding ActiveToolId}" Foreground="#333333" FontSize="10"/>
                 </StackPanel>
             </Border>
 
@@ -94,7 +94,7 @@
                         <Grid>
                             <TextBlock Text="{Binding Label1}" Foreground="#0078D7" FontWeight="Bold" Width="28"/>
                             <TextBlock Text="{Binding Position1, StringFormat='{}{0:F3}'}"
-                                      Foreground="White" FontFamily="Consolas" FontSize="12"
+                                      Foreground="#222222" FontFamily="Consolas" FontSize="12"
                                       HorizontalAlignment="Right"/>
                         </Grid>
                     </Border>
@@ -102,7 +102,7 @@
                         <Grid>
                             <TextBlock Text="{Binding Label2}" Foreground="#00AA00" FontWeight="Bold" Width="28"/>
                             <TextBlock Text="{Binding Position2, StringFormat='{}{0:F3}'}"
-                                      Foreground="White" FontFamily="Consolas" FontSize="12"
+                                      Foreground="#222222" FontFamily="Consolas" FontSize="12"
                                       HorizontalAlignment="Right"/>
                         </Grid>
                     </Border>
@@ -110,7 +110,7 @@
                         <Grid>
                             <TextBlock Text="{Binding Label3}" Foreground="#CC0000" FontWeight="Bold" Width="28"/>
                             <TextBlock Text="{Binding Position3, StringFormat='{}{0:F3}'}"
-                                      Foreground="White" FontFamily="Consolas" FontSize="12"
+                                      Foreground="#222222" FontFamily="Consolas" FontSize="12"
                                       HorizontalAlignment="Right"/>
                         </Grid>
                     </Border>
@@ -122,7 +122,7 @@
                         <Grid>
                             <TextBlock Text="{Binding Label4}" Foreground="#888888" FontWeight="Bold" Width="28"/>
                             <TextBlock Text="{Binding Position4, StringFormat='{}{0:F3}'}"
-                                      Foreground="White" FontFamily="Consolas" FontSize="12"
+                                      Foreground="#222222" FontFamily="Consolas" FontSize="12"
                                       HorizontalAlignment="Right"/>
                         </Grid>
                     </Border>
@@ -130,7 +130,7 @@
                         <Grid>
                             <TextBlock Text="{Binding Label5}" Foreground="#888888" FontWeight="Bold" Width="28"/>
                             <TextBlock Text="{Binding Position5, StringFormat='{}{0:F3}'}"
-                                      Foreground="White" FontFamily="Consolas" FontSize="12"
+                                      Foreground="#222222" FontFamily="Consolas" FontSize="12"
                                       HorizontalAlignment="Right"/>
                         </Grid>
                     </Border>
@@ -138,7 +138,7 @@
                         <Grid>
                             <TextBlock Text="{Binding Label6}" Foreground="#888888" FontWeight="Bold" Width="28"/>
                             <TextBlock Text="{Binding Position6, StringFormat='{}{0:F3}'}"
-                                      Foreground="White" FontFamily="Consolas" FontSize="12"
+                                      Foreground="#222222" FontFamily="Consolas" FontSize="12"
                                       HorizontalAlignment="Right"/>
                         </Grid>
                     </Border>
@@ -146,7 +146,7 @@
             </Grid>
 
             <!-- Unit indicator -->
-            <TextBlock Text="{Binding Unit}" Foreground="#666666" FontSize="10"
+            <TextBlock Text="{Binding Unit}" Foreground="#555555" FontSize="10"
                       HorizontalAlignment="Right" Margin="0,4,0,0"/>
         </StackPanel>
     </Border>

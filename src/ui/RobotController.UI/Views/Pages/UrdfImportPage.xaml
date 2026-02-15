@@ -11,7 +11,7 @@
     <UserControl.Resources>
         <!-- Dark theme TextBox style -->
         <Style x:Key="DarkTextBox" TargetType="TextBox">
-            <Setter Property="Background" Value="#4E4E4E"/>
+            <Setter Property="Background" Value="#D8D8D8"/>
             <Setter Property="Foreground" Value="#E0E0E0"/>
             <Setter Property="BorderBrush" Value="#5E5E5E"/>
             <Setter Property="CaretBrush" Value="#E0E0E0"/>
@@ -20,10 +20,10 @@
 
         <!-- Dark theme DataGrid style -->
         <Style x:Key="DarkDataGrid" TargetType="DataGrid">
-            <Setter Property="Background" Value="#4E4E4E"/>
+            <Setter Property="Background" Value="#D8D8D8"/>
             <Setter Property="Foreground" Value="#E0E0E0"/>
             <Setter Property="BorderBrush" Value="#5E5E5E"/>
-            <Setter Property="RowBackground" Value="#4E4E4E"/>
+            <Setter Property="RowBackground" Value="#D8D8D8"/>
             <Setter Property="AlternatingRowBackground" Value="#545454"/>
             <Setter Property="GridLinesVisibility" Value="Horizontal"/>
             <Setter Property="HorizontalGridLinesBrush" Value="#5E5E5E"/>
@@ -63,7 +63,7 @@
                                 <Setter TargetName="border" Property="Background" Value="#787878"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="border" Property="Background" Value="#484848"/>
+                                <Setter TargetName="border" Property="Background" Value="#D0D0D0"/>
                                 <Setter Property="Foreground" Value="#666666"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -237,7 +237,7 @@
             <Button Grid.Column="3" Content="Copy to Core &amp; Refresh"
                        Command="{Binding CopyToCoreAndRefreshCommand}"
                        Background="#4CAF50"
-                       Foreground="White"
+                       Foreground="#222222"
                        IsEnabled="{Binding IsPackageReady}"
                        ToolTip="Copy package to Core build folder and refresh package list"/>
         </Grid>
@@ -248,7 +248,7 @@
                 Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}">
             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                 <ProgressBar IsIndeterminate="True" Width="50" Height="6"/>
-                <TextBlock Text="Processing..." Foreground="White" Margin="0,10,0,0"/>
+                <TextBlock Text="Processing..." Foreground="#222222" Margin="0,10,0,0"/>
             </StackPanel>
         </Border>
     </Grid>

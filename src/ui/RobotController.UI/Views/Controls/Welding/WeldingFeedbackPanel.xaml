@@ -6,7 +6,7 @@
              mc:Ignorable="d"
              d:DesignHeight="280" d:DesignWidth="300">
 
-    <Border Background="#2D2D2D" CornerRadius="8" Padding="12">
+    <Border Background="#D0D0D0" CornerRadius="8" Padding="12">
         <StackPanel>
             <TextBlock Text="LIVE FEEDBACK"
                       FontSize="12" FontWeight="Bold"
@@ -32,10 +32,10 @@
                 <ProgressBar Grid.Row="0" Grid.Column="1"
                             Value="{Binding ActualCurrent}"
                             Maximum="400" Height="8" Margin="8,4"
-                            Background="#353535" Foreground="#FF8800"/>
+                            Background="#B8B8B8" Foreground="#FF8800"/>
                 <TextBlock Grid.Row="0" Grid.Column="2"
                           Text="{Binding CurrentDisplay}"
-                          Foreground="White" FontFamily="Consolas"
+                          Foreground="#333333" FontFamily="Consolas"
                           FontSize="14" FontWeight="Bold"
                           Width="80" TextAlignment="Right"/>
 
@@ -45,10 +45,10 @@
                 <ProgressBar Grid.Row="1" Grid.Column="1"
                             Value="{Binding ActualVoltage}"
                             Maximum="40" Height="8" Margin="8,4"
-                            Background="#353535" Foreground="#00AAFF"/>
+                            Background="#B8B8B8" Foreground="#00AAFF"/>
                 <TextBlock Grid.Row="1" Grid.Column="2"
                           Text="{Binding VoltageDisplay}"
-                          Foreground="White" FontFamily="Consolas"
+                          Foreground="#333333" FontFamily="Consolas"
                           FontSize="14" FontWeight="Bold"
                           Width="80" TextAlignment="Right"/>
 
@@ -58,10 +58,10 @@
                 <ProgressBar Grid.Row="2" Grid.Column="1"
                             Value="{Binding ActualWireSpeed}"
                             Maximum="20" Height="8" Margin="8,4"
-                            Background="#353535" Foreground="#AA00FF"/>
+                            Background="#B8B8B8" Foreground="#AA00FF"/>
                 <TextBlock Grid.Row="2" Grid.Column="2"
                           Text="{Binding WireSpeedDisplay}"
-                          Foreground="White" FontFamily="Consolas"
+                          Foreground="#333333" FontFamily="Consolas"
                           FontSize="14" FontWeight="Bold"
                           Width="80" TextAlignment="Right"/>
 
@@ -71,16 +71,16 @@
                 <ProgressBar Grid.Row="3" Grid.Column="1"
                             Value="{Binding ActualPower}"
                             Maximum="10" Height="8" Margin="8,4"
-                            Background="#353535" Foreground="#FFFF00"/>
+                            Background="#B8B8B8" Foreground="#FFFF00"/>
                 <TextBlock Grid.Row="3" Grid.Column="2"
                           Text="{Binding PowerDisplay}"
-                          Foreground="White" FontFamily="Consolas"
+                          Foreground="#333333" FontFamily="Consolas"
                           FontSize="14" FontWeight="Bold"
                           Width="80" TextAlignment="Right"/>
             </Grid>
 
             <!-- Separator -->
-            <Rectangle Height="1" Fill="#404040" Margin="0,12"/>
+            <Rectangle Height="1" Fill="#999999" Margin="0,12"/>
 
             <!-- Status indicators -->
             <UniformGrid Columns="3" Margin="0,0,0,12">
@@ -120,19 +120,19 @@
                 <StackPanel Grid.Column="0">
                     <TextBlock Text="Time" Foreground="#888888" FontSize="10"/>
                     <TextBlock Text="{Binding WeldTimeDisplay}"
-                              Foreground="White" FontFamily="Consolas" FontSize="14"/>
+                              Foreground="#333333" FontFamily="Consolas" FontSize="14"/>
                 </StackPanel>
 
                 <StackPanel Grid.Column="1">
                     <TextBlock Text="Distance" Foreground="#888888" FontSize="10"/>
                     <TextBlock Text="{Binding DistanceDisplay}"
-                              Foreground="White" FontFamily="Consolas" FontSize="14"/>
+                              Foreground="#333333" FontFamily="Consolas" FontSize="14"/>
                 </StackPanel>
 
                 <StackPanel Grid.Column="2">
                     <TextBlock Text="Heat Input" Foreground="#888888" FontSize="10"/>
                     <TextBlock Text="{Binding HeatInputDisplay}"
-                              Foreground="White" FontFamily="Consolas" FontSize="14"/>
+                              Foreground="#333333" FontFamily="Consolas" FontSize="14"/>
                 </StackPanel>
             </Grid>
         </StackPanel>

@@ -8,7 +8,7 @@
              d:DesignHeight="600" d:DesignWidth="400"
              d:DataContext="{d:DesignInstance Type=pages:RobotPackageBrowserViewModel}">
 
-    <Border Background="#4E4E4E" CornerRadius="8" Padding="12">
+    <Border Background="#D8D8D8" CornerRadius="8" Padding="12">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
@@ -22,7 +22,7 @@
                 <TextBlock Text="ROBOT LIBRARY"
                            FontWeight="Bold"
                            FontSize="14"
-                           Foreground="#AAAAAA"/>
+                           Foreground="#555555"/>
                 <TextBlock Text="Select a robot model to load into the simulator"
                            FontSize="11"
                            Foreground="#666666"
@@ -30,7 +30,7 @@
             </StackPanel>
 
             <!-- Package List -->
-            <Border Grid.Row="1" Background="#3E3E3E" CornerRadius="4">
+            <Border Grid.Row="1" Background="#D0D0D0" CornerRadius="4">
                 <ListBox ItemsSource="{Binding AvailablePackages}"
                          SelectedItem="{Binding SelectedPackage}"
                          Background="Transparent"
@@ -72,7 +72,7 @@
                                 <!-- Robot Icon -->
                                 <Border Grid.Column="0"
                                         Width="40" Height="40"
-                                        Background="#5E5E5E"
+                                        Background="#B8B8B8"
                                         CornerRadius="4"
                                         Margin="0,0,10,0">
                                     <TextBlock Text="R"
@@ -87,9 +87,9 @@
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                     <TextBlock Text="{Binding Name}"
                                                FontWeight="Bold"
-                                               Foreground="White"
+                                               Foreground="#222222"
                                                TextTrimming="CharacterEllipsis"/>
-                                    <TextBlock Foreground="#888888" FontSize="11">
+                                    <TextBlock Foreground="#666666" FontSize="11">
                                         <Run Text="{Binding Manufacturer}"/>
                                         <Run Text=" | "/>
                                         <Run Text="{Binding Dof}"/>
@@ -116,29 +116,29 @@
                         Padding="15,8"
                         Margin="0,0,5,0"
                         Background="#0078D4"
-                        Foreground="White"
+                        Foreground="#222222"
                         BorderThickness="0"
                         ToolTip="Import robot from URDF/XACRO"/>
                 <Button Content="Refresh"
                         Command="{Binding RefreshPackagesCommand}"
                         Padding="15,8"
                         Margin="0,0,5,0"
-                        Background="#5E5E5E"
-                        Foreground="White"
+                        Background="#B8B8B8"
+                        Foreground="#222222"
                         BorderThickness="0"/>
                 <Button Content="Load"
                         Command="{Binding LoadSelectedPackageCommand}"
                         Padding="15,8"
                         Margin="0,0,5,0"
                         Background="#4CAF50"
-                        Foreground="White"
+                        Foreground="#222222"
                         BorderThickness="0"
                         IsEnabled="{Binding SelectedPackage, Converter={StaticResource NullToBoolConverter}}"/>
                 <Button Content="Delete"
                         Command="{Binding DeleteSelectedPackageCommand}"
                         Padding="15,8"
                         Background="#D32F2F"
-                        Foreground="White"
+                        Foreground="#222222"
                         BorderThickness="0"
                         IsEnabled="{Binding SelectedPackage, Converter={StaticResource NullToBoolConverter}}"
                         ToolTip="Delete selected robot package"/>
@@ -146,7 +146,7 @@
 
             <!-- Status Bar -->
             <Border Grid.Row="3"
-                    Background="#363636"
+                    Background="#FFFFFF"
                     CornerRadius="4"
                     Padding="10,5"
                     Margin="0,10,0,0">
@@ -156,7 +156,7 @@
                                  Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}"
                                  Margin="0,0,10,0"/>
                     <TextBlock Text="{Binding StatusMessage}"
-                               Foreground="#888888"
+                               Foreground="#666666"
                                VerticalAlignment="Center"/>
                 </StackPanel>
             </Border>

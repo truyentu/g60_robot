@@ -72,6 +72,9 @@ public partial class MainWindow : Window
 
         // Initialize TCP Path Trace container
         TcpTraceVisual.Children.Add(_viewportService.TcpTraceContainer);
+
+        // Set initial Navigator layout (default NavIndex=9 → split-screen)
+        UpdateNavigatorLayout(_viewModel?.SelectedNavIndex ?? 9);
     }
 
     private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -136,7 +139,28 @@ public partial class MainWindow : Window
                     bool show3DJog = _viewModel?.SelectedNavIndex == 0 && (_viewModel?.Is3DJogEnabled ?? false);
                     _viewportService.ShowTcpGizmo(show3DJog);
                 }
+
+                // Toggle Navigator split-screen layout
+                UpdateNavigatorLayout(_viewModel?.SelectedNavIndex ?? 0);
             });
+        }
+    }
+
+    private void UpdateNavigatorLayout(int navIndex)
+    {
+        if (navIndex == 9)
+        {
+            NavigatorColumn.Width = new GridLength(300);
+            NavSplitterColumn.Width = new GridLength(3);
+            NavigatorPanel.Visibility = Visibility.Visible;
+            NavSplitter.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            NavigatorColumn.Width = new GridLength(0);
+            NavSplitterColumn.Width = new GridLength(0);
+            NavigatorPanel.Visibility = Visibility.Collapsed;
+            NavSplitter.Visibility = Visibility.Collapsed;
         }
     }
 

@@ -58,6 +58,7 @@ public partial class StationSetupViewModel : ObservableObject
 {
     private readonly IViewportService _viewportService;
     private readonly IIpcClientService _ipcClient;
+    private WorkspaceService? _workspaceService;
 
     public ObservableCollection<SceneObjectItemViewModel> Objects { get; } = new();
     public ObservableCollection<string> AvailableFrames { get; } = new() { "World" };
@@ -124,6 +125,32 @@ public partial class StationSetupViewModel : ObservableObject
 
         _ipcClient.BaseChanged += OnBaseChanged;
         _ipcClient.ConnectionStateChanged += OnConnectionStateChanged;
+    }
+
+    /// <summary>Set workspace for station file path resolution</summary>
+    public void SetWorkspaceService(WorkspaceService workspace)
+    {
+        _workspaceService = workspace;
+        // Auto-load station when workspace is set (in case IPC connected before workspace was set)
+        _ = LoadStationAsync();
+    }
+
+    /// <summary>Resolve station file path — workspace/Station/ if available with real data, fallback to config/station/</summary>
+    private string GetStationFilePath()
+    {
+        if (_workspaceService != null)
+        {
+            var wsStation = Path.Combine(_workspaceService.StationDir, "station.json");
+            if (File.Exists(wsStation))
+            {
+                return wsStation;
+            }
+        }
+        // Fallback to bin config
+        var binStation = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config", "station", "station.json");
+        return File.Exists(binStation) ? binStation :
+               Path.Combine(_workspaceService?.StationDir ??
+                   Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config", "station"), "station.json");
     }
 
     // ========================================================================
@@ -650,9 +677,8 @@ public partial class StationSetupViewModel : ObservableObject
         {
             HasError = false;
 
-            var stationDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config", "station");
-            Directory.CreateDirectory(stationDir);
-            var stationFile = Path.Combine(stationDir, "station.json");
+            var stationFile = GetStationFilePath();
+            Directory.CreateDirectory(Path.GetDirectoryName(stationFile)!);
 
             var stationData = new StationData
             {
@@ -690,7 +716,8 @@ public partial class StationSetupViewModel : ObservableObject
         {
             HasError = false;
 
-            var stationFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config", "station", "station.json");
+            var stationFile = GetStationFilePath();
+            Log.Information("[StationSetup] Loading station from: {Path}", stationFile);
             if (!File.Exists(stationFile))
             {
                 Log.Information("[StationSetup] No station file found at {Path}", stationFile);
@@ -699,6 +726,7 @@ public partial class StationSetupViewModel : ObservableObject
 
             var json = await File.ReadAllTextAsync(stationFile);
             var stationData = JsonSerializer.Deserialize<StationData>(json);
+            Log.Information("[StationSetup] Deserialized: Objects={Count}", stationData?.Objects?.Count ?? -1);
             if (stationData?.Objects == null) return;
 
             // Clear existing

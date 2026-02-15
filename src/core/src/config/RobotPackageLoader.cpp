@@ -10,12 +10,14 @@
 #include <yaml-cpp/yaml.h>
 #include <fstream>
 #include <sstream>
+#include <set>
 
 namespace robot_controller {
 namespace config {
 
 // Default library path - will be set during initialization
 std::filesystem::path RobotPackageLoader::s_libraryPath = "";
+std::filesystem::path RobotPackageLoader::s_fallbackLibraryPath = "";
 
 // Cache for built-in packages (to avoid re-scanning on every request)
 static std::vector<RobotPackageInfo> s_cachedPackages;
@@ -24,6 +26,11 @@ static bool s_cacheValid = false;
 void RobotPackageLoader::setLibraryPath(const std::filesystem::path& path) {
     s_libraryPath = path;
     LOG_INFO("Robot library path set to: {}", path.string());
+}
+
+void RobotPackageLoader::setFallbackLibraryPath(const std::filesystem::path& path) {
+    s_fallbackLibraryPath = path;
+    LOG_INFO("Robot fallback library path set to: {}", path.string());
 }
 
 std::filesystem::path RobotPackageLoader::getLibraryPath() {
@@ -178,6 +185,42 @@ std::vector<RobotPackageInfo> RobotPackageLoader::getBuiltInPackages() {
         }
     }
 
+    // Also scan fallback library path for packages not in primary
+    if (!s_fallbackLibraryPath.empty() && std::filesystem::exists(s_fallbackLibraryPath)) {
+        std::set<std::string> existingIds;
+        for (const auto& p : packages) existingIds.insert(p.id);
+
+        LOG_DEBUG("Scanning fallback robot packages in: {}", s_fallbackLibraryPath.string());
+        for (const auto& entry : std::filesystem::directory_iterator(s_fallbackLibraryPath)) {
+            if (!entry.is_directory()) continue;
+            auto id = entry.path().filename().string();
+            if (existingIds.count(id)) continue; // Already in primary
+
+            auto robotYaml = entry.path() / "robot.yaml";
+            if (!std::filesystem::exists(robotYaml)) continue;
+
+            try {
+                YAML::Node config = YAML::LoadFile(robotYaml.string());
+                RobotPackageInfo info;
+                info.id = id;
+                info.name = config["name"].as<std::string>("");
+                info.manufacturer = config["manufacturer"].as<std::string>("");
+                info.model_type = config["type"].as<std::string>("");
+                info.payload_kg = config["payload_kg"].as<double>(0);
+                info.reach_mm = config["reach_mm"].as<double>(0);
+                if (config["kinematics"] && config["kinematics"]["joints"]) {
+                    info.dof = config["kinematics"]["joints"].size();
+                }
+                auto meshesDir = entry.path() / "meshes";
+                info.has_meshes = std::filesystem::exists(meshesDir);
+                packages.push_back(info);
+                LOG_DEBUG("Found fallback package: {}", info.name);
+            } catch (const YAML::Exception& e) {
+                LOG_WARN("Failed to parse fallback {}: {}", robotYaml.string(), e.what());
+            }
+        }
+    }
+
     // Update cache
     s_cachedPackages = packages;
     s_cacheValid = true;
@@ -201,8 +244,16 @@ std::optional<RobotPackage> RobotPackageLoader::loadBuiltIn(const std::string& n
     }
 
     auto packagePath = s_libraryPath / name;
-    if (!std::filesystem::exists(packagePath)) {
-        LOG_ERROR("Built-in package not found: {}", name);
+    if (!std::filesystem::exists(packagePath / "robot.yaml")) {
+        // Try fallback library path
+        if (!s_fallbackLibraryPath.empty()) {
+            auto fallbackPath = s_fallbackLibraryPath / name;
+            if (std::filesystem::exists(fallbackPath / "robot.yaml")) {
+                LOG_INFO("Package {} not in primary, loading from fallback: {}", name, fallbackPath.string());
+                return loadFromDirectory(fallbackPath);
+            }
+        }
+        LOG_ERROR("Built-in package not found: {} (checked primary and fallback)", name);
         return std::nullopt;
     }
 

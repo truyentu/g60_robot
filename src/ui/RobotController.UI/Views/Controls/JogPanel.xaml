@@ -13,9 +13,9 @@
             <Setter Property="Height" Value="40"/>
             <Setter Property="FontSize" Value="16"/>
             <Setter Property="FontWeight" Value="Bold"/>
-            <Setter Property="Background" Value="#404040"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderBrush" Value="#606060"/>
+            <Setter Property="Background" Value="#B8B8B8"/>
+            <Setter Property="Foreground" Value="#222222"/>
+            <Setter Property="BorderBrush" Value="#999999"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Delay" Value="200"/>
             <Setter Property="Interval" Value="50"/>
@@ -37,11 +37,11 @@
                     <Setter Property="Background" Value="#00AA00"/>
                 </Trigger>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#505050"/>
+                    <Setter Property="Background" Value="#A8A8A8"/>
                 </Trigger>
                 <Trigger Property="IsEnabled" Value="False">
-                    <Setter Property="Background" Value="#484848"/>
-                    <Setter Property="Foreground" Value="#606060"/>
+                    <Setter Property="Background" Value="#C8C8C8"/>
+                    <Setter Property="Foreground" Value="#999999"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -51,9 +51,9 @@
             <Setter Property="Width" Value="80"/>
             <Setter Property="Height" Value="32"/>
             <Setter Property="Margin" Value="2"/>
-            <Setter Property="Background" Value="#353535"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderBrush" Value="#505050"/>
+            <Setter Property="Background" Value="#C8C8C8"/>
+            <Setter Property="Foreground" Value="#222222"/>
+            <Setter Property="BorderBrush" Value="#999999"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ToggleButton">
@@ -79,12 +79,12 @@
         </Style>
     </UserControl.Resources>
 
-    <Border Background="#4E4E4E" CornerRadius="8" Padding="12">
+    <Border Background="#C8C8C8" CornerRadius="8" Padding="12">
         <StackPanel>
             <!-- Header -->
             <TextBlock Text="JOG CONTROL"
                        FontSize="14" FontWeight="Bold"
-                       Foreground="#AAAAAA"
+                       Foreground="#555555"
                        Margin="0,0,0,12"/>
 
             <!-- Mode Toggle -->
@@ -92,15 +92,15 @@
                 <RadioButton Content="Joint"
                            IsChecked="{Binding JogJointMode}"
                            GroupName="JogMode"
-                           Foreground="White" Margin="0,0,16,0"/>
+                           Foreground="#333333" Margin="0,0,16,0"/>
                 <RadioButton Content="Cartesian"
                            GroupName="JogMode"
-                           Foreground="White"/>
+                           Foreground="#333333"/>
             </StackPanel>
 
             <!-- Joint Selection (visible in Joint mode) -->
             <StackPanel Visibility="{Binding JogJointMode, Converter={StaticResource BoolToVisibility}}">
-                <TextBlock Text="Select Joint:" Foreground="#888888" Margin="0,0,0,4"/>
+                <TextBlock Text="Select Joint:" Foreground="#555555" Margin="0,0,0,4"/>
                 <WrapPanel Margin="0,0,0,12">
                     <ToggleButton Content="J1" Style="{StaticResource JointSelectStyle}"
                                 IsChecked="{Binding Joints[0].IsSelected}"
@@ -136,18 +136,18 @@
                     </Style>
                 </StackPanel.Style>
 
-                <TextBlock Text="Select Axis:" Foreground="#888888" Margin="0,0,0,4"/>
+                <TextBlock Text="Select Axis:" Foreground="#555555" Margin="0,0,0,4"/>
 
                 <!-- Coordinate System -->
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                    <TextBlock Text="Frame:" Foreground="#666666" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBlock Text="Frame:" Foreground="#555555" VerticalAlignment="Center" Margin="0,0,8,0"/>
                     <ComboBox ItemsSource="{Binding CoordinateSystems}"
                               SelectedItem="{Binding CoordinateSystem}"
                               Width="100"/>
                 </StackPanel>
 
                 <!-- Linear Axes -->
-                <TextBlock Text="Linear (mm):" Foreground="#666666" Margin="0,0,0,4"/>
+                <TextBlock Text="Linear (mm):" Foreground="#555555" Margin="0,0,0,4"/>
                 <WrapPanel Margin="0,0,0,8">
                     <ToggleButton Content="X" Style="{StaticResource JointSelectStyle}"
                                   Foreground="Red"
@@ -164,7 +164,7 @@
                 </WrapPanel>
 
                 <!-- Rotational Axes -->
-                <TextBlock Text="Rotational (deg):" Foreground="#666666" Margin="0,0,0,4"/>
+                <TextBlock Text="Rotational (deg):" Foreground="#555555" Margin="0,0,0,4"/>
                 <WrapPanel Margin="0,0,0,12">
                     <ToggleButton Content="Rx" Style="{StaticResource JointSelectStyle}"
                                   IsChecked="{Binding CartesianAxes[3].IsSelected}"
@@ -206,25 +206,25 @@
                 <RadioButton Content="Continuous"
                            IsChecked="{Binding JogContinuous}"
                            GroupName="JogType"
-                           Foreground="White" Margin="0,0,16,0"/>
+                           Foreground="#333333" Margin="0,0,16,0"/>
                 <RadioButton Content="Increment"
                            GroupName="JogType"
-                           Foreground="White"/>
+                           Foreground="#333333"/>
             </StackPanel>
 
             <!-- Increment Selection -->
             <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                <TextBlock Text="Increment:" Foreground="#888888"
+                <TextBlock Text="Increment:" Foreground="#555555"
                           VerticalAlignment="Center" Margin="0,0,8,0"/>
                 <ComboBox ItemsSource="{Binding JogIncrements}"
                          SelectedItem="{Binding JogIncrement}"
                          Width="80"/>
-                <TextBlock Text="°" Foreground="#888888"
+                <TextBlock Text="°" Foreground="#555555"
                           VerticalAlignment="Center" Margin="4,0,0,0"/>
             </StackPanel>
 
             <!-- Speed Slider -->
-            <TextBlock Text="Jog Speed:" Foreground="#888888" Margin="0,0,0,4"/>
+            <TextBlock Text="Jog Speed:" Foreground="#555555" Margin="0,0,0,4"/>
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -237,22 +237,22 @@
                        IsSnapToTickEnabled="False"/>
                 <TextBlock Grid.Column="1"
                           Text="{Binding JogSpeed, StringFormat={}{0:F0}%}"
-                          Foreground="White"
+                          Foreground="#222222"
                           TextAlignment="Right"
                           VerticalAlignment="Center"/>
             </Grid>
 
             <!-- Keyboard Hint -->
-            <Border Background="#3E3E3E" CornerRadius="4"
+            <Border Background="#B8B8B8" CornerRadius="4"
                    Padding="8" Margin="0,16,0,0">
                 <StackPanel>
                     <TextBlock Text="Keyboard Shortcuts:"
-                              FontWeight="Bold" Foreground="#888888"/>
-                    <TextBlock Text="1-6: Select joint" Foreground="#666666"/>
-                    <TextBlock Text="Left/Right: Jog axis" Foreground="#666666"/>
-                    <TextBlock Text="Space: Pause/Resume" Foreground="#666666"/>
-                    <TextBlock Text="Esc: Stop" Foreground="#666666"/>
-                    <TextBlock Text="+/-: Feed override" Foreground="#666666"/>
+                              FontWeight="Bold" Foreground="#555555"/>
+                    <TextBlock Text="1-6: Select joint" Foreground="#555555"/>
+                    <TextBlock Text="Left/Right: Jog axis" Foreground="#555555"/>
+                    <TextBlock Text="Space: Pause/Resume" Foreground="#555555"/>
+                    <TextBlock Text="Esc: Stop" Foreground="#555555"/>
+                    <TextBlock Text="+/-: Feed override" Foreground="#555555"/>
                 </StackPanel>
             </Border>
         </StackPanel>

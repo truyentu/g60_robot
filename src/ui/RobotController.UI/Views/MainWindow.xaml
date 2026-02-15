@@ -10,9 +10,9 @@
         xmlns:layout="clr-namespace:RobotController.UI.Views.Layout"
         mc:Ignorable="d"
         Title="Robot Controller"
-        Height="900" Width="1400"
-        MinHeight="600" MinWidth="1000"
-        Background="#383838"
+        Height="768" Width="1024"
+        MinHeight="600" MinWidth="800"
+        Background="#C0C0C0"
         WindowStartupLocation="CenterScreen"
         SnapsToDevicePixels="True"
         UseLayoutRounding="True">
@@ -25,12 +25,12 @@
     <!-- Row 2: Main Workspace (Viewport + Navigator + Pages)             -->
     <!-- Row 3: Bottom Softkeys (modular UserControl)                     -->
     <!-- ================================================================ -->
-    <Grid Background="#383838">
+    <Grid Background="#C0C0C0">
         <Grid.RowDefinitions>
-            <RowDefinition Height="56"/>   <!-- Status Bar -->
-            <RowDefinition Height="40"/>   <!-- Message Banner -->
+            <RowDefinition Height="40"/>   <!-- Status Bar -->
+            <RowDefinition Height="28"/>   <!-- Message Banner -->
             <RowDefinition Height="*"/>    <!-- Main Workspace -->
-            <RowDefinition Height="72"/>   <!-- Bottom Softkeys -->
+            <RowDefinition Height="52"/>   <!-- Bottom Softkeys -->
         </Grid.RowDefinitions>
 
         <!-- ============================================================ -->
@@ -48,29 +48,50 @@
         <!-- ContentControl for dynamic page loading                      -->
         <!-- Currently hosts: Navigator sidebar + Viewport + Page content -->
         <!-- ============================================================ -->
-        <Grid Grid.Row="2" Background="#444444">
+        <Grid Grid.Row="2" Background="#C8C8C8">
             <!-- Content Area: Viewport + Pages -->
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>                   <!-- Viewport + Pages -->
                     <ColumnDefinition Width="Auto"/>                <!-- Splitter -->
-                    <ColumnDefinition Width="260" MinWidth="200"/>  <!-- Properties Panel -->
+                    <ColumnDefinition Width="200" MinWidth="160"/>  <!-- Properties Panel -->
                     <ColumnDefinition Width="Auto"/>                <!-- KUKA Right Status Column -->
                 </Grid.ColumnDefinitions>
 
-                <!-- Left: 3D Viewport (always present) -->
+                <!-- Left: Navigator (split) + 3D Viewport -->
                 <Grid Grid.Column="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition x:Name="NavigatorColumn" Width="0"/>
+                        <ColumnDefinition x:Name="NavSplitterColumn" Width="0"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Navigator Panel (visible when NavIndex == 9, controlled by code-behind) -->
+                    <pages:NavigatorView Grid.Column="0" x:Name="NavigatorPanel"
+                                         DataContext="{Binding NavigatorVm}"
+                                         HorizontalAlignment="Stretch"
+                                         Visibility="Collapsed">
+                    </pages:NavigatorView>
+
+                    <!-- Navigator/Viewport Splitter -->
+                    <GridSplitter Grid.Column="1" Width="3" Background="#AAAAAA"
+                                  HorizontalAlignment="Stretch"
+                                  x:Name="NavSplitter" Visibility="Collapsed">
+                    </GridSplitter>
+
+                    <!-- Viewport + Pages (Column 2) -->
+                    <Grid Grid.Column="2">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*"/>    <!-- Viewport -->
                         <RowDefinition Height="Auto"/> <!-- UDP Monitor (collapsible) -->
                     </Grid.RowDefinitions>
 
                     <!-- 3D Viewport -->
-                    <Border Grid.Row="0" Background="#2A2A2A" BorderBrush="#2A2A2A" BorderThickness="0,0,0,1">
+                    <Border Grid.Row="0" Background="#E0E0E0" BorderBrush="#999999" BorderThickness="0,0,0,1">
                         <helix:HelixViewport3D x:Name="Viewport3D"
-                                               Background="#2A2A2A"
+                                               Background="#E0E0E0"
                                                ShowCoordinateSystem="True"
-                                               CoordinateSystemLabelForeground="White"
+                                               CoordinateSystemLabelForeground="Black"
                                                ZoomExtentsWhenLoaded="True"
                                                CameraRotationMode="Turntable"
                                                RotateAroundMouseDownPoint="True"
@@ -98,16 +119,16 @@
                             <ModelVisual3D x:Name="LightingModel">
                                 <ModelVisual3D.Content>
                                     <Model3DGroup>
-                                        <AmbientLight Color="#404040"/>
-                                        <DirectionalLight Color="#C8C8C8" Direction="-1,-1,-1"/>
-                                        <DirectionalLight Color="#646464" Direction="1,0.5,0.5"/>
+                                        <AmbientLight Color="#808080"/>
+                                        <DirectionalLight Color="#D0D0D0" Direction="-1,-1,-1"/>
+                                        <DirectionalLight Color="#909090" Direction="1,0.5,0.5"/>
                                     </Model3DGroup>
                                 </ModelVisual3D.Content>
                             </ModelVisual3D>
                             <helix:GridLinesVisual3D x:Name="GridLines"
                                                      Width="2000" Length="2000"
                                                      MajorDistance="500" MinorDistance="100"
-                                                     Thickness="1" Fill="#404040"/>
+                                                     Thickness="1" Fill="#AAAAAA"/>
                             <helix:CoordinateSystemVisual3D x:Name="CoordAxes" ArrowLengths="200"/>
                             <ModelVisual3D x:Name="RobotModelVisual"/>
                             <ModelVisual3D x:Name="TcpMarkerVisual"/>
@@ -169,7 +190,7 @@
                                             </Ellipse.Style>
                                         </Ellipse>
                                         <TextBlock Text="UDP"
-                                                   Foreground="White" FontSize="11" FontFamily="Consolas"
+                                                   Foreground="#222222" FontSize="11" FontFamily="Consolas"
                                                    VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Border>
@@ -217,7 +238,7 @@
                                             </Ellipse.Style>
                                         </Ellipse>
                                         <TextBlock Text="{Binding Stm32StatusText, FallbackValue='STM32'}"
-                                                   Foreground="White" FontSize="11" FontFamily="Segoe UI"
+                                                   Foreground="#222222" FontSize="11" FontFamily="Segoe UI"
                                                    VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Border>
@@ -283,7 +304,7 @@
                     </Button>
 
                     <!-- Page Content Overlay (covers viewport for non-Teach pages) -->
-                    <Border x:Name="PageContentOverlay" Grid.Row="0" Background="#444444">
+                    <Border x:Name="PageContentOverlay" Grid.Row="0" Background="#C8C8C8">
                         <Border.Style>
                             <Style TargetType="Border">
                                 <Setter Property="Visibility" Value="Collapsed"/>
@@ -395,7 +416,7 @@
                     </Border>
 
                     <!-- UDP Packet Monitor Panel (Row 1, collapsible) -->
-                    <Border Grid.Row="1" Background="#2D2D2D" BorderBrush="#1A1A1A" BorderThickness="0,2,0,0"
+                    <Border Grid.Row="1" Background="#D0D0D0" BorderBrush="#AAAAAA" BorderThickness="0,2,0,0"
                             Height="220" DataContext="{Binding DiagnosticsViewModel}">
                         <Border.Style>
                             <Style TargetType="Border">
@@ -416,12 +437,12 @@
                             </Grid.RowDefinitions>
 
                             <!-- Toolbar -->
-                            <Border Grid.Row="0" Background="#3A3A3A" Padding="4,2">
+                            <Border Grid.Row="0" Background="#C8C8C8" Padding="4,2">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="UDP PACKETS" Foreground="#4EC9B0" FontWeight="Bold"
                                                FontSize="11" FontFamily="Consolas" VerticalAlignment="Center" Margin="4,0,12,0"/>
                                     <Button Command="{Binding ToggleCaptureCommand}"
-                                            Background="#555555" Foreground="White" BorderThickness="0"
+                                            Background="#555555" Foreground="#222222" BorderThickness="0"
                                             FontSize="10" Padding="8,2" Margin="0,0,4,0" Cursor="Hand"
                                             FontFamily="Consolas">
                                         <Button.Style>
@@ -436,13 +457,13 @@
                                         </Button.Style>
                                     </Button>
                                     <Button Content="Clear" Command="{Binding ClearPacketsCommand}"
-                                            Background="#555555" Foreground="White" BorderThickness="0"
+                                            Background="#555555" Foreground="#222222" BorderThickness="0"
                                             FontSize="10" Padding="8,2" Margin="0,0,8,0" Cursor="Hand"
                                             FontFamily="Consolas"/>
-                                    <TextBlock Text="Filter:" Foreground="#888" FontSize="10"
+                                    <TextBlock Text="Filter:" Foreground="#666666" FontSize="10"
                                                VerticalAlignment="Center" Margin="0,0,4,0" FontFamily="Consolas"/>
                                     <ComboBox Width="60" SelectedIndex="0"
-                                              Background="#444" Foreground="White" FontSize="10"
+                                              Background="#444" Foreground="#222222" FontSize="10"
                                               FontFamily="Consolas" BorderThickness="0"
                                               SelectionChanged="UdpFilterCombo_SelectionChanged">
                                         <ComboBoxItem Content="All" IsSelected="True"/>
@@ -460,13 +481,13 @@
                                     <!-- Close button -->
                                     <Button Content="X" Margin="12,0,0,0" Padding="6,0"
                                             Command="{Binding DataContext.ToggleUdpMonitorCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                            Background="Transparent" Foreground="#888" BorderThickness="0"
+                                            Background="Transparent" Foreground="#666666" BorderThickness="0"
                                             FontSize="11" FontWeight="Bold" Cursor="Hand" FontFamily="Consolas"/>
                                 </StackPanel>
                             </Border>
 
                             <!-- Column Headers -->
-                            <Border Grid.Row="1" Background="#333333" Padding="4,0">
+                            <Border Grid.Row="1" Background="#BEBEBE" Padding="4,0">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="80"/>
@@ -476,12 +497,12 @@
                                         <ColumnDefinition Width="40"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="TIME" Foreground="#888" FontSize="9" FontFamily="Consolas" VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Column="1" Text="DIR" Foreground="#888" FontSize="9" FontFamily="Consolas" VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Column="2" Text="TYPE" Foreground="#888" FontSize="9" FontFamily="Consolas" VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Column="3" Text="SEQ" Foreground="#888" FontSize="9" FontFamily="Consolas" VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Column="4" Text="LEN" Foreground="#888" FontSize="9" FontFamily="Consolas" VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Column="5" Text="PAYLOAD HEX" Foreground="#888" FontSize="9" FontFamily="Consolas" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="0" Text="TIME" Foreground="#666666" FontSize="9" FontFamily="Consolas" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" Text="DIR" Foreground="#666666" FontSize="9" FontFamily="Consolas" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="2" Text="TYPE" Foreground="#666666" FontSize="9" FontFamily="Consolas" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="3" Text="SEQ" Foreground="#666666" FontSize="9" FontFamily="Consolas" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="4" Text="LEN" Foreground="#666666" FontSize="9" FontFamily="Consolas" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="5" Text="PAYLOAD HEX" Foreground="#666666" FontSize="9" FontFamily="Consolas" VerticalAlignment="Center"/>
                                 </Grid>
                             </Border>
 
@@ -524,7 +545,7 @@
                                                 <ColumnDefinition Width="40"/>
                                                 <ColumnDefinition Width="*"/>
                                             </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="{Binding Time}" Foreground="#AAAAAA" FontSize="10" FontFamily="Consolas"/>
+                                            <TextBlock Grid.Column="0" Text="{Binding Time}" Foreground="#555555" FontSize="10" FontFamily="Consolas"/>
                                             <TextBlock Grid.Column="1" Text="{Binding Dir}" FontSize="10" FontFamily="Consolas">
                                                 <TextBlock.Style>
                                                     <Style TargetType="TextBlock">
@@ -537,9 +558,9 @@
                                                     </Style>
                                                 </TextBlock.Style>
                                             </TextBlock>
-                                            <TextBlock Grid.Column="2" Text="{Binding TypeName}" Foreground="White" FontSize="10" FontFamily="Consolas" FontWeight="SemiBold"/>
-                                            <TextBlock Grid.Column="3" Text="{Binding Seq}" Foreground="#AAAAAA" FontSize="10" FontFamily="Consolas"/>
-                                            <TextBlock Grid.Column="4" Text="{Binding Len}" Foreground="#AAAAAA" FontSize="10" FontFamily="Consolas"/>
+                                            <TextBlock Grid.Column="2" Text="{Binding TypeName}" Foreground="#222222" FontSize="10" FontFamily="Consolas" FontWeight="SemiBold"/>
+                                            <TextBlock Grid.Column="3" Text="{Binding Seq}" Foreground="#555555" FontSize="10" FontFamily="Consolas"/>
+                                            <TextBlock Grid.Column="4" Text="{Binding Len}" Foreground="#555555" FontSize="10" FontFamily="Consolas"/>
                                             <TextBlock Grid.Column="5" Text="{Binding Hex}" Foreground="#CE9178" FontSize="10" FontFamily="Consolas"/>
                                         </Grid>
                                     </DataTemplate>
@@ -547,9 +568,9 @@
                             </ListBox>
 
                             <!-- Status Bar -->
-                            <Border Grid.Row="3" Background="#333333" Padding="4,0">
+                            <Border Grid.Row="3" Background="#BEBEBE" Padding="4,0">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock FontSize="9" Foreground="#888" FontFamily="Consolas" VerticalAlignment="Center">
+                                    <TextBlock FontSize="9" Foreground="#666666" FontFamily="Consolas" VerticalAlignment="Center">
                                         <Run Text="Packets: "/><Run Text="{Binding UdpPackets.Count, Mode=OneWay}"/>
                                     </TextBlock>
                                     <TextBlock FontSize="9" FontFamily="Consolas" VerticalAlignment="Center" Margin="12,0,0,0">
@@ -571,14 +592,15 @@
                         </Grid>
                     </Border>
                 </Grid>
+                </Grid>
 
                 <!-- Right Splitter -->
-                <GridSplitter Grid.Column="1" Width="3" Background="#2A2A2A"
+                <GridSplitter Grid.Column="1" Width="3" Background="#AAAAAA"
                               HorizontalAlignment="Center" VerticalAlignment="Stretch"/>
 
                 <!-- Properties Panel (right side) — KUKA SmartPAD Style -->
-                <Border Grid.Column="2" Background="#3E3E3E"
-                        BorderBrush="#2A2A2A" BorderThickness="1,0,0,0">
+                <Border Grid.Column="2" Background="#C8C8C8"
+                        BorderBrush="#999999" BorderThickness="1,0,0,0">
                     <Border.Style>
                         <Style TargetType="Border">
                             <Setter Property="Visibility" Value="Visible"/>
@@ -631,7 +653,7 @@
                 <!-- KUKA Right Status Column (Column 3)                       -->
                 <!-- Status indicators + Close (X) button — KUKA KSS 8.3 §4.2 -->
                 <!-- ======================================================== -->
-                <Border Grid.Column="3" Background="#4E4E4E" BorderBrush="#2A2A2A" BorderThickness="1,0,0,0" Width="48">
+                <Border Grid.Column="3" Background="#CCCCCC" BorderBrush="#999999" BorderThickness="1,0,0,0" Width="48">
                     <Border.Style>
                         <Style TargetType="Border">
                             <Setter Property="Visibility" Value="Collapsed"/>
@@ -662,33 +684,33 @@
                     </Border.Style>
                     <StackPanel VerticalAlignment="Top">
                         <!-- Robot Status Icon -->
-                        <Border Background="#5A5A5A" BorderBrush="#2A2A2A" BorderThickness="0,0,0,1"
+                        <Border Background="#D8D8D8" BorderBrush="#999999" BorderThickness="0,0,0,1"
                                 Height="44" Margin="2,2,2,0" ToolTip="Robot Status">
                             <TextBlock Text="🤖" FontSize="20" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
 
                         <!-- Drives Status -->
-                        <Border Background="#5A5A5A" BorderBrush="#2A2A2A" BorderThickness="0,0,0,1"
+                        <Border Background="#D8D8D8" BorderBrush="#999999" BorderThickness="0,0,0,1"
                                 Height="44" Margin="2,1,2,0" ToolTip="Drives Status">
                             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                                 <Ellipse Width="10" Height="10" Fill="{Binding DrivesStatusColor}" HorizontalAlignment="Center"/>
-                                <TextBlock Text="{Binding DrivesStatusSymbol}" Foreground="White" FontSize="10"
+                                <TextBlock Text="{Binding DrivesStatusSymbol}" Foreground="#222222" FontSize="10"
                                            FontWeight="Bold" HorizontalAlignment="Center" Margin="0,1,0,0"/>
                             </StackPanel>
                         </Border>
 
                         <!-- Interpreter Status -->
-                        <Border Background="#5A5A5A" BorderBrush="#2A2A2A" BorderThickness="0,0,0,1"
+                        <Border Background="#D8D8D8" BorderBrush="#999999" BorderThickness="0,0,0,1"
                                 Height="44" Margin="2,1,2,0" ToolTip="Robot Interpreter">
                             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                                 <Ellipse Width="10" Height="10" Fill="{Binding RobotInterpreterColor}" HorizontalAlignment="Center"/>
-                                <TextBlock Text="R" Foreground="White" FontSize="10"
+                                <TextBlock Text="R" Foreground="#222222" FontSize="10"
                                            FontWeight="Bold" HorizontalAlignment="Center" Margin="0,1,0,0"/>
                             </StackPanel>
                         </Border>
 
                         <!-- Separator -->
-                        <Rectangle Fill="#2A2A2A" Height="2" Margin="4,4,4,4"/>
+                        <Rectangle Fill="#AAAAAA" Height="2" Margin="4,4,4,4"/>
 
                         <!-- CLOSE PAGE BUTTON (Orange X) — KUKA Style -->
                         <Button Command="{Binding ClosePageCommand}" Cursor="Hand"
@@ -712,33 +734,33 @@
                         </Button>
 
                         <!-- Separator -->
-                        <Rectangle Fill="#2A2A2A" Height="2" Margin="4,2,4,4"/>
+                        <Rectangle Fill="#AAAAAA" Height="2" Margin="4,2,4,4"/>
 
                         <!-- Tool/Base Indicator -->
-                        <Border Background="#5A5A5A" BorderBrush="#2A2A2A" BorderThickness="0,0,0,1"
+                        <Border Background="#D8D8D8" BorderBrush="#999999" BorderThickness="0,0,0,1"
                                 Height="44" Margin="2,0,2,1" ToolTip="Active Tool">
                             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                                 <TextBlock Text="T" Foreground="#EB6A0A" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center"/>
-                                <TextBlock Text="{Binding ActiveToolDisplay}" Foreground="White" FontSize="9"
+                                <TextBlock Text="{Binding ActiveToolDisplay}" Foreground="#222222" FontSize="9"
                                            HorizontalAlignment="Center" Margin="0,1,0,0"/>
                             </StackPanel>
                         </Border>
 
-                        <Border Background="#5A5A5A" BorderBrush="#2A2A2A" BorderThickness="0,0,0,1"
+                        <Border Background="#D8D8D8" BorderBrush="#999999" BorderThickness="0,0,0,1"
                                 Height="44" Margin="2,0,2,1" ToolTip="Active Base">
                             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                                 <TextBlock Text="B" Foreground="#4EC9B0" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center"/>
-                                <TextBlock Text="{Binding ActiveBaseDisplay}" Foreground="White" FontSize="9"
+                                <TextBlock Text="{Binding ActiveBaseDisplay}" Foreground="#222222" FontSize="9"
                                            HorizontalAlignment="Center" Margin="0,1,0,0"/>
                             </StackPanel>
                         </Border>
 
                         <!-- Override Indicator -->
-                        <Border Background="#5A5A5A" BorderBrush="#2A2A2A" BorderThickness="0,0,0,1"
+                        <Border Background="#D8D8D8" BorderBrush="#999999" BorderThickness="0,0,0,1"
                                 Height="44" Margin="2,0,2,1" ToolTip="Speed Override">
                             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                <TextBlock Text="OV" Foreground="#AAAAAA" FontSize="9" HorizontalAlignment="Center"/>
-                                <TextBlock Foreground="White" FontSize="11" FontWeight="Bold"
+                                <TextBlock Text="OV" Foreground="#555555" FontSize="9" HorizontalAlignment="Center"/>
+                                <TextBlock Foreground="#222222" FontSize="11" FontWeight="Bold"
                                            HorizontalAlignment="Center" Margin="0,1,0,0">
                                     <TextBlock.Text>
                                         <MultiBinding StringFormat="{}{0:F0}%">
@@ -750,9 +772,9 @@
                         </Border>
 
                         <!-- Incremental Jog Mode -->
-                        <Border Background="#5A5A5A" BorderBrush="#2A2A2A" BorderThickness="0,0,0,1"
+                        <Border Background="#D8D8D8" BorderBrush="#999999" BorderThickness="0,0,0,1"
                                 Height="44" Margin="2,0,2,1" ToolTip="Incremental Jog">
-                            <TextBlock Text="{Binding IncrementalJogMode}" Foreground="White" FontSize="14"
+                            <TextBlock Text="{Binding IncrementalJogMode}" Foreground="#222222" FontSize="14"
                                        FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                     </StackPanel>
@@ -771,7 +793,7 @@
         <Border Grid.Row="0" Grid.RowSpan="4"
                 Background="#80000000"
                 Visibility="{Binding ShowNewProgramDialog, Converter={StaticResource BoolToVisibility}}">
-            <Border Background="#4E4E4E" BorderBrush="#2A2A2A" BorderThickness="2"
+            <Border Background="#CCCCCC" BorderBrush="#999999" BorderThickness="2"
                     Width="400" Height="260"
                     HorizontalAlignment="Center" VerticalAlignment="Center"
                     SnapsToDevicePixels="True">
@@ -785,17 +807,17 @@
                     </Grid.RowDefinitions>
                     <TextBlock Grid.Row="0" Text="New Program"
                                FontSize="18" FontWeight="Bold"
-                               Foreground="White" Margin="0,0,0,12" FontFamily="Segoe UI"/>
+                               Foreground="#222222" Margin="0,0,0,12" FontFamily="Segoe UI"/>
                     <Grid Grid.Row="1" Margin="0,0,0,8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="80"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="Name:" Foreground="#AAAAAA" FontSize="13"
+                        <TextBlock Text="Name:" Foreground="#555555" FontSize="13"
                                    VerticalAlignment="Center" FontFamily="Segoe UI"/>
                         <TextBox Grid.Column="1"
                                  Text="{Binding NewProgramName, UpdateSourceTrigger=PropertyChanged}"
-                                 Background="#363636" Foreground="White" BorderBrush="#5A5A5A"
+                                 Background="#FFFFFF" Foreground="#222222" BorderBrush="#999999"
                                  FontSize="14" Padding="6,4" FontFamily="Consolas"/>
                     </Grid>
                     <Grid Grid.Row="2" Margin="0,0,0,8">
@@ -803,11 +825,11 @@
                             <ColumnDefinition Width="80"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="Desc:" Foreground="#AAAAAA" FontSize="13"
+                        <TextBlock Text="Desc:" Foreground="#555555" FontSize="13"
                                    VerticalAlignment="Center" FontFamily="Segoe UI"/>
                         <TextBox Grid.Column="1"
                                  Text="{Binding NewProgramDescription, UpdateSourceTrigger=PropertyChanged}"
-                                 Background="#363636" Foreground="White" BorderBrush="#5A5A5A"
+                                 Background="#FFFFFF" Foreground="#222222" BorderBrush="#999999"
                                  FontSize="14" Padding="6,4" FontFamily="Consolas"/>
                     </Grid>
                     <StackPanel Grid.Row="4" Orientation="Horizontal"
@@ -831,7 +853,7 @@
         <Border Grid.Row="0" Grid.RowSpan="4"
                 Background="#80000000"
                 Visibility="{Binding ShowDeleteConfirmDialog, Converter={StaticResource BoolToVisibility}}">
-            <Border Background="#4E4E4E" BorderBrush="#2A2A2A" BorderThickness="2"
+            <Border Background="#CCCCCC" BorderBrush="#999999" BorderThickness="2"
                     Width="380" Height="180"
                     HorizontalAlignment="Center" VerticalAlignment="Center"
                     SnapsToDevicePixels="True">
@@ -843,8 +865,8 @@
                     </Grid.RowDefinitions>
                     <TextBlock Grid.Row="0" Text="Delete Program?"
                                FontSize="18" FontWeight="Bold"
-                               Foreground="White" Margin="0,0,0,10" FontFamily="Segoe UI"/>
-                    <TextBlock Grid.Row="1" TextWrapping="Wrap" Foreground="#AAAAAA" FontFamily="Segoe UI">
+                               Foreground="#222222" Margin="0,0,0,10" FontFamily="Segoe UI"/>
+                    <TextBlock Grid.Row="1" TextWrapping="Wrap" Foreground="#555555" FontFamily="Segoe UI">
                         <Run Text="Are you sure you want to delete "/>
                         <Run Text="{Binding DeleteTargetName, Mode=OneWay}" Foreground="#FFAA00" FontWeight="Bold"/>
                         <Run Text="? This action cannot be undone."/>
@@ -870,7 +892,7 @@
         <Border Grid.Row="0" Grid.RowSpan="4"
                 Background="#80000000"
                 Visibility="{Binding ShowRenameDialog, Converter={StaticResource BoolToVisibility}}">
-            <Border Background="#4E4E4E" BorderBrush="#2A2A2A" BorderThickness="2"
+            <Border Background="#CCCCCC" BorderBrush="#999999" BorderThickness="2"
                     Width="380" Height="180"
                     HorizontalAlignment="Center" VerticalAlignment="Center"
                     SnapsToDevicePixels="True">
@@ -883,17 +905,17 @@
                     </Grid.RowDefinitions>
                     <TextBlock Grid.Row="0" Text="Rename Program"
                                FontSize="18" FontWeight="Bold"
-                               Foreground="White" Margin="0,0,0,12" FontFamily="Segoe UI"/>
+                               Foreground="#222222" Margin="0,0,0,12" FontFamily="Segoe UI"/>
                     <Grid Grid.Row="1" Margin="0,0,0,8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="60"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="Name:" Foreground="#AAAAAA" FontSize="13"
+                        <TextBlock Text="Name:" Foreground="#555555" FontSize="13"
                                    VerticalAlignment="Center" FontFamily="Segoe UI"/>
                         <TextBox Grid.Column="1"
                                  Text="{Binding RenameProgramName, UpdateSourceTrigger=PropertyChanged}"
-                                 Background="#363636" Foreground="White" BorderBrush="#5A5A5A"
+                                 Background="#363636" Foreground="#222222" BorderBrush="#5A5A5A"
                                  FontSize="14" Padding="6,4" FontFamily="Consolas"/>
                     </Grid>
                     <StackPanel Grid.Row="3" Orientation="Horizontal"
@@ -917,7 +939,7 @@
         <Border Grid.Row="0" Grid.RowSpan="4"
                 Background="#80000000"
                 Visibility="{Binding ShowStm32ConnectDialog, Converter={StaticResource BoolToVisibility}}">
-            <Border Background="#4E4E4E" BorderBrush="#2A2A2A" BorderThickness="2"
+            <Border Background="#CCCCCC" BorderBrush="#999999" BorderThickness="2"
                     Width="400" Height="260"
                     HorizontalAlignment="Center" VerticalAlignment="Center"
                     SnapsToDevicePixels="True">
@@ -932,17 +954,17 @@
                     </Grid.RowDefinitions>
                     <TextBlock Grid.Row="0" Text="Connect STM32 (Ethernet)"
                                FontSize="18" FontWeight="Bold"
-                               Foreground="White" Margin="0,0,0,12" FontFamily="Segoe UI"/>
+                               Foreground="#222222" Margin="0,0,0,12" FontFamily="Segoe UI"/>
                     <Grid Grid.Row="1" Margin="0,0,0,8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="60"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="IP:" Foreground="#AAAAAA" FontSize="13"
+                        <TextBlock Text="IP:" Foreground="#555555" FontSize="13"
                                    VerticalAlignment="Center" FontFamily="Segoe UI"/>
                         <TextBox Grid.Column="1"
                                  Text="{Binding Stm32IpAddress, UpdateSourceTrigger=PropertyChanged}"
-                                 Background="#363636" Foreground="White" BorderBrush="#5A5A5A"
+                                 Background="#363636" Foreground="#222222" BorderBrush="#5A5A5A"
                                  FontSize="14" Padding="6,4" FontFamily="Consolas"/>
                     </Grid>
                     <Grid Grid.Row="2" Margin="0,0,0,8">
@@ -950,11 +972,11 @@
                             <ColumnDefinition Width="60"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="Port:" Foreground="#AAAAAA" FontSize="13"
+                        <TextBlock Text="Port:" Foreground="#555555" FontSize="13"
                                    VerticalAlignment="Center" FontFamily="Segoe UI"/>
                         <TextBox Grid.Column="1"
                                  Text="{Binding Stm32Port, UpdateSourceTrigger=PropertyChanged}"
-                                 Background="#363636" Foreground="White" BorderBrush="#5A5A5A"
+                                 Background="#363636" Foreground="#222222" BorderBrush="#5A5A5A"
                                  FontSize="14" Padding="6,4" FontFamily="Consolas"/>
                     </Grid>
                     <TextBlock Grid.Row="3" Text="{Binding Stm32StatusText}"
@@ -979,7 +1001,7 @@
         <Border Grid.Row="0" Grid.RowSpan="4"
                 Background="#80000000"
                 Visibility="{Binding ShowEStopConfirmDialog, Converter={StaticResource BoolToVisibility}}">
-            <Border Background="#4E4E4E" BorderBrush="#2A2A2A" BorderThickness="2"
+            <Border Background="#CCCCCC" BorderBrush="#999999" BorderThickness="2"
                     Width="380" Height="200"
                     HorizontalAlignment="Center" VerticalAlignment="Center"
                     SnapsToDevicePixels="True">
@@ -991,8 +1013,8 @@
                     </Grid.RowDefinitions>
                     <TextBlock Grid.Row="0" Text="Reset E-STOP?"
                                FontSize="18" FontWeight="Bold"
-                               Foreground="White" Margin="0,0,0,10" FontFamily="Segoe UI"/>
-                    <TextBlock Grid.Row="1" TextWrapping="Wrap" Foreground="#AAAAAA" FontFamily="Segoe UI">
+                               Foreground="#222222" Margin="0,0,0,10" FontFamily="Segoe UI"/>
+                    <TextBlock Grid.Row="1" TextWrapping="Wrap" Foreground="#555555" FontFamily="Segoe UI">
                         <Run Text="E-STOP is currently active. "/>
                         <Run Text="Please verify all hazards are clear before resetting." Foreground="#FFAA00"/>
                     </TextBlock>

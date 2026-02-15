@@ -15,18 +15,18 @@
         </Grid.RowDefinitions>
 
         <!-- Mode selector -->
-        <Border Grid.Row="0" Background="#2D2D2D" CornerRadius="8"
+        <Border Grid.Row="0" Background="#D0D0D0" CornerRadius="8"
                Padding="8" Margin="0,0,0,8">
             <StackPanel Orientation="Horizontal">
                 <RadioButton Content="Live View" GroupName="Mode"
                             IsChecked="True"
-                            Foreground="White" Margin="0,0,16,0"/>
+                            Foreground="#333333" Margin="0,0,16,0"/>
                 <RadioButton Content="Tracking" GroupName="Mode"
-                            Foreground="White" Margin="0,0,16,0"/>
+                            Foreground="#333333" Margin="0,0,16,0"/>
                 <RadioButton Content="Scan-to-Path" GroupName="Mode"
-                            Foreground="White" Margin="0,0,16,0"/>
+                            Foreground="#333333" Margin="0,0,16,0"/>
                 <RadioButton Content="Calibration" GroupName="Mode"
-                            Foreground="White"/>
+                            Foreground="#333333"/>
             </StackPanel>
         </Border>
 
@@ -51,7 +51,7 @@
         </Grid>
 
         <!-- Bottom: Control buttons -->
-        <Border Grid.Row="2" Background="#2D2D2D" CornerRadius="8"
+        <Border Grid.Row="2" Background="#D0D0D0" CornerRadius="8"
                Padding="12" Margin="0,8,0,0">
             <Grid>
                 <Grid.ColumnDefinitions>

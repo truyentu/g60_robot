@@ -6,7 +6,7 @@
              mc:Ignorable="d"
              d:DesignHeight="280" d:DesignWidth="280">
 
-    <Border Background="#2D2D2D" CornerRadius="8" Padding="12">
+    <Border Background="#D0D0D0" CornerRadius="8" Padding="12">
         <StackPanel>
             <!-- Header with status -->
             <Grid Margin="0,0,0,12">
@@ -25,16 +25,16 @@
                 <Grid>
                     <TextBlock Text="Quality" Foreground="#888888"/>
                     <TextBlock Text="{Binding QualityPercent, StringFormat='{}{0}%'}"
-                              Foreground="White" HorizontalAlignment="Right"/>
+                              Foreground="#333333" HorizontalAlignment="Right"/>
                 </Grid>
                 <ProgressBar Value="{Binding QualityPercent}" Maximum="100"
                             Height="8" Margin="0,4,0,0"
-                            Background="#353535"
+                            Background="#B8B8B8"
                             Foreground="{Binding QualityColor}"/>
             </StackPanel>
 
             <!-- Deviation display -->
-            <Border Background="#252525" CornerRadius="4" Padding="12" Margin="0,0,0,12">
+            <Border Background="#C8C8C8" CornerRadius="4" Padding="12" Margin="0,0,0,12">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
@@ -54,7 +54,7 @@
                         <TextBlock Text="HEIGHT" Foreground="#666666"
                                   FontSize="10" TextAlignment="Center"/>
                         <TextBlock Text="{Binding HeightDisplay}"
-                                  Foreground="White"
+                                  Foreground="#333333"
                                   FontFamily="Consolas" FontSize="20"
                                   FontWeight="Bold" TextAlignment="Center"/>
                     </StackPanel>
@@ -71,18 +71,18 @@
                 <StackPanel Grid.Column="0">
                     <TextBlock Text="Predicted X" Foreground="#666666" FontSize="10"/>
                     <TextBlock Text="{Binding PredictedX, StringFormat='{}{0:F2} mm'}"
-                              Foreground="White" FontFamily="Consolas"/>
+                              Foreground="#333333" FontFamily="Consolas"/>
                 </StackPanel>
 
                 <StackPanel Grid.Column="1">
                     <TextBlock Text="Predicted Z" Foreground="#666666" FontSize="10"/>
                     <TextBlock Text="{Binding PredictedZ, StringFormat='{}{0:F2} mm'}"
-                              Foreground="White" FontFamily="Consolas"/>
+                              Foreground="#333333" FontFamily="Consolas"/>
                 </StackPanel>
             </Grid>
 
             <!-- Statistics -->
-            <Rectangle Height="1" Fill="#404040" Margin="0,8"/>
+            <Rectangle Height="1" Fill="#999999" Margin="0,8"/>
 
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -97,25 +97,25 @@
                 <StackPanel Grid.Row="0" Grid.Column="0">
                     <TextBlock Text="Frames" Foreground="#666666" FontSize="10"/>
                     <TextBlock Text="{Binding FramesDisplay}"
-                              Foreground="White" FontFamily="Consolas"/>
+                              Foreground="#333333" FontFamily="Consolas"/>
                 </StackPanel>
 
                 <StackPanel Grid.Row="0" Grid.Column="1">
                     <TextBlock Text="Latency" Foreground="#666666" FontSize="10"/>
                     <TextBlock Text="{Binding LatencyDisplay}"
-                              Foreground="White" FontFamily="Consolas"/>
+                              Foreground="#333333" FontFamily="Consolas"/>
                 </StackPanel>
 
                 <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,8,0,0">
                     <TextBlock Text="Detection Rate" Foreground="#666666" FontSize="10"/>
                     <TextBlock Text="{Binding DetectionRateDisplay}"
-                              Foreground="White" FontFamily="Consolas"/>
+                              Foreground="#333333" FontFamily="Consolas"/>
                 </StackPanel>
 
                 <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,8,0,0">
                     <TextBlock Text="Valid" Foreground="#666666" FontSize="10"/>
                     <TextBlock Text="{Binding DetectionsValid}"
-                              Foreground="White" FontFamily="Consolas"/>
+                              Foreground="#333333" FontFamily="Consolas"/>
                 </StackPanel>
             </Grid>
         </StackPanel>

@@ -6,7 +6,7 @@
              mc:Ignorable="d"
              d:DesignHeight="200" d:DesignWidth="250">
 
-    <Border Background="#2D2D2D" CornerRadius="8" Padding="12">
+    <Border Background="#D0D0D0" CornerRadius="8" Padding="12">
         <StackPanel>
             <TextBlock Text="WEAVE PREVIEW"
                       FontSize="12" FontWeight="Bold"
@@ -37,7 +37,7 @@
                 <ComboBox Grid.Column="1"
                          ItemsSource="{Binding PatternTypes}"
                          SelectedItem="{Binding SelectedPattern}"
-                         Background="#353535" Foreground="White"/>
+                         Background="#B8B8B8" Foreground="#333333"/>
             </Grid>
 
             <!-- Parameters -->
@@ -50,13 +50,13 @@
                 <StackPanel Grid.Column="0" Margin="0,0,4,0">
                     <TextBlock Text="Amplitude" Foreground="#888888" FontSize="10"/>
                     <TextBox Text="{Binding Amplitude, UpdateSourceTrigger=PropertyChanged}"
-                            Background="#353535" Foreground="White" Padding="4"/>
+                            Background="#B8B8B8" Foreground="#333333" Padding="4"/>
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Margin="4,0,0,0">
                     <TextBlock Text="Wavelength" Foreground="#888888" FontSize="10"/>
                     <TextBox Text="{Binding Wavelength, UpdateSourceTrigger=PropertyChanged}"
-                            Background="#353535" Foreground="White" Padding="4"/>
+                            Background="#B8B8B8" Foreground="#333333" Padding="4"/>
                 </StackPanel>
             </Grid>
 
@@ -70,13 +70,13 @@
                 <StackPanel Grid.Column="0" Margin="0,0,4,0">
                     <TextBlock Text="Dwell Left (ms)" Foreground="#888888" FontSize="10"/>
                     <TextBox Text="{Binding DwellLeft}"
-                            Background="#353535" Foreground="White" Padding="4"/>
+                            Background="#B8B8B8" Foreground="#333333" Padding="4"/>
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Margin="4,0,0,0">
                     <TextBlock Text="Dwell Right (ms)" Foreground="#888888" FontSize="10"/>
                     <TextBox Text="{Binding DwellRight}"
-                            Background="#353535" Foreground="White" Padding="4"/>
+                            Background="#B8B8B8" Foreground="#333333" Padding="4"/>
                 </StackPanel>
             </Grid>
 
@@ -94,7 +94,7 @@
                                Command="{Binding DataContext.ApplyPresetCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                CommandParameter="{Binding}"
                                Margin="2" Padding="8,4"
-                               Background="#404040" Foreground="White"
+                               Background="#B8B8B8" Foreground="#333333"
                                FontSize="10"/>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
@@ -109,7 +109,7 @@
 
                 <CheckBox Grid.Column="0" Content="Enable Weave"
                          IsChecked="{Binding IsEnabled}"
-                         Foreground="White"/>
+                         Foreground="#333333"/>
 
                 <TextBlock Grid.Column="1"
                           Text="{Binding PathLengthRatio, StringFormat=Path: {0:F2}x}"

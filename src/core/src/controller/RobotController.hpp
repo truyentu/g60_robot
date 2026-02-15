@@ -83,6 +83,11 @@ public:
     bool initialize(const std::string& configDir = "config");
 
     /**
+     * Set workspace path (call before initialize)
+     */
+    void setWorkspacePath(const std::string& path) { m_workspacePath = path; }
+
+    /**
      * Start the control loop
      */
     bool start();
@@ -180,6 +185,9 @@ private:
     // Packet log queue (thread-safe: IO thread pushes, control loop publishes)
     std::queue<ipc::Message> m_packetLogQueue;
     std::mutex m_packetLogMutex;
+
+    // Workspace path (optional, takes priority over configDir)
+    std::string m_workspacePath;
 };
 
 } // namespace robot_controller

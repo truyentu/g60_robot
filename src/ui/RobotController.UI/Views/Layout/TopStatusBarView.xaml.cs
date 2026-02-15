@@ -42,6 +42,9 @@ public partial class TopStatusBarView : UserControl
 
         // Help submenu
         { "Help.Info",                               4 },
+
+        // Navigator (direct)
+        { "Navigator",                               9 },
     };
 
     // Main menu tag → Submenu L1 panel name
@@ -272,6 +275,17 @@ public partial class TopStatusBarView : UserControl
     }
 
     private readonly Dictionary<string, string> _recentTagMap = new();
+
+    // ===== Navigator direct click =====
+    private void Navigator_Click(object sender, RoutedEventArgs e)
+    {
+        if (MainVm != null)
+        {
+            MainVm.SelectedNavIndex = 9;
+        }
+        AddRecentItem("Navigator", "Navigator");
+        MainMenuToggle.IsChecked = false;
+    }
 
     // ===== Helpers =====
     private void HideAllSubL1()

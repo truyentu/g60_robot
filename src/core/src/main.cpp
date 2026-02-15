@@ -9,6 +9,8 @@
 #include <thread>
 #include <chrono>
 #include <fstream>
+#include <filesystem>
+#include <cstdlib>
 
 #include "logging/Logger.hpp"
 #include "controller/RobotController.hpp"
@@ -28,12 +30,49 @@ int main(int argc, char* argv[]) {
     std::signal(SIGINT, signalHandler);
     std::signal(SIGTERM, signalHandler);
 
-    // Determine config directory - try multiple locations
-    std::string configDir = "config";  // Try local first
-    if (argc > 1) {
-        configDir = argv[1];
-    } else {
-        // Check common locations
+    // Determine workspace and config directories
+    std::string configDir = "config";
+    std::string workspaceDir = "";
+
+    // Parse command line args
+    for (int i = 1; i < argc; i++) {
+        std::string arg = argv[i];
+        if (arg.rfind("--workspace=", 0) == 0) {
+            workspaceDir = arg.substr(12);
+        } else {
+            configDir = arg;
+        }
+    }
+
+    // Try ROBOT_WORKSPACE environment variable
+    if (workspaceDir.empty()) {
+        const char* envWs = std::getenv("ROBOT_WORKSPACE");
+        if (envWs && std::ifstream(std::string(envWs) + "/Config/system.yaml").good()) {
+            workspaceDir = envWs;
+        }
+    }
+
+    // Try to find workspace/ relative to executable
+    if (workspaceDir.empty()) {
+        const char* wsPaths[] = {
+            "workspace",
+            "../../workspace",
+            "../../../workspace",
+            "../../../../workspace",
+            "../../../../../workspace",
+            "../../../../../../workspace",
+            "../../../../../../../workspace"
+        };
+        for (const char* path : wsPaths) {
+            if (std::filesystem::exists(std::string(path) + "/Config")) {
+                workspaceDir = path;
+                break;
+            }
+        }
+    }
+
+    // Fallback: find config directory (backward compatible)
+    if (workspaceDir.empty()) {
         const char* configPaths[] = {
             "config",           // Local (VS working dir)
             "../../config",     // From build/bin/Release
@@ -56,9 +95,18 @@ int main(int argc, char* argv[]) {
     LOG_INFO("Robot Controller Core v1.0.0");
     LOG_INFO("========================================");
 
+    if (!workspaceDir.empty()) {
+        LOG_INFO("Workspace: {}", workspaceDir);
+    }
+    LOG_INFO("Config: {}", configDir);
+
     // Create and initialize controller
     robot_controller::RobotController controller;
     g_controller = &controller;
+
+    if (!workspaceDir.empty()) {
+        controller.setWorkspacePath(workspaceDir);
+    }
 
     if (!controller.initialize(configDir)) {
         LOG_ERROR("Failed to initialize controller");

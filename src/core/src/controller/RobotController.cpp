@@ -52,11 +52,32 @@ RobotController::~RobotController() {
 bool RobotController::initialize(const std::string& configDir) {
     LOG_INFO("Initializing RobotController...");
 
+    // Determine effective paths — workspace takes priority
+    std::string effectiveConfigDir = configDir;
+    if (!m_workspacePath.empty()) {
+        auto wsConfig = std::filesystem::path(m_workspacePath) / "Config" / "system.yaml";
+        if (std::filesystem::exists(wsConfig)) {
+            effectiveConfigDir = (std::filesystem::path(m_workspacePath) / "Config").string();
+            LOG_INFO("Loading config from workspace: {}", effectiveConfigDir);
+        } else {
+            LOG_INFO("Workspace Config/system.yaml not found, falling back to: {}", configDir);
+        }
+    }
+
     // Load configuration
     auto& config = ConfigManager::instance();
-    if (!config.loadAll(configDir)) {
-        LOG_ERROR("Failed to load configuration");
-        return false;
+    if (!config.loadAll(effectiveConfigDir)) {
+        // Fallback to original configDir if workspace failed
+        if (effectiveConfigDir != configDir) {
+            LOG_WARN("Workspace config failed, falling back to: {}", configDir);
+            if (!config.loadAll(configDir)) {
+                LOG_ERROR("Failed to load configuration");
+                return false;
+            }
+        } else {
+            LOG_ERROR("Failed to load configuration");
+            return false;
+        }
     }
 
     const auto& sysConfig = config.systemConfig();
@@ -75,16 +96,36 @@ bool RobotController::initialize(const std::string& configDir) {
     registerIpcHandlers();
 
     // Set robot library path for package loading
-    std::filesystem::path robotLibPath = std::filesystem::path(configDir) / "robots";
-    if (std::filesystem::exists(robotLibPath)) {
-        RobotPackageLoader::setLibraryPath(robotLibPath);
-    } else {
-        // Try relative to executable
-        robotLibPath = std::filesystem::current_path() / "config" / "robots";
+    // Prefer workspace/Catalog/ if workspace is set, with configDir/robots as fallback
+    bool robotLibFound = false;
+    if (!m_workspacePath.empty()) {
+        auto wsCatalog = std::filesystem::path(m_workspacePath) / "Catalog";
+        if (std::filesystem::exists(wsCatalog)) {
+            RobotPackageLoader::setLibraryPath(wsCatalog);
+            LOG_INFO("Robot library from workspace: {}", wsCatalog.string());
+            robotLibFound = true;
+
+            // Set fallback to configDir/robots so packages not yet in Catalog can still load
+            std::filesystem::path fallbackPath = std::filesystem::path(configDir) / "robots";
+            if (!std::filesystem::exists(fallbackPath)) {
+                fallbackPath = std::filesystem::current_path() / "config" / "robots";
+            }
+            if (std::filesystem::exists(fallbackPath)) {
+                RobotPackageLoader::setFallbackLibraryPath(fallbackPath);
+            }
+        }
+    }
+    if (!robotLibFound) {
+        std::filesystem::path robotLibPath = std::filesystem::path(configDir) / "robots";
         if (std::filesystem::exists(robotLibPath)) {
             RobotPackageLoader::setLibraryPath(robotLibPath);
         } else {
-            LOG_WARN("Robot library path not found, package loading may fail");
+            robotLibPath = std::filesystem::current_path() / "config" / "robots";
+            if (std::filesystem::exists(robotLibPath)) {
+                RobotPackageLoader::setLibraryPath(robotLibPath);
+            } else {
+                LOG_WARN("Robot library path not found, package loading may fail");
+            }
         }
     }
 
@@ -126,11 +167,40 @@ bool RobotController::initialize(const std::string& configDir) {
         }
     });
 
-    // Load tools from config directory
-    std::filesystem::path toolsDir = std::filesystem::path(configDir) / "tools";
-    if (std::filesystem::exists(toolsDir)) {
-        m_toolManager->loadFromDirectory(toolsDir.string());
-        LOG_INFO("Tools loaded from: {}", toolsDir.string());
+    // Load tools — prefer workspace/Tools/ if available
+    bool toolsLoaded = false;
+    if (!m_workspacePath.empty()) {
+        auto wsTools = std::filesystem::path(m_workspacePath) / "Tools";
+        if (std::filesystem::exists(wsTools)) {
+            m_toolManager->loadFromDirectory(wsTools.string());
+            LOG_INFO("Tools loaded from workspace: {}", wsTools.string());
+            toolsLoaded = true;
+        }
+    }
+    if (!toolsLoaded) {
+        std::filesystem::path toolsDir = std::filesystem::path(configDir) / "tools";
+        if (std::filesystem::exists(toolsDir)) {
+            m_toolManager->loadFromDirectory(toolsDir.string());
+            LOG_INFO("Tools loaded from: {}", toolsDir.string());
+        }
+    }
+
+    // Load base frames — prefer workspace/Frames/ if available
+    bool framesLoaded = false;
+    if (!m_workspacePath.empty()) {
+        auto wsFrames = std::filesystem::path(m_workspacePath) / "Frames";
+        if (std::filesystem::exists(wsFrames)) {
+            m_baseFrameManager->loadFromDirectory(wsFrames.string());
+            LOG_INFO("Frames loaded from workspace: {}", wsFrames.string());
+            framesLoaded = true;
+        }
+    }
+    if (!framesLoaded) {
+        std::filesystem::path framesDir = std::filesystem::path(configDir) / "frames";
+        if (std::filesystem::exists(framesDir)) {
+            m_baseFrameManager->loadFromDirectory(framesDir.string());
+            LOG_INFO("Frames loaded from: {}", framesDir.string());
+        }
     }
 
     // Initialize complete

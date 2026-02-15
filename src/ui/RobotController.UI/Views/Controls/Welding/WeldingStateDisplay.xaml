@@ -6,7 +6,7 @@
              mc:Ignorable="d"
              d:DesignHeight="200" d:DesignWidth="280">
 
-    <Border Background="#2D2D2D" CornerRadius="8" Padding="12">
+    <Border Background="#D0D0D0" CornerRadius="8" Padding="12">
         <StackPanel>
             <!-- Header with current state -->
             <Grid Margin="0,0,0,12">
@@ -23,7 +23,7 @@
             </Grid>
 
             <!-- State Machine Visualization -->
-            <Border Background="#252525" CornerRadius="4" Padding="8" Margin="0,0,0,8">
+            <Border Background="#C8C8C8" CornerRadius="4" Padding="8" Margin="0,0,0,8">
                 <StackPanel>
                     <!-- Top row: Pre-flow -> Arc Start -> Welding -> Crater -->
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
@@ -96,13 +96,13 @@
                 <StackPanel Grid.Column="0">
                     <TextBlock Text="State Time" Foreground="#888888" FontSize="10"/>
                     <TextBlock Text="{Binding StateTime, StringFormat={}{0} ms}"
-                              Foreground="White" FontFamily="Consolas"/>
+                              Foreground="#333333" FontFamily="Consolas"/>
                 </StackPanel>
 
                 <StackPanel Grid.Column="1">
                     <TextBlock Text="Arc Retries" Foreground="#888888" FontSize="10"/>
                     <TextBlock Text="{Binding ArcRetries}"
-                              Foreground="White" FontFamily="Consolas"/>
+                              Foreground="#333333" FontFamily="Consolas"/>
                 </StackPanel>
             </Grid>
 

@@ -6,11 +6,11 @@
              mc:Ignorable="d"
              d:DesignHeight="120" d:DesignWidth="300">
 
-    <Border Background="#2D2D2D" CornerRadius="8" Padding="12">
+    <Border Background="#D0D0D0" CornerRadius="8" Padding="12">
         <StackPanel>
             <!-- Header -->
             <TextBlock Text="OVERRIDE" FontSize="12" FontWeight="Bold"
-                      Foreground="#AAAAAA" Margin="0,0,0,8"/>
+                      Foreground="#555555" Margin="0,0,0,8"/>
 
             <!-- Override Sliders -->
             <Grid>
@@ -27,7 +27,7 @@
 
                 <!-- Program Override -->
                 <TextBlock Grid.Row="0" Grid.Column="0" Text="Program"
-                          Foreground="#888888" VerticalAlignment="Center"
+                          Foreground="#555555" VerticalAlignment="Center"
                           FontSize="11" Margin="0,4"/>
                 <Slider Grid.Row="0" Grid.Column="1"
                        Minimum="1" Maximum="100"
@@ -35,12 +35,12 @@
                        VerticalAlignment="Center" Margin="8,4"/>
                 <TextBlock Grid.Row="0" Grid.Column="2"
                           Text="{Binding ProgramOverride, StringFormat='{}{0}%'}"
-                          Foreground="White" FontFamily="Consolas"
+                          Foreground="#222222" FontFamily="Consolas"
                           TextAlignment="Right" VerticalAlignment="Center"/>
 
                 <!-- Jog Override -->
                 <TextBlock Grid.Row="1" Grid.Column="0" Text="Jog"
-                          Foreground="#888888" VerticalAlignment="Center"
+                          Foreground="#555555" VerticalAlignment="Center"
                           FontSize="11" Margin="0,4"/>
                 <Slider Grid.Row="1" Grid.Column="1"
                        Minimum="1" Maximum="100"
@@ -48,12 +48,12 @@
                        VerticalAlignment="Center" Margin="8,4"/>
                 <TextBlock Grid.Row="1" Grid.Column="2"
                           Text="{Binding JogOverride, StringFormat='{}{0}%'}"
-                          Foreground="White" FontFamily="Consolas"
+                          Foreground="#222222" FontFamily="Consolas"
                           TextAlignment="Right" VerticalAlignment="Center"/>
 
                 <!-- Manual Override (T1 mode cap) -->
                 <TextBlock Grid.Row="2" Grid.Column="0" Text="Manual"
-                          Foreground="#888888" VerticalAlignment="Center"
+                          Foreground="#555555" VerticalAlignment="Center"
                           FontSize="11" Margin="0,4"/>
                 <Slider Grid.Row="2" Grid.Column="1"
                        Minimum="1" Maximum="100"
@@ -61,7 +61,7 @@
                        VerticalAlignment="Center" Margin="8,4"/>
                 <TextBlock Grid.Row="2" Grid.Column="2"
                           Text="{Binding ManualOverride, StringFormat='{}{0}%'}"
-                          Foreground="White" FontFamily="Consolas"
+                          Foreground="#222222" FontFamily="Consolas"
                           TextAlignment="Right" VerticalAlignment="Center"/>
             </Grid>
         </StackPanel>

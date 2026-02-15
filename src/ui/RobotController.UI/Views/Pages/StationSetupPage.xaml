@@ -32,7 +32,7 @@
                                Text="{Binding Objects.Count, StringFormat='{}{0} object(s) in scene'}"/>
 
                     <!-- Robot Base Height Info -->
-                    <Border Background="#484848" CornerRadius="4" Padding="8,5" Margin="0,8,0,0">
+                    <Border Background="#D0D0D0" CornerRadius="4" Padding="8,5" Margin="0,8,0,0">
                         <TextBlock Text="{Binding RobotBaseHeightInfo}" Foreground="#4FC3F7"
                                    FontSize="11" FontWeight="SemiBold"/>
                     </Border>
@@ -97,7 +97,7 @@
                 <StackPanel Grid.Row="2" Margin="0,10,0,0">
                     <StackPanel Orientation="Horizontal">
                         <Button Content="Import STL" Command="{Binding ImportObjectCommand}"
-                                Background="{StaticResource AccentBrush}" Foreground="White"
+                                Background="{StaticResource AccentBrush}" Foreground="#222222"
                                 Padding="15,5" Margin="0,0,5,0"/>
                         <Button Content="Delete" Command="{Binding DeleteObjectCommand}"
                                 IsEnabled="{Binding SelectedObject, Converter={StaticResource NotNullToBool}}"
@@ -192,15 +192,15 @@
                         <!-- Quick Placement Actions -->
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
                             <Button Content="Drop to Ground" Command="{Binding DropToGroundCommand}"
-                                    Background="#555" Foreground="White" FontSize="11"
+                                    Background="#555" Foreground="#222222" FontSize="11"
                                     Padding="10,4" Margin="0,0,5,0" ToolTip="Set Z so object bottom sits on ground (Z=0)"/>
                             <Button Content="Align to Robot Base" Command="{Binding AlignToRobotBaseCommand}"
-                                    Background="#555" Foreground="White" FontSize="11"
+                                    Background="#555" Foreground="#222222" FontSize="11"
                                     Padding="10,4" Margin="0,0,5,0" ToolTip="Set Z so object top aligns with robot base height"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
                             <Button Content="Drop to Table" Command="{Binding DropToTableCommand}"
-                                    Background="#8B6914" Foreground="White" FontSize="11"
+                                    Background="#8B6914" Foreground="#222222" FontSize="11"
                                     Padding="10,4" Margin="0,0,5,0"
                                     ToolTip="Set Z so object bottom sits on top of the welding table surface"/>
                         </StackPanel>
@@ -221,15 +221,15 @@
                             <TextBlock Text="Quick:" Foreground="Gray" FontSize="11"
                                        VerticalAlignment="Center" Margin="0,0,5,0"/>
                             <Button Content="Flip X" Command="{Binding FlipXCommand}"
-                                    Background="#8B0000" Foreground="White" FontSize="10"
+                                    Background="#8B0000" Foreground="#222222" FontSize="10"
                                     Padding="8,3" Margin="0,0,3,0"
                                     ToolTip="Rotate +90° around X axis"/>
                             <Button Content="Flip Y" Command="{Binding FlipYCommand}"
-                                    Background="#006400" Foreground="White" FontSize="10"
+                                    Background="#006400" Foreground="#222222" FontSize="10"
                                     Padding="8,3" Margin="0,0,3,0"
                                     ToolTip="Rotate +90° around Y axis"/>
                             <Button Content="Flip Z" Command="{Binding FlipZCommand}"
-                                    Background="#00008B" Foreground="White" FontSize="10"
+                                    Background="#00008B" Foreground="#222222" FontSize="10"
                                     Padding="8,3"
                                     ToolTip="Rotate +90° around Z axis"/>
                         </StackPanel>
@@ -253,27 +253,27 @@
                             <WrapPanel>
                                 <Button Content="Flat" CommandParameter="Flat"
                                         Command="{Binding ApplyPresetOrientationCommand}"
-                                        Background="#444" Foreground="White" FontSize="10"
+                                        Background="#444" Foreground="#222222" FontSize="10"
                                         Padding="8,3" Margin="0,0,3,3"/>
                                 <Button Content="Stand X" CommandParameter="StandX"
                                         Command="{Binding ApplyPresetOrientationCommand}"
-                                        Background="#444" Foreground="White" FontSize="10"
+                                        Background="#444" Foreground="#222222" FontSize="10"
                                         Padding="8,3" Margin="0,0,3,3"/>
                                 <Button Content="Stand Y" CommandParameter="StandY"
                                         Command="{Binding ApplyPresetOrientationCommand}"
-                                        Background="#444" Foreground="White" FontSize="10"
+                                        Background="#444" Foreground="#222222" FontSize="10"
                                         Padding="8,3" Margin="0,0,3,3"/>
                                 <Button Content="Tilt 45°" CommandParameter="Tilt45"
                                         Command="{Binding ApplyPresetOrientationCommand}"
-                                        Background="#444" Foreground="White" FontSize="10"
+                                        Background="#444" Foreground="#222222" FontSize="10"
                                         Padding="8,3" Margin="0,0,3,3"/>
                                 <Button Content="Flip 180°" CommandParameter="UpsideDown"
                                         Command="{Binding ApplyPresetOrientationCommand}"
-                                        Background="#444" Foreground="White" FontSize="10"
+                                        Background="#444" Foreground="#222222" FontSize="10"
                                         Padding="8,3" Margin="0,0,3,3"/>
                                 <Button Content="Rot 90°" CommandParameter="Rotate90"
                                         Command="{Binding ApplyPresetOrientationCommand}"
-                                        Background="#444" Foreground="White" FontSize="10"
+                                        Background="#444" Foreground="#222222" FontSize="10"
                                         Padding="8,3" Margin="0,0,3,3"/>
                             </WrapPanel>
                         </StackPanel>
@@ -369,7 +369,7 @@
                         <!-- Apply/Cancel -->
                         <StackPanel Orientation="Horizontal" Margin="0,20,0,0">
                             <Button Content="Apply" Command="{Binding ApplyTransformCommand}"
-                                    Background="{StaticResource AccentBrush}" Foreground="White"
+                                    Background="{StaticResource AccentBrush}" Foreground="#222222"
                                     Padding="20,8" Margin="0,0,10,0"/>
                             <Button Content="Cancel" Command="{Binding CancelEditCommand}"
                                     Padding="20,8"/>
@@ -379,7 +379,7 @@
                     <!-- Error message -->
                     <Border Background="#F44336" CornerRadius="4" Padding="10" Margin="0,15,0,0"
                             Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}}">
-                        <TextBlock Text="{Binding ErrorMessage}" Foreground="White" TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding ErrorMessage}" Foreground="#222222" TextWrapping="Wrap"/>
                     </Border>
                 </StackPanel>
             </ScrollViewer>

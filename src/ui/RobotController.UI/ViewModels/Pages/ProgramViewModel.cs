@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
+using RobotController.UI.Services;
 using Serilog;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -13,13 +14,11 @@ namespace RobotController.UI.ViewModels.Pages;
 /// </summary>
 public partial class ProgramViewModel : ObservableObject
 {
+    private WorkspaceService? _workspace;
+    private string? _currentProgramPath;
+
     [ObservableProperty]
-    private ObservableCollection<ProgramItem> _programs = new()
-    {
-        new ProgramItem { Name = "WeldSeam01", Description = "Butt weld seam program" },
-        new ProgramItem { Name = "WeldSeam02", Description = "Fillet weld program" },
-        new ProgramItem { Name = "PickPlace01", Description = "Pick and place demo" },
-    };
+    private ObservableCollection<ProgramItem> _programs = new();
 
     [ObservableProperty]
     private ProgramItem? _selectedProgram;
@@ -38,6 +37,79 @@ public partial class ProgramViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _showModulesOnly;
+
+    /// <summary>Set workspace service for file-based operations</summary>
+    public void SetWorkspaceService(WorkspaceService workspace)
+    {
+        _workspace = workspace;
+        LoadProgramsFromWorkspace();
+    }
+
+    /// <summary>Scan workspace/R1/Programs/ and populate the program list from disk</summary>
+    public void LoadProgramsFromWorkspace()
+    {
+        if (_workspace == null) return;
+
+        Programs.Clear();
+        var programsDir = _workspace.ProgramsDir;
+        if (!Directory.Exists(programsDir)) return;
+
+        // Recursively find all .program files
+        foreach (var programFile in Directory.EnumerateFiles(programsDir, "*.program", SearchOption.AllDirectories))
+        {
+            var name = Path.GetFileNameWithoutExtension(programFile);
+            var comment = "";
+            // Extract &COMMENT from first 10 lines
+            try
+            {
+                using var reader = new StreamReader(programFile);
+                for (int i = 0; i < 10; i++)
+                {
+                    var line = reader.ReadLine();
+                    if (line == null) break;
+                    if (line.StartsWith("&COMMENT", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var idx = line.IndexOf(' ');
+                        comment = idx >= 0 ? line.Substring(idx + 1).Trim() : "";
+                        break;
+                    }
+                }
+            }
+            catch { }
+
+            Programs.Add(new ProgramItem { Name = name, Description = comment });
+        }
+
+        Log.Information("Loaded {Count} programs from workspace", Programs.Count);
+    }
+
+    /// <summary>Open a .program file from disk into the editor</summary>
+    public void OpenProgramFile(string programPath)
+    {
+        if (_workspace == null) return;
+
+        _currentProgramPath = programPath;
+        ProgramCode = _workspace.LoadProgramSource(programPath);
+
+        var name = Path.GetFileNameWithoutExtension(programPath);
+        ProgramStatus = $"Opened: {name}";
+        Log.Information("Program opened from file: {Path}", programPath);
+
+        UpdateCounts();
+    }
+
+    /// <summary>Save current program back to its file on disk</summary>
+    public void SaveCurrentProgramToFile()
+    {
+        if (_workspace == null || _currentProgramPath == null) return;
+
+        _workspace.SaveProgramSource(_currentProgramPath, ProgramCode);
+        ProgramStatus = $"Saved: {Path.GetFileNameWithoutExtension(_currentProgramPath)}";
+        Log.Information("Program saved to file: {Path}", _currentProgramPath);
+    }
+
+    /// <summary>Current file path of the open program (null if none)</summary>
+    public string? CurrentProgramPath => _currentProgramPath;
 
     // Clipboard for Cut/Copy/Paste
     private ProgramItem? _clipboard;
@@ -68,7 +140,14 @@ public partial class ProgramViewModel : ObservableObject
 
         var lines = ProgramCode.Split('\n');
         LineCount = lines.Length;
-        PointCount = lines.Count(l => l.Trim().StartsWith("MOV", StringComparison.OrdinalIgnoreCase));
+        PointCount = lines.Count(l =>
+        {
+            var trimmed = l.Trim();
+            return trimmed.StartsWith("MOV", StringComparison.OrdinalIgnoreCase)
+                || trimmed.StartsWith("PTP ", StringComparison.OrdinalIgnoreCase)
+                || trimmed.StartsWith("LIN ", StringComparison.OrdinalIgnoreCase)
+                || trimmed.StartsWith("CIRC ", StringComparison.OrdinalIgnoreCase);
+        });
     }
 
     // ====== Navigator Softkey Actions ======
@@ -76,6 +155,17 @@ public partial class ProgramViewModel : ObservableObject
     /// <summary>Create program with a specific name (called from MainViewModel dialog)</summary>
     public void CreateProgramWithName(string name, string description)
     {
+        // Create actual files on disk if workspace available
+        if (_workspace != null)
+        {
+            _workspace.CreateProgram(_workspace.ProgramsDir, name);
+            LoadProgramsFromWorkspace();
+            SelectedProgram = Programs.FirstOrDefault(p => p.Name == name);
+            ProgramStatus = $"Created: {name}";
+            Log.Information("New program created on disk: {Name}", name);
+            return;
+        }
+
         var newProgram = new ProgramItem
         {
             Name = name,
@@ -263,11 +353,27 @@ public partial class ProgramViewModel : ObservableObject
     [RelayCommand]
     public void DeleteProgram()
     {
-        if (SelectedProgram != null)
+        if (SelectedProgram == null) return;
+
+        // Delete actual files on disk if workspace available
+        if (_workspace != null)
         {
-            Programs.Remove(SelectedProgram);
-            SelectedProgram = Programs.FirstOrDefault();
+            var programPath = Path.Combine(_workspace.ProgramsDir, SelectedProgram.Name + ".program");
+            // Also search subdirectories for the file
+            if (!File.Exists(programPath))
+            {
+                var found = Directory.EnumerateFiles(_workspace.ProgramsDir, SelectedProgram.Name + ".program", SearchOption.AllDirectories).FirstOrDefault();
+                if (found != null) programPath = found;
+            }
+            if (File.Exists(programPath))
+            {
+                _workspace.DeleteFileOrFolder(programPath);
+                Log.Information("Program deleted from disk: {Path}", programPath);
+            }
         }
+
+        Programs.Remove(SelectedProgram);
+        SelectedProgram = Programs.FirstOrDefault();
     }
 
     [RelayCommand]
@@ -279,7 +385,10 @@ public partial class ProgramViewModel : ObservableObject
     [RelayCommand]
     private void SaveProgram()
     {
-        ProgramStatus = "Saved";
+        if (_currentProgramPath != null)
+            SaveCurrentProgramToFile();
+        else
+            ProgramStatus = "Saved";
     }
 
     [RelayCommand]

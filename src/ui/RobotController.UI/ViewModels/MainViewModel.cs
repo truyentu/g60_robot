@@ -261,7 +261,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     // UI State
     [ObservableProperty]
-    private int _selectedNavIndex = 0;
+    private int _selectedNavIndex = 9;
 
     private int _prePickNavIndex = -1; // Nav index before TCP picking
 
@@ -334,6 +334,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private ProgramEditorViewModel? _programEditor;
 
+    [ObservableProperty]
+    private NavigatorViewModel? _navigatorVm;
+
     // 3D Model
     public Model3DGroup? RobotModelGroup => _viewportService.GetModelGroup();
     public Model3DGroup? TcpMarkerGroup { get; private set; }
@@ -398,6 +401,22 @@ public partial class MainViewModel : ObservableObject, IDisposable
         PositionDisplay = new PositionDisplayViewModel(_ipcClient);
         ProgramEditor = new ProgramEditorViewModel(_ipcClient, _viewportService);
 
+        // Initialize workspace and Navigator
+        var workspace = new WorkspaceService();
+        workspace.EnsureWorkspaceStructure();
+        NavigatorVm = new NavigatorViewModel(workspace);
+        NavigatorVm.OpenProgramRequested += OnNavigatorOpenProgram;
+        NavigatorVm.Initialize(); // Navigator is default screen — init immediately
+
+        // Connect workspace to ProgramViewModel
+        ProgramViewModel.SetWorkspaceService(workspace);
+
+        // Connect workspace to RobotCatalog for Catalog → Mada copy
+        RobotCatalogViewModel?.SetWorkspaceService(workspace);
+
+        // Connect workspace to StationSetup for workspace-based station file
+        StationSetup?.SetWorkspaceService(workspace);
+
         // Subscribe to tool change for viewport update
         _ipcClient.ToolChanged += OnToolChangedForViewport;
 
@@ -416,7 +435,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void ClosePage()
     {
-        SelectedNavIndex = 0;
+        SelectedNavIndex = 9;
     }
 
     [RelayCommand]
@@ -450,11 +469,35 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         // Hide TCP gizmo when not on Teach & Program
         _viewportService.ShowTcpGizmo(Is3DJogEnabled && value == 0);
+
+        // Initialize Navigator when entering Navigator page
+        if (value == 9)
+        {
+            NavigatorVm?.Initialize();
+        }
     }
 
     private void UpdateSoftkeysForContext(int navIndex)
     {
-        if (navIndex == 0) // Teach & Program → Navigator mode
+        if (navIndex == 9) // Navigator — KUKA File Browser softkeys
+        {
+            Softkey1Text = "New";
+            Softkey2Text = "Open";
+            Softkey3Text = "Select";
+            Softkey4Text = "Delete";
+            Softkey5Text = "Copy";
+            Softkey6Text = "Rename";
+            Softkey7Text = "Edit";
+            Softkey7Visible = Visibility.Visible;
+
+            Softkey1Command = new RelayCommand(() => NavigatorVm?.NewProgramCommand.Execute(null));
+            Softkey2Command = new RelayCommand(() => NavigatorVm?.OpenCommand.Execute(null));
+            Softkey3Command = new RelayCommand(() => NavigatorVm?.SelectCommand.Execute(null));
+            Softkey4Command = new RelayCommand(() => NavigatorVm?.DeleteCommand.Execute(null));
+            Softkey5Command = new RelayCommand(() => NavigatorVm?.CopyCommand.Execute(null));
+            Softkey6Command = new RelayCommand(() => NavigatorVm?.RenameCommand.Execute(null));
+        }
+        else if (navIndex == 0) // Teach & Program → Navigator mode
         {
             Softkey1Text = "New";
             Softkey2Text = "Select";
@@ -576,6 +619,24 @@ public partial class MainViewModel : ObservableObject, IDisposable
             ProgramEditor.ProgramName = ProgramViewModel.SelectedProgram.Name;
         }
         Log.Information("Program opened: {Name}", ProgramViewModel.SelectedProgram.Name);
+    }
+
+    /// <summary>Handle Navigator requesting to open a .program file</summary>
+    private void OnNavigatorOpenProgram(string programPath)
+    {
+        // Load program file into ProgramViewModel
+        ProgramViewModel?.OpenProgramFile(programPath);
+
+        // Also load into ProgramEditor if available
+        if (ProgramEditor != null && ProgramViewModel != null)
+        {
+            ProgramEditor.ProgramSource = ProgramViewModel.ProgramCode;
+            ProgramEditor.ProgramName = System.IO.Path.GetFileNameWithoutExtension(programPath);
+        }
+
+        // Switch to Program Editor page (NavIndex 1)
+        SelectedNavIndex = 1;
+        Log.Information("Navigator: Opened program file {Path}", programPath);
     }
 
     // Rename dialog

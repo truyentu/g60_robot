@@ -15,32 +15,32 @@
 
         <!-- Header -->
         <Grid Grid.Row="0" Margin="0,0,0,16">
-            <TextBlock Text="DIAGNOSTICS" FontSize="18" FontWeight="Bold" Foreground="White"/>
+            <TextBlock Text="DIAGNOSTICS" FontSize="18" FontWeight="Bold" Foreground="#222222"/>
         </Grid>
 
         <!-- Tab Control -->
         <TabControl Grid.Row="1" Background="Transparent" BorderThickness="0">
             <TabControl.Resources>
                 <Style TargetType="TabItem">
-                    <Setter Property="Background" Value="#4E4E4E"/>
-                    <Setter Property="Foreground" Value="#888888"/>
+                    <Setter Property="Background" Value="#D8D8D8"/>
+                    <Setter Property="Foreground" Value="#666666"/>
                     <Setter Property="Padding" Value="16,6"/>
                     <Setter Property="FontWeight" Value="Bold"/>
                     <Setter Property="Template">
                         <Setter.Value>
                             <ControlTemplate TargetType="TabItem">
-                                <Border x:Name="Border" Background="#3E3E3E" CornerRadius="6,6,0,0"
+                                <Border x:Name="Border" Background="#D0D0D0" CornerRadius="6,6,0,0"
                                         Margin="0,0,2,0" Padding="{TemplateBinding Padding}">
                                     <ContentPresenter x:Name="Content" ContentSource="Header"
                                                       HorizontalAlignment="Center"/>
                                 </Border>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsSelected" Value="True">
-                                        <Setter TargetName="Border" Property="Background" Value="#4E4E4E"/>
-                                        <Setter Property="Foreground" Value="White"/>
+                                        <Setter TargetName="Border" Property="Background" Value="#D8D8D8"/>
+                                        <Setter Property="Foreground" Value="#222222"/>
                                     </Trigger>
                                     <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter TargetName="Border" Property="Background" Value="#555555"/>
+                                        <Setter TargetName="Border" Property="Background" Value="#B8B8B8"/>
                                     </Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>
@@ -58,7 +58,7 @@
                     </Grid.ColumnDefinitions>
 
                     <!-- Log Viewer -->
-                    <Border Grid.Column="0" Background="#4E4E4E" CornerRadius="0,0,8,8" Margin="0,0,16,0">
+                    <Border Grid.Column="0" Background="#D8D8D8" CornerRadius="0,0,8,8" Margin="0,0,16,0">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
@@ -67,7 +67,7 @@
                             </Grid.RowDefinitions>
 
                             <!-- Log Header -->
-                            <Border Grid.Row="0" Background="#545454" Padding="12">
+                            <Border Grid.Row="0" Background="#C8C8C8" Padding="12">
                                 <Grid>
                                     <StackPanel Orientation="Horizontal">
                                         <Button Content="Clear Log" Width="80" Height="28" Margin="0,0,8,0"
@@ -76,8 +76,8 @@
                                                 Command="{Binding ExportLogCommand}"/>
                                     </StackPanel>
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                        <TextBlock Text="Filter:" Foreground="#888888" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                        <ComboBox SelectedItem="{Binding LogFilter}" Width="100" Background="#363636">
+                                        <TextBlock Text="Filter:" Foreground="#666666" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        <ComboBox SelectedItem="{Binding LogFilter}" Width="100" Background="#FFFFFF">
                                             <ComboBoxItem Content="All"/>
                                             <ComboBoxItem Content="Error"/>
                                             <ComboBoxItem Content="Warning"/>
@@ -90,7 +90,7 @@
 
                             <!-- Log Content -->
                             <ListBox Grid.Row="1" ItemsSource="{Binding LogEntries}"
-                                     Background="#363636" BorderThickness="0"
+                                     Background="#FFFFFF" BorderThickness="0"
                                      FontFamily="Consolas" FontSize="12"
                                      ScrollViewer.HorizontalScrollBarVisibility="Auto">
                                 <ListBox.ItemTemplate>
@@ -121,7 +121,7 @@
                                                     </Style>
                                                 </TextBlock.Style>
                                             </TextBlock>
-                                            <TextBlock Grid.Column="2" Text="{Binding Message}" Foreground="#D4D4D4"
+                                            <TextBlock Grid.Column="2" Text="{Binding Message}" Foreground="#333333"
                                                        TextWrapping="NoWrap"/>
                                         </Grid>
                                     </DataTemplate>
@@ -135,13 +135,13 @@
                             </ListBox>
 
                             <!-- Log Stats -->
-                            <Border Grid.Row="2" Background="#545454" Padding="12">
+                            <Border Grid.Row="2" Background="#C8C8C8" Padding="12">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="Entries: " Foreground="#888888"/>
-                                    <TextBlock Text="{Binding LogEntries.Count, FallbackValue=0, Mode=OneWay}" Foreground="#888888"/>
-                                    <TextBlock Text=" | Errors: " Foreground="#888888"/>
+                                    <TextBlock Text="Entries: " Foreground="#666666"/>
+                                    <TextBlock Text="{Binding LogEntries.Count, FallbackValue=0, Mode=OneWay}" Foreground="#666666"/>
+                                    <TextBlock Text=" | Errors: " Foreground="#666666"/>
                                     <TextBlock Text="{Binding ErrorCount, FallbackValue=0}" Foreground="#FF6666"/>
-                                    <TextBlock Text=" | Warnings: " Foreground="#888888"/>
+                                    <TextBlock Text=" | Warnings: " Foreground="#666666"/>
                                     <TextBlock Text="{Binding WarningCount, FallbackValue=0}" Foreground="#FFAA00"/>
                                 </StackPanel>
                             </Border>
@@ -151,11 +151,11 @@
                     <!-- System Status -->
                     <StackPanel Grid.Column="1">
                         <!-- Core Status -->
-                        <Border Background="#4E4E4E" CornerRadius="8" Padding="16" Margin="0,0,0,16">
+                        <Border Background="#D8D8D8" CornerRadius="8" Padding="16" Margin="0,0,0,16">
                             <StackPanel>
-                                <TextBlock Text="CORE STATUS" FontWeight="Bold" Foreground="#AAAAAA" Margin="0,0,0,12"/>
+                                <TextBlock Text="CORE STATUS" FontWeight="Bold" Foreground="#555555" Margin="0,0,0,12"/>
                                 <Grid Margin="0,0,0,8">
-                                    <TextBlock Text="Connection" Foreground="#888888"/>
+                                    <TextBlock Text="Connection" Foreground="#666666"/>
                                     <TextBlock Text="{Binding CoreConnectionStatus, FallbackValue=Disconnected}"
                                                HorizontalAlignment="Right">
                                         <TextBlock.Style>
@@ -171,66 +171,66 @@
                                     </TextBlock>
                                 </Grid>
                                 <Grid Margin="0,0,0,8">
-                                    <TextBlock Text="Version" Foreground="#888888"/>
+                                    <TextBlock Text="Version" Foreground="#666666"/>
                                     <TextBlock Text="{Binding CoreVersion, FallbackValue=N/A}"
-                                               Foreground="White" HorizontalAlignment="Right"/>
+                                               Foreground="#222222" HorizontalAlignment="Right"/>
                                 </Grid>
                                 <Grid Margin="0,0,0,8">
-                                    <TextBlock Text="Uptime" Foreground="#888888"/>
+                                    <TextBlock Text="Uptime" Foreground="#666666"/>
                                     <TextBlock Text="{Binding Uptime, FallbackValue=00:00:00}"
-                                               Foreground="White" HorizontalAlignment="Right"/>
+                                               Foreground="#222222" HorizontalAlignment="Right"/>
                                 </Grid>
                                 <Grid Margin="0,0,0,8">
-                                    <TextBlock Text="Cycle Time" Foreground="#888888"/>
+                                    <TextBlock Text="Cycle Time" Foreground="#666666"/>
                                     <TextBlock Text="{Binding CycleTime, FallbackValue=0.0 ms}"
-                                               Foreground="White" HorizontalAlignment="Right"/>
+                                               Foreground="#222222" HorizontalAlignment="Right"/>
                                 </Grid>
                                 <Grid>
-                                    <TextBlock Text="CPU Usage" Foreground="#888888"/>
+                                    <TextBlock Text="CPU Usage" Foreground="#666666"/>
                                     <TextBlock Text="{Binding CpuUsage, FallbackValue=0%}"
-                                               Foreground="White" HorizontalAlignment="Right"/>
+                                               Foreground="#222222" HorizontalAlignment="Right"/>
                                 </Grid>
                             </StackPanel>
                         </Border>
 
                         <!-- Communication Stats -->
-                        <Border Background="#4E4E4E" CornerRadius="8" Padding="16" Margin="0,0,0,16">
+                        <Border Background="#D8D8D8" CornerRadius="8" Padding="16" Margin="0,0,0,16">
                             <StackPanel>
-                                <TextBlock Text="COMMUNICATION" FontWeight="Bold" Foreground="#AAAAAA" Margin="0,0,0,12"/>
+                                <TextBlock Text="COMMUNICATION" FontWeight="Bold" Foreground="#555555" Margin="0,0,0,12"/>
                                 <Grid Margin="0,0,0,8">
-                                    <TextBlock Text="Messages Sent" Foreground="#888888"/>
+                                    <TextBlock Text="Messages Sent" Foreground="#666666"/>
                                     <TextBlock Text="{Binding MessagesSent, FallbackValue=0}"
-                                               Foreground="White" HorizontalAlignment="Right"/>
+                                               Foreground="#222222" HorizontalAlignment="Right"/>
                                 </Grid>
                                 <Grid Margin="0,0,0,8">
-                                    <TextBlock Text="Messages Received" Foreground="#888888"/>
+                                    <TextBlock Text="Messages Received" Foreground="#666666"/>
                                     <TextBlock Text="{Binding MessagesReceived, FallbackValue=0}"
-                                               Foreground="White" HorizontalAlignment="Right"/>
+                                               Foreground="#222222" HorizontalAlignment="Right"/>
                                 </Grid>
                                 <Grid Margin="0,0,0,8">
-                                    <TextBlock Text="Errors" Foreground="#888888"/>
+                                    <TextBlock Text="Errors" Foreground="#666666"/>
                                     <TextBlock Text="{Binding CommErrors, FallbackValue=0}"
                                                Foreground="#FF6666" HorizontalAlignment="Right"/>
                                 </Grid>
                                 <Grid>
-                                    <TextBlock Text="Latency" Foreground="#888888"/>
+                                    <TextBlock Text="Latency" Foreground="#666666"/>
                                     <TextBlock Text="{Binding Latency, FallbackValue=0 ms}"
-                                               Foreground="White" HorizontalAlignment="Right"/>
+                                               Foreground="#222222" HorizontalAlignment="Right"/>
                                 </Grid>
                             </StackPanel>
                         </Border>
 
                         <!-- Quick Actions -->
-                        <Border Background="#4E4E4E" CornerRadius="8" Padding="16">
+                        <Border Background="#D8D8D8" CornerRadius="8" Padding="16">
                             <StackPanel>
-                                <TextBlock Text="QUICK ACTIONS" FontWeight="Bold" Foreground="#AAAAAA" Margin="0,0,0,12"/>
+                                <TextBlock Text="QUICK ACTIONS" FontWeight="Bold" Foreground="#555555" Margin="0,0,0,12"/>
                                 <Button Content="Ping Core" Height="32" Margin="0,0,0,8"
                                         Command="{Binding PingCoreCommand}"/>
                                 <Button Content="Request Status" Height="32" Margin="0,0,0,8"
                                         Command="{Binding RequestStatusCommand}"/>
                                 <Button Content="Reset Statistics" Height="32" Margin="0,0,0,8"
                                         Command="{Binding ResetStatsCommand}"/>
-                                <Button Content="Test E-Stop" Height="32" Background="#AA0000" Foreground="White"
+                                <Button Content="Test E-Stop" Height="32" Background="#AA0000" Foreground="#222222"
                                         Command="{Binding TestEStopCommand}"/>
                             </StackPanel>
                         </Border>
@@ -240,7 +240,7 @@
 
             <!-- ============ TAB 2: UDP Packets ============ -->
             <TabItem Header="UDP Packets">
-                <Border Background="#4E4E4E" CornerRadius="0,0,8,8">
+                <Border Background="#D8D8D8" CornerRadius="0,0,8,8">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
@@ -249,7 +249,7 @@
                         </Grid.RowDefinitions>
 
                         <!-- Toolbar -->
-                        <Border Grid.Row="0" Background="#545454" Padding="10">
+                        <Border Grid.Row="0" Background="#C8C8C8" Padding="10">
                             <StackPanel Orientation="Horizontal">
                                 <Button Width="90" Height="28" Margin="0,0,8,0"
                                         Command="{Binding ToggleCaptureCommand}">
@@ -257,7 +257,7 @@
                                         <Style TargetType="Button">
                                             <Setter Property="Content" Value="Stop"/>
                                             <Setter Property="Background" Value="#AA3333"/>
-                                            <Setter Property="Foreground" Value="White"/>
+                                            <Setter Property="Foreground" Value="#222222"/>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding IsCapturing}" Value="False">
                                                     <Setter Property="Content" Value="Capture"/>
@@ -269,9 +269,9 @@
                                 </Button>
                                 <Button Content="Clear" Width="70" Height="28" Margin="0,0,16,0"
                                         Command="{Binding ClearPacketsCommand}"/>
-                                <TextBlock Text="Filter:" Foreground="#888888"
+                                <TextBlock Text="Filter:" Foreground="#666666"
                                            VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                <ComboBox Width="80" Height="28" Background="#363636"
+                                <ComboBox Width="80" Height="28" Background="#FFFFFF"
                                           SelectedItem="{Binding PacketFilter}">
                                     <ComboBoxItem Content="All" IsSelected="True"/>
                                     <ComboBoxItem Content="TX"/>
@@ -296,7 +296,7 @@
                             </Grid.RowDefinitions>
 
                             <!-- Column Headers -->
-                            <Border Grid.Row="0" Background="#3A3A3A" Padding="8,4">
+                            <Border Grid.Row="0" Background="#C8C8C8" Padding="8,4">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="100"/>
@@ -326,7 +326,7 @@
 
                             <!-- Packet Data -->
                             <ListBox Grid.Row="1" ItemsSource="{Binding UdpPackets}"
-                                     Background="#2D2D2D" BorderThickness="0"
+                                     Background="#C0C0C0" BorderThickness="0"
                                      FontFamily="Consolas" FontSize="11"
                                      ScrollViewer.HorizontalScrollBarVisibility="Auto"
                                      ScrollViewer.CanContentScroll="True"
@@ -359,11 +359,11 @@
                                                     </Style>
                                                 </TextBlock.Style>
                                             </TextBlock>
-                                            <TextBlock Grid.Column="2" Text="{Binding TypeName}" Foreground="#D4D4D4"
+                                            <TextBlock Grid.Column="2" Text="{Binding TypeName}" Foreground="#333333"
                                                        FontWeight="SemiBold"/>
-                                            <TextBlock Grid.Column="3" Text="{Binding Seq}" Foreground="#888888"
+                                            <TextBlock Grid.Column="3" Text="{Binding Seq}" Foreground="#666666"
                                                        TextAlignment="Right"/>
-                                            <TextBlock Grid.Column="4" Text="{Binding Len}" Foreground="#888888"
+                                            <TextBlock Grid.Column="4" Text="{Binding Len}" Foreground="#666666"
                                                        TextAlignment="Right"/>
                                             <TextBlock Grid.Column="5" Text="{Binding Hex}" Foreground="#CE9178"
                                                        Margin="8,0,0,0" TextWrapping="NoWrap"/>
@@ -377,7 +377,7 @@
                                         <Setter Property="Background" Value="Transparent"/>
                                         <Style.Triggers>
                                             <Trigger Property="IsSelected" Value="True">
-                                                <Setter Property="Background" Value="#3A3A5A"/>
+                                                <Setter Property="Background" Value="#A0C0E8"/>
                                             </Trigger>
                                         </Style.Triggers>
                                     </Style>
@@ -386,11 +386,11 @@
                         </Grid>
 
                         <!-- Status Bar -->
-                        <Border Grid.Row="2" Background="#545454" Padding="10,6">
+                        <Border Grid.Row="2" Background="#C8C8C8" Padding="10,6">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Foreground="#888888" FontFamily="Consolas" FontSize="11">
+                                <TextBlock Foreground="#666666" FontFamily="Consolas" FontSize="11">
                                     <Run Text="Packets: "/>
-                                    <Run Text="{Binding UdpPackets.Count, Mode=OneWay}" Foreground="White"/>
+                                    <Run Text="{Binding UdpPackets.Count, Mode=OneWay}" Foreground="#222222"/>
                                     <Run Text="  |  Capturing: "/>
                                 </TextBlock>
                                 <TextBlock FontFamily="Consolas" FontSize="11">

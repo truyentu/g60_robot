@@ -7,7 +7,7 @@
              d:DesignWidth="500" d:DesignHeight="40">
 
     <!-- KUKA-Style Inline Form: appears below the current command line -->
-    <Border Background="#4E4E4E" BorderBrush="#007ACC" BorderThickness="1"
+    <Border Background="#C8C8C8" BorderBrush="#007ACC" BorderThickness="1"
             CornerRadius="4" Padding="8,4" Margin="0,2,0,0">
         <Border.Effect>
             <DropShadowEffect Color="Black" BlurRadius="8" ShadowDepth="2" Opacity="0.4"/>
@@ -19,13 +19,13 @@
                         Visibility="{Binding IsMotionCommand, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}">
 
                 <!-- Motion Type -->
-                <TextBlock Text="Motion:" Foreground="#AAAAAA" VerticalAlignment="Center"
+                <TextBlock Text="Motion:" Foreground="#555555" VerticalAlignment="Center"
                            FontSize="11" Margin="0,0,4,0"/>
                 <ComboBox ItemsSource="{Binding MotionTypes}"
                           SelectedItem="{Binding MotionType, Mode=TwoWay}"
                           Width="70" FontSize="11"
-                          Background="#4A4A4A" Foreground="White"
-                          BorderBrush="#5A5A5A"/>
+                          Background="#FFFFFF" Foreground="#222222"
+                          BorderBrush="#999999"/>
 
                 <!-- Target (read-only label) -->
                 <TextBlock Foreground="#CE9178" VerticalAlignment="Center"
@@ -34,16 +34,16 @@
                     <Run Text="{Binding TargetName}"/>
                 </TextBlock>
 
-                <Rectangle Width="1" Fill="#555555" Margin="10,2"/>
+                <Rectangle Width="1" Fill="#999999" Margin="10,2"/>
 
                 <!-- Approximation Dropdown (KRL: C_PTP, C_DIS, C_VEL, C_ORI) -->
-                <TextBlock Text="Approx:" Foreground="#AAAAAA" VerticalAlignment="Center"
+                <TextBlock Text="Approx:" Foreground="#555555" VerticalAlignment="Center"
                            FontSize="11" Margin="10,0,4,0"/>
                 <ComboBox ItemsSource="{Binding AvailableApproximations}"
                           SelectedItem="{Binding Approximation, Mode=TwoWay}"
                           Width="85" FontSize="11"
-                          Background="#4A4A4A" Foreground="White"
-                          BorderBrush="#5A5A5A"/>
+                          Background="#FFFFFF" Foreground="#222222"
+                          BorderBrush="#999999"/>
             </StackPanel>
 
             <!-- ArcStart Form -->
@@ -55,8 +55,8 @@
                 <ComboBox ItemsSource="{Binding AvailableJobs}"
                           SelectedItem="{Binding SelectedJob, Mode=TwoWay}"
                           Width="200" FontSize="11"
-                          Background="#4A4A4A" Foreground="White"
-                          BorderBrush="#5A5A5A">
+                          Background="#FFFFFF" Foreground="#222222"
+                          BorderBrush="#999999">
                     <ComboBox.ItemTemplate>
                         <DataTemplate>
                             <TextBlock>

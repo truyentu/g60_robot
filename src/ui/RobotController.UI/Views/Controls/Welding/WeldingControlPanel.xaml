@@ -7,7 +7,7 @@
              mc:Ignorable="d"
              d:DesignHeight="600" d:DesignWidth="900">
 
-    <Grid Background="#1E1E1E">
+    <Grid Background="#E0E0E0">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -15,11 +15,11 @@
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <Border Grid.Row="0" Background="#252525" Padding="16,12">
+        <Border Grid.Row="0" Background="#C8C8C8" Padding="16,12">
             <Grid>
                 <TextBlock Text="WELDING CONTROL"
                           FontSize="18" FontWeight="Bold"
-                          Foreground="White"/>
+                          Foreground="#333333"/>
                 <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
                     <Ellipse Width="12" Height="12" Margin="8,0"
                             Fill="{Binding IsConnected, Converter={StaticResource BoolToColor}, ConverterParameter=#00FF00|#FF0000}"/>
@@ -58,7 +58,7 @@
 
             <!-- Parameter Controls -->
             <Border Grid.Column="0" Grid.ColumnSpan="3" Grid.Row="1"
-                   Background="#2D2D2D" CornerRadius="8" Padding="16">
+                   Background="#D0D0D0" CornerRadius="8" Padding="16">
                 <StackPanel>
                     <TextBlock Text="PARAMETER CONTROL"
                               FontSize="12" FontWeight="Bold"
@@ -74,7 +74,7 @@
                     </ItemsControl>
 
                     <!-- Synergic Mode -->
-                    <Border Background="#252525" CornerRadius="4" Padding="12" Margin="0,12,0,0">
+                    <Border Background="#C8C8C8" CornerRadius="4" Padding="12" Margin="0,12,0,0">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
@@ -83,14 +83,14 @@
 
                             <CheckBox Grid.Column="0" Content="Synergic Mode"
                                      IsChecked="{Binding Job.SynergicMode}"
-                                     Foreground="White" Margin="0,0,16,0"/>
+                                     Foreground="#333333" Margin="0,0,16,0"/>
 
                             <StackPanel Grid.Column="1" Orientation="Horizontal">
                                 <TextBlock Text="Program:" Foreground="#888888"
                                           VerticalAlignment="Center" Margin="0,0,8,0"/>
                                 <TextBox Text="{Binding Job.SynergicProgram}"
-                                        Width="60" Background="#353535"
-                                        Foreground="White" Padding="4"/>
+                                        Width="60" Background="#B8B8B8"
+                                        Foreground="#333333" Padding="4"/>
                             </StackPanel>
                         </Grid>
                     </Border>
@@ -99,7 +99,7 @@
         </Grid>
 
         <!-- Footer - Control Buttons -->
-        <Border Grid.Row="2" Background="#252525" Padding="16,12">
+        <Border Grid.Row="2" Background="#C8C8C8" Padding="16,12">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -129,7 +129,7 @@
                     <Button Content="RESET"
                            Command="{Binding ResetFaultCommand}"
                            Width="80" Height="40"
-                           Background="#404040" Foreground="White"
+                           Background="#B8B8B8" Foreground="#333333"
                            Visibility="{Binding State.HasFault, Converter={StaticResource BoolToVisibility}}"/>
                 </StackPanel>
 
@@ -139,17 +139,17 @@
                               VerticalAlignment="Center" Margin="0,0,8,0"/>
                     <ComboBox ItemsSource="{Binding Job.SavedJobs}"
                              SelectedItem="{Binding Job.SelectedJob}"
-                             Width="150" Background="#353535"
-                             Foreground="White"/>
+                             Width="150" Background="#B8B8B8"
+                             Foreground="#333333"/>
 
                     <Button Content="SAVE" Width="60" Height="30"
                            Command="{Binding Job.SaveJobCommand}"
-                           Background="#404040" Foreground="White"
+                           Background="#B8B8B8" Foreground="#333333"
                            Margin="8,0,0,0"/>
 
                     <Button Content="NEW" Width="60" Height="30"
                            Command="{Binding Job.NewJobCommand}"
-                           Background="#404040" Foreground="White"
+                           Background="#B8B8B8" Foreground="#333333"
                            Margin="4,0,0,0"/>
                 </StackPanel>
             </Grid>

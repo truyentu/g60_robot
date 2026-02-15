@@ -9,14 +9,14 @@
     <UserControl.Resources>
         <!-- Model Item Style -->
         <Style x:Key="ModelItemStyle" TargetType="Border">
-            <Setter Property="Background" Value="#353535"/>
+            <Setter Property="Background" Value="#C8C8C8"/>
             <Setter Property="CornerRadius" Value="6"/>
             <Setter Property="Padding" Value="12,10"/>
             <Setter Property="Margin" Value="0,4"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#404040"/>
+                    <Setter Property="Background" Value="#B8B8B8"/>
                 </Trigger>
                 <DataTrigger Binding="{Binding IsSelected}" Value="True">
                     <Setter Property="Background" Value="#1a5fb4"/>
@@ -49,14 +49,14 @@
                     <Setter Property="Background" Value="#1a86e0"/>
                 </Trigger>
                 <Trigger Property="IsEnabled" Value="False">
-                    <Setter Property="Background" Value="#555555"/>
+                    <Setter Property="Background" Value="#B8B8B8"/>
                     <Setter Property="Foreground" Value="#888888"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
     </UserControl.Resources>
 
-    <Border Background="#2D2D2D" CornerRadius="8" Padding="12">
+    <Border Background="#D0D0D0" CornerRadius="8" Padding="12">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
@@ -69,7 +69,7 @@
             <Grid Grid.Row="0" Margin="0,0,0,12">
                 <TextBlock Text="ROBOT CATALOG"
                           FontSize="14" FontWeight="Bold"
-                          Foreground="#AAAAAA"/>
+                          Foreground="#555555"/>
                 <Button Content="⟳"
                         Command="{Binding LoadCatalogCommand}"
                         HorizontalAlignment="Right"
@@ -100,7 +100,7 @@
             </Border>
 
             <!-- Model List -->
-            <Border Grid.Row="2" Background="#252525" CornerRadius="6">
+            <Border Grid.Row="2" Background="#B8B8B8" CornerRadius="6">
                 <Grid>
                     <!-- Loading Indicator -->
                     <TextBlock Text="Loading..."
@@ -148,7 +148,7 @@
                                             <!-- Model Name -->
                                             <TextBlock Grid.Column="0" Grid.Row="0"
                                                       Text="{Binding Name}"
-                                                      Foreground="White"
+                                                      Foreground="#222222"
                                                       FontWeight="SemiBold"
                                                       FontSize="14"/>
 

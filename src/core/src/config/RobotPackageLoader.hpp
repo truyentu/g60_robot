@@ -74,6 +74,11 @@ public:
     static void setLibraryPath(const std::filesystem::path& path);
 
     /**
+     * Set a fallback library path (used when primary path doesn't have a package)
+     */
+    static void setFallbackLibraryPath(const std::filesystem::path& path);
+
+    /**
      * Get the robots library directory
      */
     static std::filesystem::path getLibraryPath();
@@ -101,6 +106,7 @@ private:
      * Default robots library path
      */
     static std::filesystem::path s_libraryPath;
+    static std::filesystem::path s_fallbackLibraryPath;
 };
 
 } // namespace config

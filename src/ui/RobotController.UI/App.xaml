@@ -17,12 +17,12 @@
         <!-- KUKA Industrial Theme - Color Palette                        -->
         <!-- ============================================================ -->
 
-        <!-- Primary Backgrounds (KUKA SmartHMI Gray Theme) -->
-        <Color x:Key="IndustrialBlack">#383838</Color>
-        <Color x:Key="IndustrialDarkGrey">#444444</Color>
-        <Color x:Key="IndustrialPanelGrey">#4E4E4E</Color>
-        <Color x:Key="IndustrialLightGrey">#5A5A5A</Color>
-        <Color x:Key="IndustrialBorder">#2A2A2A</Color>
+        <!-- Primary Backgrounds (KUKA SmartHMI Light Gray Theme) -->
+        <Color x:Key="IndustrialBlack">#808080</Color>
+        <Color x:Key="IndustrialDarkGrey">#C0C0C0</Color>
+        <Color x:Key="IndustrialPanelGrey">#CCCCCC</Color>
+        <Color x:Key="IndustrialLightGrey">#D8D8D8</Color>
+        <Color x:Key="IndustrialBorder">#999999</Color>
 
         <!-- KUKA Accent -->
         <Color x:Key="KukaOrange">#EB6A0A</Color>
@@ -30,18 +30,18 @@
         <Color x:Key="KukaOrangePressed">#CC5500</Color>
 
         <!-- Status Colors -->
-        <Color x:Key="AlarmRed">#4A0000</Color>
+        <Color x:Key="AlarmRed">#FFCCCC</Color>
         <Color x:Key="StatusGreen">#00AA44</Color>
         <Color x:Key="StatusYellow">#FFAA00</Color>
-        <Color x:Key="StatusCyan">#4EC9B0</Color>
+        <Color x:Key="StatusCyan">#008888</Color>
 
         <!-- Brushes -->
         <SolidColorBrush x:Key="PrimaryBackground" Color="{StaticResource IndustrialDarkGrey}"/>
         <SolidColorBrush x:Key="SecondaryBackground" Color="{StaticResource IndustrialPanelGrey}"/>
-        <SolidColorBrush x:Key="PanelBackground" Color="#525252"/>
+        <SolidColorBrush x:Key="PanelBackground" Color="#D0D0D0"/>
         <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource IndustrialBorder}"/>
-        <SolidColorBrush x:Key="ForegroundBrush" Color="#FFFFFF"/>
-        <SolidColorBrush x:Key="SubTextBrush" Color="#AAAAAA"/>
+        <SolidColorBrush x:Key="ForegroundBrush" Color="#222222"/>
+        <SolidColorBrush x:Key="SubTextBrush" Color="#555555"/>
         <SolidColorBrush x:Key="DimTextBrush" Color="#777777"/>
         <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource KukaOrange}"/>
         <SolidColorBrush x:Key="KukaOrangeBrush" Color="{StaticResource KukaOrange}"/>
@@ -106,7 +106,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#525252"/>
+                                <Setter TargetName="bd" Property="Background" Value="#D8D8D8"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="bd" Property="Background" Value="#0078D7"/>
@@ -150,10 +150,10 @@
             </Setter>
         </Style>
 
-        <!-- Status Bar Info Block (dark inset panel) -->
+        <!-- Status Bar Info Block (light inset panel) -->
         <Style x:Key="StatusInfoBlock" TargetType="Border">
-            <Setter Property="Background" Value="#363636"/>
-            <Setter Property="BorderBrush" Value="#2A2A2A"/>
+            <Setter Property="Background" Value="#B8B8B8"/>
+            <Setter Property="BorderBrush" Value="#999999"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="10,4"/>
             <Setter Property="Margin" Value="3,5"/>
@@ -162,11 +162,11 @@
 
         <!-- Softkey Button (Industrial membrane strip) -->
         <Style x:Key="SoftkeyButton" TargetType="Button">
-            <Setter Property="Background" Value="#525252"/>
-            <Setter Property="Foreground" Value="#FFFFFF"/>
-            <Setter Property="BorderBrush" Value="#2A2A2A"/>
+            <Setter Property="Background" Value="#C0C0C0"/>
+            <Setter Property="Foreground" Value="#222222"/>
+            <Setter Property="BorderBrush" Value="#999999"/>
             <Setter Property="BorderThickness" Value="0,1,1,0"/>
-            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontSize" Value="12"/>
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="FontFamily" Value="Segoe UI"/>
             <Setter Property="Cursor" Value="Hand"/>
@@ -182,7 +182,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#626262"/>
+                                <Setter TargetName="bd" Property="Background" Value="#D8D8D8"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="bd" Property="Background">
@@ -190,10 +190,11 @@
                                         <SolidColorBrush Color="{StaticResource KukaOrange}"/>
                                     </Setter.Value>
                                 </Setter>
+                                <Setter Property="Foreground" Value="White"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Foreground" Value="#444444"/>
-                                <Setter TargetName="bd" Property="Background" Value="#3E3E3E"/>
+                                <Setter Property="Foreground" Value="#AAAAAA"/>
+                                <Setter TargetName="bd" Property="Background" Value="#B0B0B0"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -203,9 +204,9 @@
 
         <!-- SoftkeyToggleButton (for Edit softkey with popup) -->
         <Style x:Key="SoftkeyToggleButton" TargetType="ToggleButton">
-            <Setter Property="Background" Value="#525252"/>
-            <Setter Property="Foreground" Value="#FFFFFF"/>
-            <Setter Property="BorderBrush" Value="#2A2A2A"/>
+            <Setter Property="Background" Value="#C0C0C0"/>
+            <Setter Property="Foreground" Value="#222222"/>
+            <Setter Property="BorderBrush" Value="#999999"/>
             <Setter Property="BorderThickness" Value="0,1,1,0"/>
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="FontWeight" Value="Bold"/>
@@ -242,10 +243,10 @@
             </Setter>
         </Style>
 
-        <!-- Acknowledge Button (dark red flat) -->
+        <!-- Acknowledge Button (light red flat - KUKA light grey theme) -->
         <Style x:Key="AckButton" TargetType="Button">
-            <Setter Property="Background" Value="#661111"/>
-            <Setter Property="Foreground" Value="#FF8888"/>
+            <Setter Property="Background" Value="#FFAAAA"/>
+            <Setter Property="Foreground" Value="#CC0000"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="FontWeight" Value="Bold"/>
@@ -261,10 +262,10 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#882222"/>
+                                <Setter TargetName="bd" Property="Background" Value="#FF8888"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#AA3333"/>
+                                <Setter TargetName="bd" Property="Background" Value="#FF6666"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -358,14 +359,14 @@
         <!-- Industrial TextBox                                           -->
         <!-- ============================================================ -->
         <Style TargetType="TextBox">
-            <Setter Property="Background" Value="#363636"/>
-            <Setter Property="Foreground" Value="#FFFFFF"/>
-            <Setter Property="BorderBrush" Value="#5A5A5A"/>
+            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="Foreground" Value="#222222"/>
+            <Setter Property="BorderBrush" Value="#999999"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="6,4"/>
             <Setter Property="FontFamily" Value="Consolas"/>
             <Setter Property="FontSize" Value="12"/>
-            <Setter Property="CaretBrush" Value="White"/>
+            <Setter Property="CaretBrush" Value="#222222"/>
             <Setter Property="SelectionBrush" Value="{StaticResource AccentBrush}"/>
         </Style>
 
@@ -373,9 +374,9 @@
         <!-- Industrial ComboBox (basic dark override)                    -->
         <!-- ============================================================ -->
         <Style TargetType="ComboBox">
-            <Setter Property="Background" Value="#363636"/>
-            <Setter Property="Foreground" Value="#FFFFFF"/>
-            <Setter Property="BorderBrush" Value="#5A5A5A"/>
+            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="Foreground" Value="#222222"/>
+            <Setter Property="BorderBrush" Value="#999999"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="6,4"/>
             <Setter Property="FontSize" Value="12"/>
@@ -385,7 +386,7 @@
         <!-- Industrial CheckBox                                          -->
         <!-- ============================================================ -->
         <Style TargetType="CheckBox">
-            <Setter Property="Foreground" Value="#CCCCCC"/>
+            <Setter Property="Foreground" Value="#333333"/>
             <Setter Property="FontSize" Value="12"/>
         </Style>
 
@@ -393,7 +394,7 @@
         <!-- Industrial RadioButton                                       -->
         <!-- ============================================================ -->
         <Style TargetType="RadioButton">
-            <Setter Property="Foreground" Value="#CCCCCC"/>
+            <Setter Property="Foreground" Value="#333333"/>
             <Setter Property="FontSize" Value="12"/>
         </Style>
 

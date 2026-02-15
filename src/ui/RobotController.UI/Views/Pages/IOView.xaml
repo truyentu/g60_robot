@@ -15,7 +15,7 @@
 
         <!-- Header -->
         <TextBlock Grid.Row="0" Text="I/O MONITOR" FontSize="18" FontWeight="Bold"
-                   Foreground="White" Margin="0,0,0,16"/>
+                   Foreground="#222222" Margin="0,0,0,16"/>
 
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
@@ -24,7 +24,7 @@
             </Grid.ColumnDefinitions>
 
             <!-- Digital Inputs -->
-            <Border Grid.Column="0" Background="#4E4E4E" CornerRadius="8" Margin="0,0,8,0">
+            <Border Grid.Column="0" Background="#D8D8D8" CornerRadius="8" Margin="0,0,8,0">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -32,7 +32,7 @@
                     </Grid.RowDefinitions>
 
                     <TextBlock Grid.Row="0" Text="DIGITAL INPUTS" FontWeight="Bold"
-                               Foreground="#AAAAAA" Margin="16,12"/>
+                               Foreground="#555555" Margin="16,12"/>
 
                     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                         <ItemsControl ItemsSource="{Binding DigitalInputs}" Margin="16,0,16,16">
@@ -47,9 +47,9 @@
                                             </Grid.ColumnDefinitions>
 
                                             <TextBlock Grid.Column="0" Text="{Binding Address}"
-                                                       Foreground="#888888" FontFamily="Consolas"/>
+                                                       Foreground="#666666" FontFamily="Consolas"/>
                                             <TextBlock Grid.Column="1" Text="{Binding Name}"
-                                                       Foreground="White"/>
+                                                       Foreground="#222222"/>
                                             <Ellipse Grid.Column="2" Width="16" Height="16">
                                                 <Ellipse.Style>
                                                     <Style TargetType="Ellipse">
@@ -72,7 +72,7 @@
             </Border>
 
             <!-- Digital Outputs -->
-            <Border Grid.Column="1" Background="#4E4E4E" CornerRadius="8" Margin="8,0,0,0">
+            <Border Grid.Column="1" Background="#D8D8D8" CornerRadius="8" Margin="8,0,0,0">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -80,7 +80,7 @@
                     </Grid.RowDefinitions>
 
                     <TextBlock Grid.Row="0" Text="DIGITAL OUTPUTS" FontWeight="Bold"
-                               Foreground="#AAAAAA" Margin="16,12"/>
+                               Foreground="#555555" Margin="16,12"/>
 
                     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                         <ItemsControl ItemsSource="{Binding DigitalOutputs}" Margin="16,0,16,16">
@@ -95,9 +95,9 @@
                                             </Grid.ColumnDefinitions>
 
                                             <TextBlock Grid.Column="0" Text="{Binding Address}"
-                                                       Foreground="#888888" FontFamily="Consolas"/>
+                                                       Foreground="#666666" FontFamily="Consolas"/>
                                             <TextBlock Grid.Column="1" Text="{Binding Name}"
-                                                       Foreground="White"/>
+                                                       Foreground="#222222"/>
                                             <ToggleButton Grid.Column="2" Width="50" Height="24"
                                                           IsChecked="{Binding Value}"
                                                           Command="{Binding DataContext.ToggleOutputCommand,
@@ -112,7 +112,7 @@
                                                                             Background="#5E5E5E">
                                                                         <Grid>
                                                                             <TextBlock x:Name="offText" Text="OFF"
-                                                                                       Foreground="#888888"
+                                                                                       Foreground="#666666"
                                                                                        HorizontalAlignment="Right"
                                                                                        VerticalAlignment="Center"
                                                                                        Margin="0,0,8,0" FontSize="10"/>

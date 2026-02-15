@@ -22,10 +22,10 @@
             </Grid.RowDefinitions>
 
             <!-- Joint Positions Large Display -->
-            <Border Grid.Row="0" Background="#4E4E4E" CornerRadius="8" Padding="16" Margin="0,0,16,16">
+            <Border Grid.Row="0" Background="#D8D8D8" CornerRadius="8" Padding="16" Margin="0,0,16,16">
                 <StackPanel>
                     <TextBlock Text="JOINT POSITIONS" FontSize="14" FontWeight="Bold"
-                               Foreground="#AAAAAA" Margin="0,0,0,12"/>
+                               Foreground="#555555" Margin="0,0,0,12"/>
 
                     <ItemsControl ItemsSource="{Binding Joints}">
                         <ItemsControl.ItemTemplate>
@@ -38,7 +38,7 @@
                                     </Grid.ColumnDefinitions>
 
                                     <TextBlock Grid.Column="0" Text="{Binding Name}"
-                                               Foreground="#888888" FontWeight="Bold"
+                                               Foreground="#666666" FontWeight="Bold"
                                                VerticalAlignment="Center"/>
 
                                     <ProgressBar Grid.Column="1"
@@ -51,7 +51,7 @@
 
                                     <TextBlock Grid.Column="2"
                                                Text="{Binding Position, StringFormat={}{0:F2}°}"
-                                               Foreground="White" FontSize="14" FontWeight="Bold"
+                                               Foreground="#222222" FontSize="14" FontWeight="Bold"
                                                TextAlignment="Right" VerticalAlignment="Center"/>
                                 </Grid>
                             </DataTemplate>
@@ -61,10 +61,10 @@
             </Border>
 
             <!-- TCP Position Display -->
-            <Border Grid.Row="1" Background="#4E4E4E" CornerRadius="8" Padding="16" Margin="0,0,16,0">
+            <Border Grid.Row="1" Background="#D8D8D8" CornerRadius="8" Padding="16" Margin="0,0,16,0">
                 <StackPanel>
                     <TextBlock Text="TCP POSITION" FontSize="14" FontWeight="Bold"
-                               Foreground="#AAAAAA" Margin="0,0,0,12"/>
+                               Foreground="#555555" Margin="0,0,0,12"/>
 
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -81,34 +81,34 @@
                         <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,8,8">
                             <TextBlock Text="X" Foreground="Red" FontWeight="Bold"/>
                             <TextBlock Text="{Binding TcpPosition.X, StringFormat={}{0:F2} mm}"
-                                       Foreground="White" FontSize="18"/>
+                                       Foreground="#222222" FontSize="18"/>
                         </StackPanel>
                         <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,8,8">
                             <TextBlock Text="Y" Foreground="LimeGreen" FontWeight="Bold"/>
                             <TextBlock Text="{Binding TcpPosition.Y, StringFormat={}{0:F2} mm}"
-                                       Foreground="White" FontSize="18"/>
+                                       Foreground="#222222" FontSize="18"/>
                         </StackPanel>
                         <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,0,8,0">
                             <TextBlock Text="Z" Foreground="DodgerBlue" FontWeight="Bold"/>
                             <TextBlock Text="{Binding TcpPosition.Z, StringFormat={}{0:F2} mm}"
-                                       Foreground="White" FontSize="18"/>
+                                       Foreground="#222222" FontSize="18"/>
                         </StackPanel>
 
                         <!-- Orientation -->
                         <StackPanel Grid.Row="0" Grid.Column="1" Margin="8,0,0,8">
-                            <TextBlock Text="Roll" Foreground="#888888" FontWeight="Bold"/>
+                            <TextBlock Text="Roll" Foreground="#666666" FontWeight="Bold"/>
                             <TextBlock Text="{Binding TcpPosition.Roll, StringFormat={}{0:F2}°}"
-                                       Foreground="White" FontSize="18"/>
+                                       Foreground="#222222" FontSize="18"/>
                         </StackPanel>
                         <StackPanel Grid.Row="1" Grid.Column="1" Margin="8,0,0,8">
-                            <TextBlock Text="Pitch" Foreground="#888888" FontWeight="Bold"/>
+                            <TextBlock Text="Pitch" Foreground="#666666" FontWeight="Bold"/>
                             <TextBlock Text="{Binding TcpPosition.Pitch, StringFormat={}{0:F2}°}"
-                                       Foreground="White" FontSize="18"/>
+                                       Foreground="#222222" FontSize="18"/>
                         </StackPanel>
                         <StackPanel Grid.Row="2" Grid.Column="1" Margin="8,0,0,0">
-                            <TextBlock Text="Yaw" Foreground="#888888" FontWeight="Bold"/>
+                            <TextBlock Text="Yaw" Foreground="#666666" FontWeight="Bold"/>
                             <TextBlock Text="{Binding TcpPosition.Yaw, StringFormat={}{0:F2}°}"
-                                       Foreground="White" FontSize="18"/>
+                                       Foreground="#222222" FontSize="18"/>
                         </StackPanel>
                     </Grid>
                 </StackPanel>
@@ -121,34 +121,34 @@
             <controls:JogPanel/>
 
             <!-- 3D Jog Controls -->
-            <Border Background="#4E4E4E" CornerRadius="8" Padding="12" Margin="0,16,0,0">
+            <Border Background="#D8D8D8" CornerRadius="8" Padding="12" Margin="0,16,0,0">
                 <StackPanel>
                     <TextBlock Text="3D JOG MODE" FontSize="12" FontWeight="Bold"
-                               Foreground="#AAAAAA" Margin="0,0,0,8"/>
+                               Foreground="#555555" Margin="0,0,0,8"/>
 
                     <!-- Enable toggle -->
                     <CheckBox Content="Enable 3D Gizmo"
                               IsChecked="{Binding Is3DJogEnabled}"
-                              Foreground="White" Margin="0,0,0,8"/>
+                              Foreground="#222222" Margin="0,0,0,8"/>
 
                     <!-- Frame selector -->
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,8"
                                 IsEnabled="{Binding Is3DJogEnabled}">
-                        <TextBlock Text="Frame:" Foreground="#888888" VerticalAlignment="Center"
+                        <TextBlock Text="Frame:" Foreground="#666666" VerticalAlignment="Center"
                                    Margin="0,0,8,0"/>
                         <RadioButton Content="World" GroupName="GizmoFrame"
                                      IsChecked="{Binding IsGizmoWorldFrame}"
-                                     Foreground="White" Margin="0,0,12,0"/>
+                                     Foreground="#222222" Margin="0,0,12,0"/>
                         <RadioButton Content="Tool" GroupName="GizmoFrame"
                                      IsChecked="{Binding IsGizmoWorldFrame, Converter={StaticResource InverseBool}}"
-                                     Foreground="White"/>
+                                     Foreground="#222222"/>
                     </StackPanel>
 
                     <!-- Live mode -->
                     <CheckBox Content="Live Mode (move during drag)"
                               IsChecked="{Binding Is3DJogLiveMode}"
                               IsEnabled="{Binding Is3DJogEnabled}"
-                              Foreground="White" Margin="0,0,0,8"/>
+                              Foreground="#222222" Margin="0,0,0,8"/>
 
                     <!-- Drag status -->
                     <TextBlock Text="{Binding GizmoDragStatus}"

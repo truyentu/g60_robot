@@ -6,7 +6,7 @@
              mc:Ignorable="d"
              d:DesignHeight="300" d:DesignWidth="300">
 
-    <Border Background="#2D2D2D" CornerRadius="8" Padding="12">
+    <Border Background="#D0D0D0" CornerRadius="8" Padding="12">
         <StackPanel>
             <TextBlock Text="SENSOR STATUS" FontSize="12" FontWeight="Bold"
                       Foreground="#888888" Margin="0,0,0,12"/>
@@ -17,7 +17,7 @@
                     <Ellipse Width="12" Height="12"
                             Fill="{Binding StatusColor}" Margin="0,0,8,0"/>
                     <TextBlock Text="{Binding ConnectionStatus}"
-                              Foreground="White"/>
+                              Foreground="#333333"/>
                 </StackPanel>
             </Grid>
 
@@ -45,31 +45,31 @@
                        IsEnabled="{Binding IsConnected}"/>
             </StackPanel>
 
-            <Rectangle Height="1" Fill="#404040" Margin="0,0,0,12"/>
+            <Rectangle Height="1" Fill="#999999" Margin="0,0,0,12"/>
 
             <!-- Device info -->
             <StackPanel Visibility="{Binding IsConnected, Converter={StaticResource BooleanToVisibilityConverter}}">
                 <Grid Margin="0,0,0,4">
                     <TextBlock Text="Model:" Foreground="#888888"/>
-                    <TextBlock Text="{Binding ModelName}" Foreground="White"
+                    <TextBlock Text="{Binding ModelName}" Foreground="#333333"
                               HorizontalAlignment="Right"/>
                 </Grid>
 
                 <Grid Margin="0,0,0,4">
                     <TextBlock Text="Serial:" Foreground="#888888"/>
-                    <TextBlock Text="{Binding SerialNumber}" Foreground="White"
+                    <TextBlock Text="{Binding SerialNumber}" Foreground="#333333"
                               HorizontalAlignment="Right"/>
                 </Grid>
 
                 <Grid Margin="0,0,0,4">
                     <TextBlock Text="Frame Rate:" Foreground="#888888"/>
-                    <TextBlock Text="{Binding FrameRateDisplay}" Foreground="White"
+                    <TextBlock Text="{Binding FrameRateDisplay}" Foreground="#333333"
                               HorizontalAlignment="Right"/>
                 </Grid>
 
                 <Grid Margin="0,0,0,4">
                     <TextBlock Text="Frames:" Foreground="#888888"/>
-                    <TextBlock Text="{Binding FramesDisplay}" Foreground="White"
+                    <TextBlock Text="{Binding FramesDisplay}" Foreground="#333333"
                               HorizontalAlignment="Right"/>
                 </Grid>
 
@@ -90,7 +90,7 @@
                 </StackPanel>
             </StackPanel>
 
-            <Rectangle Height="1" Fill="#404040" Margin="0,12"/>
+            <Rectangle Height="1" Fill="#999999" Margin="0,12"/>
 
             <!-- Configuration -->
             <Expander Header="Configuration" Foreground="#888888">
