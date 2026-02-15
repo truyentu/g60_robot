@@ -1,0 +1,168 @@
+<?xml version="1.0"?>
+<!-- KRL (KUKA Robot Language) Syntax Highlighting — Light theme, KUKA SmartHMI style -->
+<SyntaxDefinition name="KRL" xmlns="http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008">
+    <Color name="Comment" foreground="#808080" fontStyle="italic"/>
+    <Color name="String" foreground="#8B4513"/>
+    <Color name="Number" foreground="#098658"/>
+    <Color name="Keyword" foreground="#0000CC" fontWeight="bold"/>
+    <Color name="Motion" foreground="#CC0000" fontWeight="bold"/>
+    <Color name="Process" foreground="#9C27B0" fontWeight="bold"/>
+    <Color name="TypeKeyword" foreground="#267F99"/>
+    <Color name="Qualifier" foreground="#0000CC"/>
+    <Color name="Point" foreground="#795E26"/>
+    <Color name="Approximation" foreground="#AF6E1D" fontWeight="bold"/>
+    <Color name="SystemVar" foreground="#0070C1"/>
+    <Color name="Operator" foreground="#333333"/>
+    <Color name="FoldDirective" foreground="#808080" fontWeight="bold" fontStyle="italic"/>
+    <Color name="HeaderDirective" foreground="#808080"/>
+    <Color name="DataBlock" foreground="#0000CC" fontWeight="bold"/>
+
+    <RuleSet ignoreCase="true">
+        <!-- FOLD directives (must appear BEFORE the general comment span so they match first) -->
+        <Span color="FoldDirective">
+            <Begin>;ENDFOLD</Begin>
+        </Span>
+        <Span color="FoldDirective">
+            <Begin>;FOLD</Begin>
+        </Span>
+
+        <!-- Comments: ; (KUKA KRL style) -->
+        <Span color="Comment" begin=";"/>
+
+        <!-- Strings -->
+        <Span color="String">
+            <Begin>"</Begin>
+            <End>"</End>
+        </Span>
+
+        <!-- Header directives (&ACCESS, &REL, &COMMENT) -->
+        <Rule color="HeaderDirective">
+            ^&amp;[A-Z]+
+        </Rule>
+
+        <!-- Data block keywords -->
+        <Keywords color="DataBlock">
+            <Word>DEFDAT</Word>
+            <Word>ENDDAT</Word>
+        </Keywords>
+
+        <!-- Process commands (Welding) -->
+        <Keywords color="Process">
+            <Word>ArcStart</Word>
+            <Word>ArcEnd</Word>
+            <Word>ArcOn</Word>
+            <Word>ArcOff</Word>
+            <Word>WeldStart</Word>
+            <Word>WeldEnd</Word>
+            <Word>Job_ID</Word>
+            <Word>ARCON</Word>
+            <Word>ARCOFF</Word>
+        </Keywords>
+
+        <!-- Motion commands (KUKA KRL) -->
+        <Keywords color="Motion">
+            <Word>PTP</Word>
+            <Word>PTP_REL</Word>
+            <Word>LIN</Word>
+            <Word>LIN_REL</Word>
+            <Word>CIRC</Word>
+            <Word>CIRC_REL</Word>
+            <Word>HOME</Word>
+            <Word>SPTP</Word>
+            <Word>SLIN</Word>
+            <Word>SCIRC</Word>
+        </Keywords>
+
+        <!-- Type keywords (KUKA KRL) -->
+        <Keywords color="TypeKeyword">
+            <Word>E6POS</Word>
+            <Word>POS</Word>
+            <Word>FRAME</Word>
+            <Word>E6AXIS</Word>
+            <Word>AXIS</Word>
+            <Word>REAL</Word>
+            <Word>INT</Word>
+            <Word>BOOL</Word>
+            <Word>CHAR</Word>
+            <Word>SIGNAL</Word>
+            <Word>STRING</Word>
+        </Keywords>
+
+        <!-- Qualifiers / Declarations -->
+        <Keywords color="Qualifier">
+            <Word>CONST</Word>
+            <Word>VAR</Word>
+            <Word>PERS</Word>
+            <Word>LOCAL</Word>
+            <Word>DECL</Word>
+            <Word>GLOBAL</Word>
+            <Word>EXTERNAL</Word>
+            <Word>IMPORT</Word>
+        </Keywords>
+
+        <!-- Control flow (KUKA KRL) -->
+        <Keywords color="Keyword">
+            <Word>DEF</Word>
+            <Word>END</Word>
+            <Word>DEFFCT</Word>
+            <Word>ENDFCT</Word>
+            <Word>IF</Word>
+            <Word>THEN</Word>
+            <Word>ELSE</Word>
+            <Word>ENDIF</Word>
+            <Word>FOR</Word>
+            <Word>TO</Word>
+            <Word>STEP</Word>
+            <Word>ENDFOR</Word>
+            <Word>WHILE</Word>
+            <Word>ENDWHILE</Word>
+            <Word>LOOP</Word>
+            <Word>ENDLOOP</Word>
+            <Word>REPEAT</Word>
+            <Word>UNTIL</Word>
+            <Word>SWITCH</Word>
+            <Word>CASE</Word>
+            <Word>DEFAULT</Word>
+            <Word>ENDSWITCH</Word>
+            <Word>GOTO</Word>
+            <Word>WAIT</Word>
+            <Word>SEC</Word>
+            <Word>HALT</Word>
+            <Word>EXIT</Word>
+            <Word>CONTINUE</Word>
+            <Word>RETURN</Word>
+            <Word>TRUE</Word>
+            <Word>FALSE</Word>
+            <Word>AND</Word>
+            <Word>OR</Word>
+            <Word>NOT</Word>
+            <Word>BAS</Word>
+            <Word>Vel</Word>
+            <Word>Tool</Word>
+            <Word>Base</Word>
+        </Keywords>
+
+        <!-- Approximation keywords (KUKA KRL) -->
+        <Keywords color="Approximation">
+            <Word>C_PTP</Word>
+            <Word>C_DIS</Word>
+            <Word>C_VEL</Word>
+            <Word>C_ORI</Word>
+        </Keywords>
+
+        <!-- System variables ($VEL.CP, $APO.CDIS, $TOOL, $BASE, $OUT[1], $IN[1], etc.) -->
+        <Rule color="SystemVar">
+            \$[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?(\[[0-9]+\])?
+        </Rule>
+
+        <!-- Points (p followed by alphanumeric, e.g., P1, pHome, P10) -->
+        <Rule color="Point">
+            \b[pP][A-Za-z0-9_]+\b
+        </Rule>
+
+        <!-- Numbers (including scientific notation 9E9) -->
+        <Rule color="Number">
+            \b[0-9]+\.?[0-9]*([eE][+-]?[0-9]+)?\b
+        </Rule>
+    </RuleSet>
+</SyntaxDefinition>
