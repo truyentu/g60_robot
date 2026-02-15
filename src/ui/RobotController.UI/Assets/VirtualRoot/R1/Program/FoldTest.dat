@@ -1,0 +1,30 @@
+&ACCESS RV
+&REL 1
+DEFDAT FoldTest PUBLIC
+  ;FOLD EXTERNAL DECLARATIONS; %{PE}
+  ;ENDFOLD
+
+  ; Home position
+  DECL E6POS HOME={A1 0.0, A2 -90.0, A3 90.0, A4 0.0, A5 0.0, A6 0.0}
+
+  ; Approach / Retreat
+  DECL E6POS P_APPROACH={X 400.0, Y 0.0, Z 500.0, A 0.0, B 90.0, C 0.0, S 2, T 10}
+  DECL E6POS P_RETREAT={X 400.0, Y 0.0, Z 600.0, A 0.0, B 90.0, C 0.0, S 2, T 10}
+
+  ; Seam 1: P1 -> P2 -> P3 (straight line along Y axis)
+  ; Expected length: 300 + 300 = 600.0 mm
+  DECL E6POS P1={X 500.0, Y 0.0, Z 300.0, A 0.0, B 90.0, C 0.0, S 2, T 10}
+  DECL E6POS P2={X 500.0, Y 300.0, Z 300.0, A 0.0, B 90.0, C 0.0, S 2, T 10}
+  DECL E6POS P3={X 500.0, Y 600.0, Z 300.0, A 0.0, B 90.0, C 0.0, S 2, T 10}
+
+  ; Seam 2: P4 -> P5(PTP skip) -> P6
+  ; Expected length: only P4->P6 LIN distance
+  ; P4=(600,0,300) P6=(600,200,300) => length = 200.0 mm (P5 is PTP, skipped)
+  DECL E6POS P4={X 600.0, Y 0.0, Z 300.0, A 0.0, B 90.0, C 0.0, S 2, T 10}
+  DECL E6POS P5={X 600.0, Y 100.0, Z 300.0, A 0.0, B 90.0, C 0.0, S 2, T 10}
+  DECL E6POS P6={X 600.0, Y 200.0, Z 300.0, A 0.0, B 90.0, C 0.0, S 2, T 10}
+
+  ; Error test point
+  DECL E6POS P_ERROR={X 700.0, Y 0.0, Z 400.0, A 0.0, B 90.0, C 0.0, S 2, T 10}
+
+ENDDAT

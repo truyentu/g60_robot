@@ -794,12 +794,49 @@
                                Foreground="#222222" FontSize="16" FontWeight="Bold"
                                FontFamily="Segoe UI"
                                TextTrimming="CharacterEllipsis"/>
-                    <!-- 3: Program Name (bottom row, smaller, dim) -->
-                    <Border Background="#B8B8B8" Padding="6,2" Margin="0,2,0,0">
-                        <TextBlock Text="{Binding CurrentProgramName, FallbackValue=''}"
-                                   Foreground="#555555" FontSize="12"
-                                   FontFamily="Consolas"
-                                   TextTrimming="CharacterEllipsis"/>
+                    <!-- 3: Program Name (bottom row, KUKA style — shows selected program path) -->
+                    <Border Padding="6,2" Margin="0,2,0,0">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Background" Value="#B8B8B8"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedProgramPath, Converter={StaticResource StringNotEmptyConverter}}" Value="True">
+                                        <Setter Property="Background" Value="#FFE0B2"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <StackPanel Orientation="Horizontal">
+                            <!-- ▶ indicator when program selected -->
+                            <TextBlock Text="&#x25B6;" Foreground="#CC0000" FontSize="10"
+                                       VerticalAlignment="Center" Margin="0,0,4,0">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding SelectedProgramPath, Converter={StaticResource StringNotEmptyConverter}}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <TextBlock Text="{Binding CurrentProgramName, FallbackValue='-/-'}"
+                                       FontSize="12" FontFamily="Consolas"
+                                       TextTrimming="CharacterEllipsis">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="#555555"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding SelectedProgramPath, Converter={StaticResource StringNotEmptyConverter}}" Value="True">
+                                                <Setter Property="Foreground" Value="#333333"/>
+                                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
                     </Border>
                 </StackPanel>
             </Border>

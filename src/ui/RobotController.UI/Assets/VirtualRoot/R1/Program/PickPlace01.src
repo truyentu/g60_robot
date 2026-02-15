@@ -1,0 +1,37 @@
+&ACCESS RVP
+&REL 1
+&COMMENT Pick and place demo
+DEF PickPlace01()
+  ;FOLD INI
+    ;FOLD BASISTECH INI
+      BAS(#INITMOV, 0)
+    ;ENDFOLD
+  ;ENDFOLD
+
+  PTP HOME Vel=100% DEFAULT
+
+  ;FOLD PTP P1 Vel=100% PDAT1 Tool[1] Base[0]
+    PTP P1 Vel=100% PDAT1 Tool[1] Base[0]
+  ;ENDFOLD
+
+  ;FOLD LIN P2 Vel=2m/s CPDAT1 Tool[1] Base[0]
+    LIN P2 Vel=2m/s CPDAT1 Tool[1] Base[0]
+  ;ENDFOLD
+
+  ;FOLD GRIPPER CLOSE
+    $OUT[1] = TRUE
+    WAIT SEC 0.5
+  ;ENDFOLD
+
+  ;FOLD PTP P3 Vel=100% PDAT2 Tool[1] Base[0]
+    PTP P3 Vel=100% PDAT2 Tool[1] Base[0]
+  ;ENDFOLD
+
+  ;FOLD GRIPPER OPEN
+    $OUT[1] = FALSE
+    WAIT SEC 0.5
+  ;ENDFOLD
+
+  PTP HOME Vel=100% DEFAULT
+
+END

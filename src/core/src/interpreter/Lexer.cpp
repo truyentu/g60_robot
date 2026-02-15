@@ -207,6 +207,12 @@ void Lexer::scanToken() {
             m_column = 1;
             break;
 
+        // KRL file header directives: &ACCESS, &REL, &COMMENT, &USER, etc.
+        // These are metadata lines — skip everything until end of line
+        case '&':
+            while (peek() != '\n' && !isAtEnd()) advance();
+            break;
+
         case ' ':
         case '\r':
         case '\t':

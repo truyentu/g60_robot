@@ -415,6 +415,20 @@
                         </Grid>
                     </Border>
 
+                    <!-- Program Editor (covers viewport when NavIndex == 1) -->
+                    <controls:ProgramEditor Grid.Row="0" DataContext="{Binding ProgramEditor}">
+                        <controls:ProgramEditor.Style>
+                            <Style TargetType="controls:ProgramEditor">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding DataContext.SelectedNavIndex, RelativeSource={RelativeSource AncestorType=Window}}" Value="1">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </controls:ProgramEditor.Style>
+                    </controls:ProgramEditor>
+
                     <!-- UDP Packet Monitor Panel (Row 1, collapsible) -->
                     <Border Grid.Row="1" Background="#D0D0D0" BorderBrush="#AAAAAA" BorderThickness="0,2,0,0"
                             Height="220" DataContext="{Binding DiagnosticsViewModel}">
@@ -658,6 +672,9 @@
                         <Style TargetType="Border">
                             <Setter Property="Visibility" Value="Collapsed"/>
                             <Style.Triggers>
+                                <DataTrigger Binding="{Binding SelectedNavIndex}" Value="1">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
                                 <DataTrigger Binding="{Binding SelectedNavIndex}" Value="2">
                                     <Setter Property="Visibility" Value="Visible"/>
                                 </DataTrigger>

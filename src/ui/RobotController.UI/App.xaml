@@ -12,6 +12,7 @@
         <converters:NullToBoolConverter x:Key="NullToBoolConverter"/>
         <converters:NullToBoolConverter x:Key="NotNullToBool"/>
         <converters:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility"/>
+        <converters:StringNotEmptyConverter x:Key="StringNotEmptyConverter"/>
 
         <!-- ============================================================ -->
         <!-- KUKA Industrial Theme - Color Palette                        -->

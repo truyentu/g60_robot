@@ -1,0 +1,38 @@
+DEFDAT $machine
+  ; === SOFT LIMITS ===
+  ; A1
+  $SOFTP_END[1] = 185.0
+  $SOFTN_END[1] = -185.0
+  ; A2
+  $SOFTP_END[2] = 45.0
+  $SOFTN_END[2] = -140.0
+  ; A3
+  $SOFTP_END[3] = 156.0
+  $SOFTN_END[3] = -120.0
+  ; A4
+  $SOFTP_END[4] = 350.0
+  $SOFTN_END[4] = -350.0
+  ; A5
+  $SOFTP_END[5] = 130.0
+  $SOFTN_END[5] = -130.0
+  ; A6
+  $SOFTP_END[6] = 350.0
+  $SOFTN_END[6] = -350.0
+
+  ; === GEAR RATIOS ===
+  $RATIO[1] = -154
+  $RATIO[2] = -154
+  $RATIO[3] = -116
+  $RATIO[4] = -80
+  $RATIO[5] = -80
+  $RATIO[6] = -52
+
+  ; === ENCODER DIRECTION ===
+  $DIR_TECH[1] = -1
+  $DIR_TECH[2] = 1
+  $DIR_TECH[3] = 1
+  $DIR_TECH[4] = -1
+  $DIR_TECH[5] = 1
+  $DIR_TECH[6] = -1
+
+ENDDAT

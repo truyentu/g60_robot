@@ -1,0 +1,15 @@
+&ACCESS RVP
+&REL 1
+DEF Orphan()
+  ;FOLD INI
+    BAS(#INITMOV, 0)
+  ;ENDFOLD
+
+  PTP HOME Vel=100% DEFAULT
+
+  ; This file intentionally has no matching .dat file
+  ; Used for TC-EDGE-008: orphan .src test
+
+  PTP HOME Vel=100% DEFAULT
+
+END

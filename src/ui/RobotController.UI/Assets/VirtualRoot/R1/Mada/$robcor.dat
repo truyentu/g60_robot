@@ -1,0 +1,16 @@
+DEFDAT $robcor
+  ; === ROBOT CORRECTION DATA ===
+  ; Coupling compensation
+  $COUPCOMP[1] = 0.0
+  $COUPCOMP[2] = 0.0
+  $COUPCOMP[3] = 0.0
+
+  ; Temperature drift
+  $TEMPDRIFT[1] = 0.0
+  $TEMPDRIFT[2] = 0.0
+  $TEMPDRIFT[3] = 0.0
+  $TEMPDRIFT[4] = 0.0
+  $TEMPDRIFT[5] = 0.0
+  $TEMPDRIFT[6] = 0.0
+
+ENDDAT

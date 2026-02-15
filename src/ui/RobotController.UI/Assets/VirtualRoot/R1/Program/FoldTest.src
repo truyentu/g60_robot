@@ -1,0 +1,74 @@
+&ACCESS RVP
+&REL 1
+&COMMENT Fold Test - All fold types
+DEF FoldTest()
+  ;FOLD INI
+    ;FOLD BASISTECH INI
+      BAS(#INITMOV, 0)
+    ;ENDFOLD
+    BAS(#TOOL, 1)
+    BAS(#BASE, 1)
+    BAS(#VEL_PTP, 100)
+    $VEL.CP = 2.0
+    $APO.CDIS = 10
+  ;ENDFOLD
+
+  ;#REGION Approach
+    PTP HOME Vel=100% DEFAULT
+    LIN P_APPROACH C_DIS
+  ;#ENDREGION
+
+  ;FOLD PTP HOME Vel=100%
+    PTP HOME Vel=100% DEFAULT
+  ;ENDFOLD
+
+  ;#REGION Weld Pass 1
+    ;--- Seam 1: straight line 600mm ---
+    ArcStart(Job_ID:=1)
+      LIN P1
+      LIN P2
+      LIN P3
+    ArcEnd
+
+    ;--- Seam 2: no Job_ID ---
+    ArcStart
+      LIN P4
+      PTP P5
+      LIN P6
+    ArcEnd
+  ;#ENDREGION
+
+  ;FOLD User Section
+    $OUT[1] = TRUE
+    WAIT SEC 0.5
+    $OUT[1] = FALSE
+  ;ENDFOLD
+
+  ;fold lower case fold
+    $OUT[2] = TRUE
+  ;ENDFOLD
+
+  ;FOLD
+    $OUT[3] = FALSE
+  ;ENDFOLD
+
+  ;#REGION Retract
+    LIN P_RETREAT
+    PTP HOME Vel=100% DEFAULT
+  ;#ENDREGION
+
+  ;FOLD Unclosed fold for error test
+    LIN P_ERROR
+
+END
+
+DEF SubRoutine1()
+  ;FOLD INI
+    BAS(#INITMOV, 0)
+  ;ENDFOLD
+
+  PTP HOME Vel=100% DEFAULT
+  LIN P1
+  LIN P2
+
+END

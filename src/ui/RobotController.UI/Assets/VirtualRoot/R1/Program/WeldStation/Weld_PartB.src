@@ -1,0 +1,18 @@
+&ACCESS RVP
+&REL 1
+&COMMENT Han co xe Wave Alpha
+DEF Weld_PartB()
+  ;FOLD INI
+    ;FOLD BASISTECH INI
+      BAS(#INITMOV, 0)
+    ;ENDFOLD
+  ;ENDFOLD
+
+  PTP HOME Vel=100% DEFAULT
+
+  LIN P1
+  LIN P2
+
+  PTP HOME Vel=100% DEFAULT
+
+END

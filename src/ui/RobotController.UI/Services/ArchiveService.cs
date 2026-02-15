@@ -31,6 +31,7 @@ public class ArchiveService
         if (File.Exists(destinationZipPath))
             File.Delete(destinationZipPath);
 
+        int fileCount = 0;
         using var zip = ZipFile.Open(destinationZipPath, ZipArchiveMode.Create);
 
         foreach (var filePath in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
@@ -40,13 +41,14 @@ public class ArchiveService
             if (relativePath.StartsWith("Catalog/", StringComparison.OrdinalIgnoreCase)) continue;
 
             zip.CreateEntryFromFile(filePath, relativePath, CompressionLevel.Optimal);
+            fileCount++;
         }
 
         var manifest = new ArchiveManifest
         {
             Timestamp = DateTime.UtcNow.ToString("o"),
             Version = "1.0",
-            FileCount = zip.Entries.Count,
+            FileCount = fileCount,
             Source = _workspace.WorkspaceRoot
         };
         var manifestJson = JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true });
@@ -56,7 +58,7 @@ public class ArchiveService
             writer.Write(manifestJson);
         }
 
-        Log.Information("Archive created: {Path} ({Count} files)", destinationZipPath, zip.Entries.Count);
+        Log.Information("Archive created: {Path} ({Count} files)", destinationZipPath, fileCount);
     }
 
     /// <summary>Archive selected directory or file to ZIP</summary>
@@ -67,6 +69,7 @@ public class ArchiveService
         if (File.Exists(destinationZipPath))
             File.Delete(destinationZipPath);
 
+        int fileCount = 0;
         using var zip = ZipFile.Open(destinationZipPath, ZipArchiveMode.Create);
 
         if (Directory.Exists(sourcePath))
@@ -75,12 +78,14 @@ public class ArchiveService
             {
                 var relativePath = Path.GetRelativePath(root, filePath).Replace('\\', '/');
                 zip.CreateEntryFromFile(filePath, relativePath, CompressionLevel.Optimal);
+                fileCount++;
             }
         }
         else if (File.Exists(sourcePath))
         {
             var relativePath = Path.GetRelativePath(root, sourcePath).Replace('\\', '/');
             zip.CreateEntryFromFile(sourcePath, relativePath, CompressionLevel.Optimal);
+            fileCount++;
 
             if (Path.GetExtension(sourcePath).Equals(".src", StringComparison.OrdinalIgnoreCase))
             {
@@ -89,6 +94,7 @@ public class ArchiveService
                 {
                     var datRelative = Path.GetRelativePath(root, datPath).Replace('\\', '/');
                     zip.CreateEntryFromFile(datPath, datRelative, CompressionLevel.Optimal);
+                    fileCount++;
                 }
             }
         }
@@ -97,7 +103,7 @@ public class ArchiveService
         {
             Timestamp = DateTime.UtcNow.ToString("o"),
             Version = "1.0",
-            FileCount = zip.Entries.Count,
+            FileCount = fileCount,
             Source = sourcePath
         };
         var manifestJson = JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true });
@@ -107,7 +113,7 @@ public class ArchiveService
             writer.Write(manifestJson);
         }
 
-        Log.Information("Archive (selected) created: {Path} ({Count} files)", destinationZipPath, zip.Entries.Count);
+        Log.Information("Archive (selected) created: {Path} ({Count} files)", destinationZipPath, fileCount);
     }
 
     /// <summary>List contents of an archive ZIP</summary>

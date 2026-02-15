@@ -40,6 +40,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _currentProgramName = "";
 
+    /// <summary>Full path of the currently selected (Satzanwahl) program for execution</summary>
+    [ObservableProperty]
+    private string _selectedProgramPath = "";
+
     // Status Bar - Tool/Base Display
     [ObservableProperty]
     private string _activeToolDisplay = "[0]";
@@ -400,12 +404,15 @@ public partial class MainViewModel : ObservableObject, IDisposable
         StationSetup = new StationSetupViewModel(_viewportService, _ipcClient);
         PositionDisplay = new PositionDisplayViewModel(_ipcClient);
         ProgramEditor = new ProgramEditorViewModel(_ipcClient, _viewportService);
+        ProgramEditor.PropertyChanged += OnProgramEditorPropertyChanged;
 
         // Initialize workspace and Navigator
         var workspace = new WorkspaceService();
         workspace.EnsureWorkspaceStructure();
         NavigatorVm = new NavigatorViewModel(workspace);
         NavigatorVm.OpenProgramRequested += OnNavigatorOpenProgram;
+        NavigatorVm.SelectProgramRequested += OnNavigatorSelectProgram;
+        NavigatorVm.CancelSelectRequested += OnNavigatorCancelSelect;
         NavigatorVm.Initialize(); // Navigator is default screen — init immediately
 
         // Connect workspace to ProgramViewModel
@@ -490,7 +497,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             Softkey7Text = "Edit";
             Softkey7Visible = Visibility.Visible;
 
-            Softkey1Command = new RelayCommand(() => NavigatorVm?.NewProgramCommand.Execute(null));
+            Softkey1Command = new RelayCommand(() => NavigatorVm?.NewItemCommand.Execute(null));
             Softkey2Command = new RelayCommand(() => NavigatorVm?.OpenCommand.Execute(null));
             Softkey3Command = new RelayCommand(() => NavigatorVm?.SelectCommand.Execute(null));
             Softkey4Command = new RelayCommand(() => NavigatorVm?.DeleteCommand.Execute(null));
@@ -514,6 +521,24 @@ public partial class MainViewModel : ObservableObject, IDisposable
             Softkey4Command = new AsyncRelayCommand(NavArchiveAsync);
             Softkey5Command = new RelayCommand(NavDelete);
             Softkey6Command = new RelayCommand(NavOpen);
+        }
+        else if (navIndex == 1) // Program Editor — Execution control softkeys
+        {
+            Softkey1Text = "\u25B6 Start";
+            Softkey2Text = "Pause";
+            Softkey3Text = "\u25A0 Stop";
+            Softkey4Text = "Step \u25B7";
+            Softkey5Text = "\u21BA Reset";
+            Softkey6Text = "Navigator";
+            Softkey7Text = "";
+            Softkey7Visible = Visibility.Collapsed;
+
+            Softkey1Command = new RelayCommand(() => ProgramEditor?.RunProgramCommand.Execute(null));
+            Softkey2Command = new RelayCommand(() => ProgramEditor?.PauseProgramCommand.Execute(null));
+            Softkey3Command = new RelayCommand(() => ProgramEditor?.StopProgramCommand.Execute(null));
+            Softkey4Command = new RelayCommand(() => ProgramEditor?.StepProgramCommand.Execute(null));
+            Softkey5Command = new RelayCommand(() => ProgramEditor?.ResetProgramCommand.Execute(null));
+            Softkey6Command = new RelayCommand(() => SelectedNavIndex = 9);
         }
         else // Default mode
         {
@@ -621,22 +646,109 @@ public partial class MainViewModel : ObservableObject, IDisposable
         Log.Information("Program opened: {Name}", ProgramViewModel.SelectedProgram.Name);
     }
 
-    /// <summary>Handle Navigator requesting to open a .program file</summary>
+    /// <summary>Handle Navigator requesting to open a .src file for editing</summary>
     private void OnNavigatorOpenProgram(string programPath)
     {
-        // Load program file into ProgramViewModel
+        // Load program file into ProgramViewModel (for program list tracking)
         ProgramViewModel?.OpenProgramFile(programPath);
 
-        // Also load into ProgramEditor if available
-        if (ProgramEditor != null && ProgramViewModel != null)
-        {
-            ProgramEditor.ProgramSource = ProgramViewModel.ProgramCode;
-            ProgramEditor.ProgramName = System.IO.Path.GetFileNameWithoutExtension(programPath);
-        }
+        // Open in editor — editing mode (editable, no program pointer)
+        ProgramEditor?.OpenForEditing(programPath);
 
         // Switch to Program Editor page (NavIndex 1)
         SelectedNavIndex = 1;
-        Log.Information("Navigator: Opened program file {Path}", programPath);
+        Log.Information("Navigator: Opened program for editing {Path}", programPath);
+    }
+
+    /// <summary>Handle Navigator requesting to select a program for execution (Satzanwahl)</summary>
+    private async void OnNavigatorSelectProgram(string programPath)
+    {
+        // Load program into ProgramViewModel (for program list tracking)
+        ProgramViewModel?.OpenProgramFile(programPath);
+
+        // Open in editor — execution mode (read-only, program pointer at DEF/INI)
+        ProgramEditor?.OpenForExecution(programPath);
+
+        // Switch to Program Editor page
+        SelectedNavIndex = 1;
+
+        var name = System.IO.Path.GetFileNameWithoutExtension(programPath);
+        CurrentProgramName = name;
+        SelectedProgramPath = programPath;
+
+        // Build display path: extract relative path from Programs folder
+        var programsDir = NavigatorVm?.Workspace?.ProgramsDir ?? "";
+        if (!string.IsNullOrEmpty(programsDir) && programPath.StartsWith(programsDir, StringComparison.OrdinalIgnoreCase))
+        {
+            var relative = programPath.Substring(programsDir.Length).TrimStart('\\', '/');
+            CurrentProgramName = $"R1/Program/{relative.Replace('\\', '/')}";
+        }
+
+        // Update interpreter state — ready to run
+        RobotInterpreterColor = Brushes.Yellow;  // Yellow = program selected, ready
+        InterpreterState = "P_READY";
+
+        // Notify NavigatorVm so it can highlight the active program
+        NavigatorVm?.SetActiveProgram(programPath);
+
+        // Send to IPC/Executor if connected
+        if (_ipcClient.IsConnected && ProgramViewModel != null &&
+            !string.IsNullOrEmpty(ProgramViewModel.ProgramCode))
+        {
+            await _ipcClient.LoadProgramAsync(ProgramViewModel.ProgramCode);
+            Log.Information("Navigator: Program sent to interpreter via IPC");
+        }
+        else
+        {
+            // Simulate Core.LoadProgram() when not connected
+            Log.Information("Loading program into Interpreter... (simulated) Path={Path}", programPath);
+        }
+
+        Log.Information("Navigator: Selected program for execution (Satzanwahl): {Path}", programPath);
+    }
+
+    /// <summary>Handle Navigator requesting to cancel program selection</summary>
+    private void OnNavigatorCancelSelect()
+    {
+        CurrentProgramName = "";
+        SelectedProgramPath = "";
+        InterpreterState = "IDLE";
+        RobotInterpreterColor = Brushes.Gray;
+
+        // Reset editor to no-program state
+        ProgramEditor?.StopProgramCommand.Execute(null);
+
+        Log.Information("Navigator: Program selection cancelled");
+    }
+
+    /// <summary>Sync interpreter color/state on TopStatusBar when ProgramEditor execution state changes</summary>
+    private void OnProgramEditorPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ProgramEditorViewModel.ExecutionState) && ProgramEditor != null)
+        {
+            InterpreterState = ProgramEditor.ExecutionState;
+            RobotInterpreterColor = ProgramEditor.ExecutionState switch
+            {
+                "RUNNING" => Brushes.Green,
+                "PAUSED" => Brushes.Orange,
+                "STOPPED" => Brushes.Red,
+                "P_END" => Brushes.Black,
+                "P_READY" or "IDLE" => Brushes.Yellow,
+                "STEP" => Brushes.YellowGreen,
+                _ => Brushes.Gray
+            };
+
+            // Update Navigator program state icon
+            var navState = ProgramEditor.ExecutionState switch
+            {
+                "RUNNING" or "STEP" => Models.ProgramState.Running,
+                "PAUSED" => Models.ProgramState.Paused,
+                "STOPPED" or "P_END" => Models.ProgramState.Error,
+                "P_READY" or "IDLE" => Models.ProgramState.Selected,
+                _ => Models.ProgramState.None
+            };
+            NavigatorVm?.UpdateProgramState(navState);
+        }
     }
 
     // Rename dialog

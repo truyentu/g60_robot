@@ -164,3 +164,19 @@ public class InverseBoolToVisibilityConverter : IValueConverter
         throw new NotImplementedException();
     }
 }
+
+/// <summary>
+/// Returns true if string is non-null and non-empty. For use in DataTrigger bindings.
+/// </summary>
+public class StringNotEmptyConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        return value is string s && !string.IsNullOrEmpty(s);
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        throw new NotImplementedException();
+    }
+}

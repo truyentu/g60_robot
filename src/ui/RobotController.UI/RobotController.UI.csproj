@@ -37,6 +37,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Resources\RPL.xshd" />
+    <EmbeddedResource Include="Resources\KRL.xshd" />
   </ItemGroup>
 
   <!-- Copy robot packages to output directory -->
@@ -45,6 +46,14 @@
       <Link>config\robots\%(RecursiveDir)%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="Assets\Templates\Module.dat">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Assets\Templates\Module.src">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

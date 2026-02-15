@@ -96,6 +96,17 @@ END";
     [ObservableProperty]
     private bool _isPaused;
 
+    /// <summary>When true, editor is locked for execution mode (Satzanwahl). False = editing mode.</summary>
+    [ObservableProperty]
+    private bool _isReadOnly;
+
+    /// <summary>
+    /// Line number of the Program Pointer (execution cursor).
+    /// -1 = hidden (editing mode), >= 1 = visible at that line (execution mode).
+    /// </summary>
+    [ObservableProperty]
+    private int _executionLine = -1;
+
     [ObservableProperty]
     private int _overridePercent = 100;
 
@@ -142,6 +153,13 @@ END";
     /// <summary>Line number where caret is (1-based, set by View)</summary>
     [ObservableProperty]
     private int _caretLineNumber;
+
+    // ========================================================================
+    // Execution Simulator (local, when no IPC connection)
+    // ========================================================================
+    private System.Windows.Threading.DispatcherTimer? _simTimer;
+    private int _simTotalLines;
+    private bool _isSimulatorMode; // true when running local simulator (even if IPC connected)
 
     public ProgramEditorViewModel(IIpcClientService ipcClient, IViewportService viewportService)
     {
@@ -330,13 +348,15 @@ END";
 
             if (response == null)
             {
-                Errors.Add("Failed to communicate with Core");
+                Errors.Add("Failed to communicate with Core (timeout or connection lost)");
+                Log.Warning("LoadProgram: response is null — IPC timeout or disconnected");
                 return;
             }
 
             if (!response.Success)
             {
-                Errors.Add(response.Error ?? "Unknown error");
+                Errors.Add(response.Error ?? "Unknown parse error");
+                Log.Warning("LoadProgram failed: {Error}", response.Error);
             }
             else
             {
@@ -354,53 +374,92 @@ END";
     [RelayCommand]
     private async Task RunProgramAsync()
     {
-        await LoadProgramAsync();
-        if (Errors.Count > 0) return;
+        if (_ipcClient.IsConnected)
+        {
+            await LoadProgramAsync();
+            if (Errors.Count > 0)
+            {
+                // Core load failed — fallback to local simulator
+                Errors.Clear();
+                Log.Warning("Core load failed, falling back to local simulator");
+                SimulatorStart();
+                return;
+            }
 
-        await _ipcClient.RunProgramAsync();
-        IsRunning = true;
-        IsPaused = false;
-        ExecutionState = "RUNNING";
-
-        // Start polling for state updates
-        _ = PollProgramStateAsync();
+            await _ipcClient.RunProgramAsync();
+            IsRunning = true;
+            IsPaused = false;
+            ExecutionState = "RUNNING";
+            _ = PollProgramStateAsync();
+        }
+        else
+        {
+            // Local simulation mode
+            SimulatorStart();
+        }
     }
 
     [RelayCommand]
     private async Task StepProgramAsync()
     {
-        if (!IsRunning)
+        if (_ipcClient.IsConnected)
         {
-            await LoadProgramAsync();
-            if (Errors.Count > 0) return;
-            IsRunning = true;
-        }
-
-        var response = await _ipcClient.StepProgramAsync();
-        if (response != null)
-        {
-            ExecutionState = response.State;
-            CurrentLine = response.CurrentLine;
-
-            if (response.State == "COMPLETED" || response.State == "ERROR")
+            if (!IsRunning)
             {
-                IsRunning = false;
+                await LoadProgramAsync();
+                if (Errors.Count > 0)
+                {
+                    // Core load failed — fallback to local simulator
+                    Errors.Clear();
+                    Log.Warning("Core load failed, falling back to local simulator for step");
+                    SimulatorStep();
+                    return;
+                }
+                IsRunning = true;
             }
+
+            var response = await _ipcClient.StepProgramAsync();
+            if (response != null)
+            {
+                ExecutionState = response.State;
+                CurrentLine = response.CurrentLine;
+                if (response.State == "COMPLETED" || response.State == "ERROR")
+                    IsRunning = false;
+            }
+        }
+        else
+        {
+            // Local simulation: single step
+            SimulatorStep();
         }
     }
 
     [RelayCommand]
     private async Task PauseProgramAsync()
     {
-        await _ipcClient.PauseProgramAsync();
+        // Always stop local simulator timer (may be running via fallback)
+        _simTimer?.Stop();
+
+        if (_ipcClient.IsConnected)
+        {
+            await _ipcClient.PauseProgramAsync();
+        }
         IsPaused = true;
         ExecutionState = "PAUSED";
+        ShowToast("Program paused");
     }
 
     [RelayCommand]
     private async Task ResumeProgramAsync()
     {
-        await _ipcClient.RunProgramAsync();
+        if (_isSimulatorMode)
+        {
+            _simTimer?.Start();
+        }
+        else if (_ipcClient.IsConnected)
+        {
+            await _ipcClient.RunProgramAsync();
+        }
         IsPaused = false;
         ExecutionState = "RUNNING";
     }
@@ -408,20 +467,157 @@ END";
     [RelayCommand]
     private async Task StopProgramAsync()
     {
-        await _ipcClient.StopProgramAsync();
+        // Always stop local simulator timer (may be running via fallback)
+        _simTimer?.Stop();
+
+        if (_ipcClient.IsConnected)
+        {
+            await _ipcClient.StopProgramAsync();
+        }
         IsRunning = false;
         IsPaused = false;
+        _isSimulatorMode = false;
         ExecutionState = "STOPPED";
+        ShowToast("Program stopped");
+        Log.Information("Program stopped at line {Line}", ExecutionLine);
     }
 
     [RelayCommand]
     private async Task ResetProgramAsync()
     {
-        await _ipcClient.ResetProgramAsync();
-        CurrentLine = 0;
+        // Always stop local simulator timer (may be running via fallback)
+        _simTimer?.Stop();
+
+        if (_ipcClient.IsConnected)
+        {
+            await _ipcClient.ResetProgramAsync();
+        }
         IsRunning = false;
         IsPaused = false;
+        _isSimulatorMode = false;
         ExecutionState = "IDLE";
+        ExecutionLine = IsReadOnly ? FindFirstExecutableLine() : -1;
+        CurrentLine = Math.Max(ExecutionLine, 0);
+        ShowToast("Program reset");
+        Log.Information("Program reset to line {Line}", ExecutionLine);
+    }
+
+    // ========================================================================
+    // Local Execution Simulator
+    // ========================================================================
+
+    private void SimulatorStart()
+    {
+        if (!IsReadOnly)
+        {
+            ShowToast("Select a program first (Satzanwahl)", "error");
+            return;
+        }
+
+        _simTotalLines = ProgramSource.Split('\n').Length;
+
+        if (ExecutionLine <= 0)
+            ExecutionLine = FindFirstExecutableLine();
+
+        IsRunning = true;
+        IsPaused = false;
+        _isSimulatorMode = true;
+        ExecutionState = "RUNNING";
+
+        // Calculate interval based on override (100% = 500ms, 10% = 5000ms)
+        var intervalMs = 500.0 / (OverridePercent / 100.0);
+
+        _simTimer?.Stop();
+        _simTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(intervalMs)
+        };
+        _simTimer.Tick += SimulatorTick;
+        _simTimer.Start();
+
+        ShowToast("Program running (simulation)");
+        Log.Information("Simulator started at line {Line}, override {Pct}%", ExecutionLine, OverridePercent);
+    }
+
+    private void SimulatorStep()
+    {
+        if (!IsReadOnly)
+        {
+            ShowToast("Select a program first (Satzanwahl)", "error");
+            return;
+        }
+
+        _simTotalLines = ProgramSource.Split('\n').Length;
+
+        if (ExecutionLine <= 0)
+            ExecutionLine = FindFirstExecutableLine();
+
+        if (!IsRunning)
+        {
+            IsRunning = true;
+            ExecutionState = "STEP";
+        }
+
+        AdvanceExecutionLine();
+    }
+
+    private void SimulatorTick(object? sender, EventArgs e)
+    {
+        AdvanceExecutionLine();
+    }
+
+    private void AdvanceExecutionLine()
+    {
+        var lines = ProgramSource.Split('\n');
+        var nextLine = ExecutionLine + 1;
+
+        // Skip blank lines and comments
+        while (nextLine <= lines.Length)
+        {
+            if (nextLine > lines.Length)
+                break;
+
+            var trimmed = lines[nextLine - 1].TrimStart();
+            if (!string.IsNullOrWhiteSpace(trimmed) && !trimmed.StartsWith(";"))
+                break;
+            nextLine++;
+        }
+
+        // Check for END or past last line
+        if (nextLine > lines.Length)
+        {
+            SimulatorFinish();
+            return;
+        }
+
+        var currentTrimmed = lines[nextLine - 1].TrimStart();
+        if (currentTrimmed.StartsWith("END", StringComparison.OrdinalIgnoreCase) &&
+            !currentTrimmed.StartsWith("ENDDAT", StringComparison.OrdinalIgnoreCase) &&
+            !currentTrimmed.StartsWith("ENDLOOP", StringComparison.OrdinalIgnoreCase) &&
+            !currentTrimmed.StartsWith("ENDIF", StringComparison.OrdinalIgnoreCase) &&
+            !currentTrimmed.StartsWith("ENDWHILE", StringComparison.OrdinalIgnoreCase) &&
+            !currentTrimmed.StartsWith("ENDFOR", StringComparison.OrdinalIgnoreCase))
+        {
+            ExecutionLine = nextLine;
+            CurrentLine = nextLine;
+            SimulatorFinish();
+            return;
+        }
+
+        ExecutionLine = nextLine;
+        CurrentLine = nextLine;
+        ExecutionState = IsRunning && !IsPaused ? "RUNNING" : "STEP";
+    }
+
+    private void SimulatorFinish()
+    {
+        _simTimer?.Stop();
+        IsRunning = false;
+        IsPaused = false;
+        _isSimulatorMode = false;
+        ExecutionState = "P_END";
+        ShowToast("Program Finished", "success", 3000);
+        Log.Information("Simulator finished at line {Line}", ExecutionLine);
     }
 
     [RelayCommand]
@@ -503,14 +699,91 @@ END";
     // File Open / Save
     // ========================================================================
 
+    /// <summary>
+    /// Open a .src file from Navigator — sets _currentFilePath so Save works.
+    /// Also loads the matching .dat file path for future reference.
+    /// </summary>
+    public void OpenFromNavigator(string srcPath)
+    {
+        if (!File.Exists(srcPath)) return;
+
+        _currentFilePath = srcPath;
+        ProgramSource = File.ReadAllText(srcPath);
+        ProgramName = Path.GetFileNameWithoutExtension(srcPath);
+        Errors.Clear();
+        ShowToast($"Opened: {Path.GetFileName(srcPath)}");
+        Log.Information("Opened from Navigator: {Path}", srcPath);
+    }
+
+    /// <summary>
+    /// Open file for editing (Double-Click). Editable, no program pointer.
+    /// </summary>
+    public void OpenForEditing(string srcPath)
+    {
+        if (!File.Exists(srcPath)) return;
+
+        _currentFilePath = srcPath;
+        ProgramSource = File.ReadAllText(srcPath);
+        ProgramName = Path.GetFileNameWithoutExtension(srcPath);
+        Errors.Clear();
+
+        // Editing mode: editable, no execution pointer
+        IsReadOnly = false;
+        ExecutionLine = -1;
+
+        ShowToast($"Editing: {Path.GetFileName(srcPath)}");
+        Log.Information("Opened for editing: {Path}", srcPath);
+    }
+
+    /// <summary>
+    /// Open file for execution (Satzanwahl/Select). Read-only with program pointer.
+    /// Finds first executable line (DEF or INI) and sets pointer there.
+    /// </summary>
+    public void OpenForExecution(string srcPath)
+    {
+        if (!File.Exists(srcPath)) return;
+
+        _currentFilePath = srcPath;
+        ProgramSource = File.ReadAllText(srcPath);
+        ProgramName = Path.GetFileNameWithoutExtension(srcPath);
+        Errors.Clear();
+
+        // Execution mode: locked, show program pointer
+        IsReadOnly = true;
+        ExecutionLine = FindFirstExecutableLine();
+        CurrentLine = ExecutionLine;
+
+        ShowToast($"Selected: {Path.GetFileName(srcPath)}", "success");
+        Log.Information("Opened for execution (Satzanwahl): {Path}, PC at line {Line}", srcPath, ExecutionLine);
+    }
+
+    /// <summary>
+    /// Find the first executable line (DEF xxx or INI) in ProgramSource.
+    /// Falls back to line 1 if not found.
+    /// </summary>
+    private int FindFirstExecutableLine()
+    {
+        var lines = ProgramSource.Split('\n');
+        for (int i = 0; i < lines.Length; i++)
+        {
+            var trimmed = lines[i].TrimStart();
+            if (trimmed.StartsWith("DEF ", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.StartsWith("INI", StringComparison.OrdinalIgnoreCase))
+            {
+                return i + 1; // 1-based line number
+            }
+        }
+        return 1;
+    }
+
     [RelayCommand]
     private void OpenFile()
     {
         var dlg = new OpenFileDialog
         {
             Title = "Open Robot Program",
-            Filter = "RPL Files (*.rpl)|*.rpl|All Files (*.*)|*.*",
-            DefaultExt = ".rpl"
+            Filter = "KRL Source (*.src)|*.src|KRL Data (*.dat)|*.dat|All Files (*.*)|*.*",
+            DefaultExt = ".src"
         };
 
         if (dlg.ShowDialog() == true)
@@ -559,8 +832,8 @@ END";
         var dlg = new SaveFileDialog
         {
             Title = "Save Robot Program",
-            Filter = "RPL Files (*.rpl)|*.rpl|All Files (*.*)|*.*",
-            DefaultExt = ".rpl",
+            Filter = "KRL Source (*.src)|*.src|KRL Data (*.dat)|*.dat|All Files (*.*)|*.*",
+            DefaultExt = ".src",
             FileName = ProgramName
         };
 

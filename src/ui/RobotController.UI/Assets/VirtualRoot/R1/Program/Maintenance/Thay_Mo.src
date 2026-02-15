@@ -1,0 +1,21 @@
+&ACCESS RVP
+&REL 1
+&COMMENT Ve vi tri bom mo
+DEF Thay_Mo()
+  ;FOLD INI
+    ;FOLD BASISTECH INI
+      BAS(#INITMOV, 0)
+    ;ENDFOLD
+  ;ENDFOLD
+
+  PTP HOME Vel=100% DEFAULT
+
+  ; Di chuyen den vi tri bom mo
+  PTP P_GREASE Vel=50% PDAT1 Tool[1] Base[0]
+
+  ; Cho ky thuat vien thao tac
+  HALT
+
+  PTP HOME Vel=100% DEFAULT
+
+END

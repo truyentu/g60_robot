@@ -393,6 +393,8 @@ bool RobotController::stopJog() {
 // ============================================================================
 
 bool RobotController::loadProgram(const std::string& source) {
+    LOG_INFO("loadProgram: begin, source size={}", source.size());
+
     // Create executor if needed
     if (!m_programExecutor) {
         m_programExecutor = std::make_unique<interpreter::Executor>();
@@ -608,8 +610,10 @@ bool RobotController::loadProgram(const std::string& source) {
     }
 
     // Tokenize
+    LOG_INFO("loadProgram: tokenizing...");
     interpreter::Lexer lexer(source);
     auto tokens = lexer.tokenize();
+    LOG_INFO("loadProgram: tokenized, {} tokens, {} errors", tokens.size(), lexer.getErrors().size());
 
     if (lexer.hasErrors()) {
         for (const auto& err : lexer.getErrors()) {
@@ -619,8 +623,10 @@ bool RobotController::loadProgram(const std::string& source) {
     }
 
     // Parse
+    LOG_INFO("loadProgram: parsing...");
     interpreter::Parser parser(tokens);
     auto program = parser.parse();
+    LOG_INFO("loadProgram: parsed, hasProgram={}, errors={}", program.has_value(), parser.getErrors().size());
 
     if (!program || parser.hasErrors()) {
         for (const auto& err : parser.getErrors()) {
@@ -2115,22 +2121,27 @@ void RobotController::registerIpcHandlers() {
 
             std::string source = request.payload.value("source", "");
 
-            LOG_INFO("LOAD_PROGRAM request");
+            LOG_INFO("LOAD_PROGRAM request, source length={}", source.size());
 
             if (source.empty()) {
                 response["success"] = false;
                 response["error"] = "No program source provided";
+                LOG_WARN("LOAD_PROGRAM: empty source");
                 return response;
             }
 
+            LOG_INFO("LOAD_PROGRAM: calling loadProgram...");
             if (loadProgram(source)) {
                 response["success"] = true;
                 response["program_name"] = getProgramName();
+                LOG_INFO("LOAD_PROGRAM: success, name={}", getProgramName());
             } else {
                 response["success"] = false;
                 response["error"] = "Failed to parse program";
+                LOG_WARN("LOAD_PROGRAM: parse failed");
             }
 
+            LOG_INFO("LOAD_PROGRAM: returning response");
             return response;
         });
 

@@ -1,0 +1,17 @@
+&ACCESS RVP
+&REL 1
+&COMMENT New program
+DEF module1()
+  ;FOLD INI
+    ;FOLD BASISTECH INI
+      BAS(#INITMOV, 0)
+    ;ENDFOLD
+  ;ENDFOLD
+
+  PTP HOME Vel=100% DEFAULT
+
+  ; TODO: Add motion commands here
+
+  PTP HOME Vel=100% DEFAULT
+
+END

@@ -1,5 +1,6 @@
 using RobotController.UI.Models;
 using RobotController.UI.ViewModels.Pages;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 
@@ -12,7 +13,7 @@ public partial class NavigatorView : UserControl
         InitializeComponent();
     }
 
-    private void TreeView_SelectedItemChanged(object sender, System.Windows.RoutedPropertyChangedEventArgs<object> e)
+    private void TreeView_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
     {
         if (DataContext is NavigatorViewModel vm && e.NewValue is DirectoryNode node)
         {
@@ -25,6 +26,21 @@ public partial class NavigatorView : UserControl
         if (DataContext is NavigatorViewModel vm && vm.SelectedFile is FileItem item)
         {
             vm.OnFileDoubleClick(item);
+        }
+    }
+
+    private void ColumnHeader_Click(object sender, RoutedEventArgs e)
+    {
+        if (e.OriginalSource is GridViewColumnHeader header &&
+            header.Column != null &&
+            header.Role != GridViewColumnHeaderRole.Padding &&
+            DataContext is NavigatorViewModel vm)
+        {
+            var column = header.Column.Header?.ToString() ?? "";
+            if (!string.IsNullOrEmpty(column))
+            {
+                vm.SortByColumn(column);
+            }
         }
     }
 }

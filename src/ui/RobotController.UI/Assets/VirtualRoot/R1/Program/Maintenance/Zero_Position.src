@@ -1,0 +1,18 @@
+&ACCESS RVP
+&REL 1
+&COMMENT Kiem tra vi tri zero
+DEF Zero_Position()
+  ;FOLD INI
+    ;FOLD BASISTECH INI
+      BAS(#INITMOV, 0)
+    ;ENDFOLD
+  ;ENDFOLD
+
+  ; Di chuyen tat ca truc ve 0 do
+  PTP {A1 0, A2 0, A3 0, A4 0, A5 0, A6 0} Vel=10% DEFAULT
+
+  HALT
+
+  PTP HOME Vel=100% DEFAULT
+
+END

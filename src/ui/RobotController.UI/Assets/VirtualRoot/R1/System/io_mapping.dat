@@ -1,0 +1,13 @@
+DEFDAT io_mapping
+  ; === DIGITAL OUTPUTS ===
+  ; $OUT[1] = Gripper / Arc ON
+  ; $OUT[2] = Gas valve
+  ; $OUT[3] = Wire feed
+  ; $OUT[4] = Clamp
+
+  ; === DIGITAL INPUTS ===
+  ; $IN[1] = Start button
+  ; $IN[2] = Home sensor
+  ; $IN[3] = Part detect
+
+ENDDAT

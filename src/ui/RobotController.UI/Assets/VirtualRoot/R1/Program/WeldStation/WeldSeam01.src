@@ -1,0 +1,31 @@
+&ACCESS RVP
+&REL 1
+&COMMENT Butt weld seam program
+DEF WeldSeam01()
+  ;FOLD INI
+    ;FOLD BASISTECH INI
+      BAS(#INITMOV, 0)
+    ;ENDFOLD
+  ;ENDFOLD
+
+  PTP HOME Vel=100% DEFAULT
+
+  ;FOLD LIN P1 Vel=2m/s CPDAT1 Tool[1] Base[2]
+    LIN P1 Vel=2m/s CPDAT1 Tool[1] Base[2]
+  ;ENDFOLD
+
+  ;FOLD ARCON
+    $OUT[1] = TRUE
+  ;ENDFOLD
+
+  ;FOLD LIN P2 Vel=10mm/s CPDAT2 Tool[1] Base[2]
+    LIN P2 Vel=10mm/s CPDAT2 Tool[1] Base[2]
+  ;ENDFOLD
+
+  ;FOLD ARCOFF
+    $OUT[1] = FALSE
+  ;ENDFOLD
+
+  PTP HOME Vel=100% DEFAULT
+
+END
