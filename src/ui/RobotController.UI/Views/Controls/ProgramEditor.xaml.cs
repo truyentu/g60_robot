@@ -8,6 +8,7 @@ using RobotController.UI.Helpers;
 using RobotController.UI.Models;
 using RobotController.UI.ViewModels;
 using System.ComponentModel;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -24,6 +25,7 @@ public partial class ProgramEditor : UserControl
 {
     private readonly CurrentLineBackgroundRenderer _lineRenderer;
     private readonly MotionLineBackgroundRenderer _motionLineRenderer;
+    private readonly ExecutionLineBackgroundRenderer _executionLineRenderer;
     private FoldingManager? _foldingManager;
     private readonly WeldSeamFoldingStrategy _foldingStrategy = new();
     private readonly DispatcherTimer _foldingUpdateTimer;
@@ -43,6 +45,10 @@ public partial class ProgramEditor : UserControl
         // Add motion line highlighting (orange when caret is on a motion instruction)
         _motionLineRenderer = new MotionLineBackgroundRenderer(CodeEditor);
         CodeEditor.TextArea.TextView.BackgroundRenderers.Add(_motionLineRenderer);
+
+        // Add execution line (Program Pointer) highlighting — yellow with left arrow margin
+        _executionLineRenderer = new ExecutionLineBackgroundRenderer(CodeEditor);
+        CodeEditor.TextArea.TextView.BackgroundRenderers.Add(_executionLineRenderer);
 
         // Install folding manager
         _foldingManager = FoldingManager.Install(CodeEditor.TextArea);
@@ -102,6 +108,68 @@ public partial class ProgramEditor : UserControl
         {
             _foldingStrategy.UpdateFoldings(_foldingManager, CodeEditor.Document);
         }
+    }
+
+    private void FoldAllButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_foldingManager == null) return;
+        foreach (var folding in _foldingManager.AllFoldings)
+        {
+            folding.IsFolded = true;
+        }
+    }
+
+    private void UnfoldAllButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_foldingManager == null) return;
+        foreach (var folding in _foldingManager.AllFoldings)
+        {
+            folding.IsFolded = false;
+        }
+    }
+
+    private void FoldCurrentBlock_Click(object sender, RoutedEventArgs e)
+    {
+        if (_foldingManager == null) return;
+        int offset = CodeEditor.CaretOffset;
+        var folding = _foldingManager.GetFoldingsContaining(offset).FirstOrDefault();
+        if (folding != null)
+            folding.IsFolded = true;
+    }
+
+    private void UnfoldCurrentBlock_Click(object sender, RoutedEventArgs e)
+    {
+        if (_foldingManager == null) return;
+        int offset = CodeEditor.CaretOffset;
+        var folding = _foldingManager.GetFoldingsContaining(offset).FirstOrDefault();
+        if (folding != null)
+            folding.IsFolded = false;
+    }
+
+    private void InsertFoldBlock_Click(object sender, RoutedEventArgs e)
+    {
+        int offset = CodeEditor.CaretOffset;
+        var line = CodeEditor.Document.GetLineByOffset(offset);
+        string indent = GetLineIndent(line);
+
+        string foldText = $"{indent};FOLD User Section\n{indent}  \n{indent};ENDFOLD\n";
+        CodeEditor.Document.Insert(line.Offset, foldText);
+
+        // Place caret inside the fold block
+        CodeEditor.CaretOffset = line.Offset + indent.Length + ";FOLD User Section\n".Length + indent.Length + 2;
+    }
+
+    private string GetLineIndent(ICSharpCode.AvalonEdit.Document.DocumentLine line)
+    {
+        string text = CodeEditor.Document.GetText(line.Offset, line.Length);
+        int spaces = 0;
+        foreach (char c in text)
+        {
+            if (c == ' ') spaces++;
+            else if (c == '\t') spaces += 2;
+            else break;
+        }
+        return new string(' ', spaces);
     }
 
     // ========================================================================
@@ -376,6 +444,30 @@ public partial class ProgramEditor : UserControl
                 }
             }
         }
+        else if (e.PropertyName == nameof(ProgramEditorViewModel.ExecutionLine))
+        {
+            if (DataContext is ProgramEditorViewModel vm)
+            {
+                _executionLineRenderer.ExecutionLine = vm.ExecutionLine;
+                CodeEditor.TextArea.TextView.InvalidateVisual();
+
+                // Scroll to execution line when it becomes visible
+                if (vm.ExecutionLine > 0 && vm.ExecutionLine <= CodeEditor.Document.LineCount)
+                {
+                    CodeEditor.ScrollToLine(vm.ExecutionLine);
+                }
+            }
+        }
+        else if (e.PropertyName == nameof(ProgramEditorViewModel.IsReadOnly))
+        {
+            if (DataContext is ProgramEditorViewModel vm)
+            {
+                // Update editor background to indicate execution mode
+                CodeEditor.Background = vm.IsReadOnly
+                    ? new SolidColorBrush(Color.FromRgb(0xFD, 0xFD, 0xF0))  // Slight yellow tint
+                    : new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFF));  // Pure white
+            }
+        }
         else if (e.PropertyName == nameof(ProgramEditorViewModel.ProgramSource))
         {
             if (DataContext is ProgramEditorViewModel vm)
@@ -414,12 +506,25 @@ public partial class ProgramEditor : UserControl
     {
         try
         {
+            // Try KRL (KUKA Robot Language) highlighting first (light theme)
             using var stream = GetType().Assembly.GetManifestResourceStream(
-                "RobotController.UI.Resources.RPL.xshd");
+                "RobotController.UI.Resources.KRL.xshd");
 
             if (stream != null)
             {
                 using var reader = new XmlTextReader(stream);
+                var highlighting = HighlightingLoader.Load(reader, HighlightingManager.Instance);
+                CodeEditor.SyntaxHighlighting = highlighting;
+                return;
+            }
+
+            // Fallback to RPL highlighting
+            using var rplStream = GetType().Assembly.GetManifestResourceStream(
+                "RobotController.UI.Resources.RPL.xshd");
+
+            if (rplStream != null)
+            {
+                using var reader = new XmlTextReader(rplStream);
                 var highlighting = HighlightingLoader.Load(reader, HighlightingManager.Instance);
                 CodeEditor.SyntaxHighlighting = highlighting;
             }
@@ -519,6 +624,79 @@ public class MotionLineBackgroundRenderer : IBackgroundRenderer
         {
             var fullWidthRect = new Rect(0, rect.Top, textView.ActualWidth, rect.Height);
             drawingContext.DrawRectangle(_highlightBrush, null, fullWidthRect);
+        }
+    }
+}
+
+/// <summary>
+/// Background renderer for Program Pointer (Satzanwahl execution line).
+/// Renders a yellow highlight band + red arrow indicator in the left margin.
+/// Only visible when ExecutionLine >= 1 (execution mode).
+/// </summary>
+public class ExecutionLineBackgroundRenderer : IBackgroundRenderer
+{
+    private readonly ICSharpCode.AvalonEdit.TextEditor _editor;
+    // Yellow highlight for program pointer (semi-transparent, rendered on Caret layer above text)
+    private static readonly SolidColorBrush _highlightBrush = new(Color.FromArgb(80, 255, 235, 59));
+    // Left border accent
+    private static readonly Pen _leftBorderPen = new(new SolidColorBrush(Color.FromRgb(0xCC, 0x00, 0x00)), 3);
+    // Arrow brush
+    private static readonly SolidColorBrush _arrowBrush = new(Color.FromRgb(0xCC, 0x00, 0x00));
+
+    public int ExecutionLine { get; set; } = -1;
+
+    public ExecutionLineBackgroundRenderer(ICSharpCode.AvalonEdit.TextEditor editor)
+    {
+        _editor = editor;
+    }
+
+    public KnownLayer Layer => KnownLayer.Caret;
+
+    public void Draw(TextView textView, DrawingContext drawingContext)
+    {
+        if (ExecutionLine <= 0 || ExecutionLine > _editor.Document.LineCount)
+            return;
+
+        textView.EnsureVisualLines();
+
+        var line = _editor.Document.GetLineByNumber(ExecutionLine);
+        var segment = new ICSharpCode.AvalonEdit.Document.TextSegment
+        {
+            StartOffset = line.Offset,
+            Length = line.Length
+        };
+
+        foreach (var rect in BackgroundGeometryBuilder.GetRectsForSegment(textView, segment))
+        {
+            // Full-width yellow highlight (semi-transparent so text is readable)
+            var fullWidthRect = new Rect(0, rect.Top, textView.ActualWidth, rect.Height);
+            drawingContext.DrawRectangle(_highlightBrush, null, fullWidthRect);
+
+            // Red left border (3px)
+            drawingContext.DrawLine(_leftBorderPen,
+                new Point(1.5, rect.Top),
+                new Point(1.5, rect.Top + rect.Height));
+
+            // Red arrow indicator ▶ — rendered ABOVE text in Caret layer
+            // Position arrow at the very left edge of the text area, before any text content
+            var arrowHeight = rect.Height * 0.35;
+            var arrowWidth = arrowHeight * 0.9;
+            var arrowCenterY = rect.Top + rect.Height / 2;
+            var arrowLeft = 4.0;
+
+            var arrowGeometry = new StreamGeometry();
+            using (var ctx = arrowGeometry.Open())
+            {
+                ctx.BeginFigure(new Point(arrowLeft, arrowCenterY - arrowHeight), true, true);
+                ctx.LineTo(new Point(arrowLeft + arrowWidth, arrowCenterY), true, false);
+                ctx.LineTo(new Point(arrowLeft, arrowCenterY + arrowHeight), true, false);
+            }
+            arrowGeometry.Freeze();
+
+            // Draw arrow with a thin dark outline for visibility
+            var outlinePen = new Pen(Brushes.DarkRed, 0.8);
+            outlinePen.Freeze();
+            drawingContext.DrawGeometry(_arrowBrush, outlinePen, arrowGeometry);
         }
     }
 }
