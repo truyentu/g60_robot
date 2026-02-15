@@ -20,6 +20,7 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
                 <!-- Filter dropdown -->
@@ -37,6 +38,28 @@
                            Foreground="#555555" FontSize="11"
                            FontFamily="Segoe UI"
                            VerticalAlignment="Center" Margin="8,0"/>
+
+                <!-- Search box -->
+                <Grid Grid.Column="2" Width="140" Margin="4,4,8,4">
+                    <TextBox x:Name="SearchBox"
+                             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                             Foreground="#333333" Background="White" BorderBrush="#BBBBBB"
+                             FontSize="11" Padding="2,1,18,1" VerticalContentAlignment="Center"/>
+                    <TextBlock Text="Search..." FontSize="11" Foreground="#AAAAAA"
+                               IsHitTestVisible="False" Padding="4,2"
+                               VerticalAlignment="Center">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value="">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </Grid>
             </Grid>
         </Border>
 
@@ -104,7 +127,37 @@
                       ItemsSource="{Binding FileList}"
                       SelectedItem="{Binding SelectedFile}"
                       MouseDoubleClick="FileList_DoubleClick"
-                      FontFamily="Segoe UI" FontSize="11">
+                      FontFamily="Segoe UI" FontSize="11"
+                      GridViewColumnHeader.Click="ColumnHeader_Click">
+                <ListView.ContextMenu>
+                    <ContextMenu Background="#F0F0F0" BorderBrush="#999999" FontFamily="Segoe UI" FontSize="12">
+                        <MenuItem Header="Open" Command="{Binding OpenCommand}"/>
+                        <MenuItem Header="Select" Command="{Binding SelectCommand}"/>
+                        <Separator/>
+                        <MenuItem Header="New">
+                            <MenuItem Header="Module" Command="{Binding NewProgramCommand}"/>
+                            <MenuItem Header="Folder" Command="{Binding NewFolderCommand}"/>
+                        </MenuItem>
+                        <Separator/>
+                        <MenuItem Header="Cut" Command="{Binding CutCommand}"/>
+                        <MenuItem Header="Copy" Command="{Binding CopyCommand}"/>
+                        <MenuItem Header="Paste" Command="{Binding PasteCommand}"/>
+                        <Separator/>
+                        <MenuItem Header="Rename" Command="{Binding RenameCommand}"/>
+                        <MenuItem Header="Delete" Command="{Binding DeleteCommand}"/>
+                        <Separator/>
+                        <MenuItem Header="Cancel Select" Command="{Binding CancelSelectCommand}"/>
+                        <Separator/>
+                        <MenuItem Header="Archive">
+                            <MenuItem Header="Archive All" Command="{Binding ArchiveAllCommand}"/>
+                            <MenuItem Header="Archive Selected" Command="{Binding ArchiveSelectedCommand}"/>
+                        </MenuItem>
+                        <MenuItem Header="Restore" Command="{Binding RestoreCommand}"/>
+                        <MenuItem Header="Compare with Archive" Command="{Binding CompareArchiveCommand}"/>
+                        <Separator/>
+                        <MenuItem Header="Properties" Command="{Binding PropertiesCommand}"/>
+                    </ContextMenu>
+                </ListView.ContextMenu>
                 <ListView.View>
                     <GridView>
                         <GridView.ColumnHeaderContainerStyle>
@@ -124,7 +177,19 @@
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding TypeIcon}" FontSize="14"
-                                               HorizontalAlignment="Center"/>
+                                               HorizontalAlignment="Center">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="#555555"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsActiveProgram}" Value="True">
+                                                        <Setter Property="Foreground" Value="#CC0000"/>
+                                                        <Setter Property="FontWeight" Value="Bold"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
                                 </DataTemplate>
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
@@ -133,13 +198,25 @@
                         <GridViewColumn Header="Name" Width="200">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
-                                    <TextBlock Text="{Binding DisplayName}" Foreground="#333333"/>
+                                    <TextBlock Text="{Binding DisplayName}">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="#333333"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsActiveProgram}" Value="True">
+                                                        <Setter Property="Foreground" Value="#CC0000"/>
+                                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
                                 </DataTemplate>
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
 
-                        <!-- Extension -->
-                        <GridViewColumn Header="Ext" Width="60">
+                        <!-- Type/Extension -->
+                        <GridViewColumn Header="Type" Width="60">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding Extension}" Foreground="#777777"/>
@@ -184,6 +261,12 @@
                         <Setter Property="Padding" Value="2,1"/>
                         <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
                         <Style.Triggers>
+                            <!-- Active program: light orange background -->
+                            <DataTrigger Binding="{Binding IsActiveProgram}" Value="True">
+                                <Setter Property="Background" Value="#FFF3E0"/>
+                                <Setter Property="BorderBrush" Value="#EB6A0A"/>
+                                <Setter Property="BorderThickness" Value="2,0,0,0"/>
+                            </DataTrigger>
                             <Trigger Property="IsSelected" Value="True">
                                 <Setter Property="Background" Value="#3A6EA5"/>
                                 <Setter Property="Foreground" Value="White"/>
@@ -203,6 +286,363 @@
                        Foreground="#666666" FontSize="11"
                        FontFamily="Segoe UI"
                        VerticalAlignment="Center" Margin="8,0"/>
+        </Border>
+
+        <!-- New Item Type Chooser Dialog Overlay -->
+        <Border Grid.RowSpan="3"
+                Background="#80000000"
+                Visibility="{Binding IsNewTypeDialogOpen, Converter={StaticResource BoolToVisibility}}"
+                Panel.ZIndex="99">
+            <Border Background="#F0F0F0" BorderBrush="#999999" BorderThickness="1"
+                    Width="240" Height="140"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    CornerRadius="4" Padding="16">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="New..." FontSize="14" FontWeight="SemiBold"
+                               Foreground="#333333" Margin="0,0,0,12"/>
+
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center"
+                                VerticalAlignment="Center">
+                        <Button Content="Module" Width="90" Padding="4,6" Margin="0,0,12,0"
+                                Command="{Binding NewTypeModuleCommand}"
+                                Background="#4A90D9" Foreground="White" BorderBrush="#357ABD"
+                                FontSize="12"/>
+                        <Button Content="Folder" Width="90" Padding="4,6"
+                                Command="{Binding NewTypeFolderCommand}"
+                                Background="#4A90D9" Foreground="White" BorderBrush="#357ABD"
+                                FontSize="12"/>
+                    </StackPanel>
+
+                    <Button Grid.Row="2" Content="Cancel" Width="70" Padding="4,3"
+                            HorizontalAlignment="Right"
+                            Command="{Binding CancelNewTypeCommand}"
+                            Background="#D8D8D8" Foreground="#333333" BorderBrush="#BBBBBB"
+                            FontSize="11"/>
+                </Grid>
+            </Border>
+        </Border>
+
+        <!-- New Program Dialog Overlay -->
+        <Border Grid.RowSpan="3"
+                Background="#80000000"
+                Visibility="{Binding IsNewProgramDialogOpen, Converter={StaticResource BoolToVisibility}}"
+                Panel.ZIndex="100">
+            <Border Background="#F0F0F0" BorderBrush="#999999" BorderThickness="1"
+                    Width="320" Height="180"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    CornerRadius="4" Padding="16">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="New Module" FontSize="14" FontWeight="SemiBold"
+                               Foreground="#333333" Margin="0,0,0,10"/>
+
+                    <TextBlock Grid.Row="1" Text="Name:" Foreground="#555555" FontSize="11" Margin="0,0,0,4"/>
+                    <TextBox Grid.Row="2" Text="{Binding NewProgramName, UpdateSourceTrigger=PropertyChanged}"
+                             FontSize="12" Padding="4,3" Margin="0,0,0,8"
+                             Background="White" Foreground="#333333" BorderBrush="#BBBBBB"/>
+
+                    <TextBlock Grid.Row="3" Text="Comment:" Foreground="#555555" FontSize="11" Margin="0,0,0,4"/>
+                    <TextBox Grid.Row="4" Text="{Binding NewProgramComment, UpdateSourceTrigger=PropertyChanged}"
+                             FontSize="12" Padding="4,3" Margin="0,0,0,10"
+                             Background="White" Foreground="#333333" BorderBrush="#BBBBBB"/>
+
+                    <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Content="OK" Width="70" Padding="4,3" Margin="0,0,8,0"
+                                Command="{Binding ConfirmNewProgramCommand}"
+                                Background="#4A90D9" Foreground="White" BorderBrush="#357ABD"
+                                FontSize="11"/>
+                        <Button Content="Cancel" Width="70" Padding="4,3"
+                                Command="{Binding CancelNewProgramCommand}"
+                                Background="#D8D8D8" Foreground="#333333" BorderBrush="#BBBBBB"
+                                FontSize="11"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Border>
+
+        <!-- Rename Dialog Overlay -->
+        <Border Grid.RowSpan="3"
+                Background="#80000000"
+                Visibility="{Binding IsRenameDialogOpen, Converter={StaticResource BoolToVisibility}}"
+                Panel.ZIndex="101">
+            <Border Background="#F0F0F0" BorderBrush="#999999" BorderThickness="1"
+                    Width="320" Height="140"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    CornerRadius="4" Padding="16">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="Rename" FontSize="14" FontWeight="SemiBold"
+                               Foreground="#333333" Margin="0,0,0,10"/>
+
+                    <TextBlock Grid.Row="1" Text="New name:" Foreground="#555555" FontSize="11" Margin="0,0,0,4"/>
+                    <TextBox Grid.Row="2" Text="{Binding RenameNewName, UpdateSourceTrigger=PropertyChanged}"
+                             FontSize="12" Padding="4,3" Margin="0,0,0,10"
+                             Background="White" Foreground="#333333" BorderBrush="#BBBBBB"
+                             VerticalAlignment="Top"/>
+
+                    <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Content="OK" Width="70" Padding="4,3" Margin="0,0,8,0"
+                                Command="{Binding ConfirmRenameCommand}"
+                                Background="#4A90D9" Foreground="White" BorderBrush="#357ABD"
+                                FontSize="11"/>
+                        <Button Content="Cancel" Width="70" Padding="4,3"
+                                Command="{Binding CancelRenameCommand}"
+                                Background="#D8D8D8" Foreground="#333333" BorderBrush="#BBBBBB"
+                                FontSize="11"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Border>
+
+        <!-- Delete Confirm Dialog Overlay -->
+        <Border Grid.RowSpan="3"
+                Background="#80000000"
+                Visibility="{Binding IsDeleteConfirmOpen, Converter={StaticResource BoolToVisibility}}"
+                Panel.ZIndex="102">
+            <Border Background="#F0F0F0" BorderBrush="#999999" BorderThickness="1"
+                    Width="320" Height="120"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    CornerRadius="4" Padding="16">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="Confirm Delete" FontSize="14" FontWeight="SemiBold"
+                               Foreground="#333333" Margin="0,0,0,6"/>
+
+                    <TextBlock Grid.Row="1" Foreground="#555555" FontSize="12"
+                               TextWrapping="Wrap" VerticalAlignment="Center">
+                        <Run Text="Delete "/>
+                        <Run Text="{Binding DeleteTargetName}" FontWeight="SemiBold"/>
+                        <Run Text="?"/>
+                    </TextBlock>
+
+                    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Content="Delete" Width="70" Padding="4,3" Margin="0,0,8,0"
+                                Command="{Binding ConfirmDeleteCommand}"
+                                Background="#D94A4A" Foreground="White" BorderBrush="#BD3737"
+                                FontSize="11"/>
+                        <Button Content="Cancel" Width="70" Padding="4,3"
+                                Command="{Binding CancelDeleteCommand}"
+                                Background="#D8D8D8" Foreground="#333333" BorderBrush="#BBBBBB"
+                                FontSize="11"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Border>
+
+        <!-- Properties Dialog Overlay -->
+        <Border Grid.RowSpan="3"
+                Background="#80000000"
+                Visibility="{Binding IsPropertiesDialogOpen, Converter={StaticResource BoolToVisibility}}"
+                Panel.ZIndex="103">
+            <Border Background="#F0F0F0" BorderBrush="#999999" BorderThickness="1"
+                    Width="360" Height="280"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    CornerRadius="4" Padding="16">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="Properties" FontSize="14" FontWeight="SemiBold"
+                               Foreground="#333333" Margin="0,0,0,10"/>
+
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="80"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Name:" Foreground="#555555" FontSize="11" Margin="0,3"/>
+                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding PropsName}" Foreground="#333333" FontSize="11" FontWeight="SemiBold" Margin="4,3" TextWrapping="Wrap"/>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Type:" Foreground="#555555" FontSize="11" Margin="0,3"/>
+                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding PropsType}" Foreground="#333333" FontSize="11" Margin="4,3"/>
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Size:" Foreground="#555555" FontSize="11" Margin="0,3"/>
+                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding PropsSize}" Foreground="#333333" FontSize="11" Margin="4,3"/>
+
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Path:" Foreground="#555555" FontSize="11" Margin="0,3"/>
+                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding PropsPath}" Foreground="#333333" FontSize="11" Margin="4,3" TextWrapping="Wrap"/>
+
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Created:" Foreground="#555555" FontSize="11" Margin="0,3"/>
+                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding PropsCreated}" Foreground="#333333" FontSize="11" Margin="4,3"/>
+
+                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Modified:" Foreground="#555555" FontSize="11" Margin="0,3"/>
+                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding PropsModified}" Foreground="#333333" FontSize="11" Margin="4,3"/>
+
+                        <TextBlock Grid.Row="6" Grid.Column="0" Text="Comment:" Foreground="#555555" FontSize="11" Margin="0,3"/>
+                        <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding PropsComment}" Foreground="#777777" FontSize="11" FontStyle="Italic" Margin="4,3" TextWrapping="Wrap"/>
+                    </Grid>
+
+                    <Button Grid.Row="2" Content="Close" Width="70" Padding="4,3"
+                            HorizontalAlignment="Right"
+                            Command="{Binding ClosePropertiesCommand}"
+                            Background="#D8D8D8" Foreground="#333333" BorderBrush="#BBBBBB"
+                            FontSize="11"/>
+                </Grid>
+            </Border>
+        </Border>
+        <!-- Restore Dialog Overlay -->
+        <Border Grid.RowSpan="3"
+                Background="#80000000"
+                Visibility="{Binding IsRestoreDialogOpen, Converter={StaticResource BoolToVisibility}}"
+                Panel.ZIndex="104">
+            <Border Background="#F0F0F0" BorderBrush="#999999" BorderThickness="1"
+                    Width="500" Height="400"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    CornerRadius="4" Padding="16">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="Restore from Archive" FontSize="14" FontWeight="SemiBold"
+                               Foreground="#333333" Margin="0,0,0,8"/>
+
+                    <TextBlock Grid.Row="1" Text="{Binding RestoreStatusMessage}"
+                               Foreground="#666666" FontSize="11" Margin="0,0,0,8"/>
+
+                    <ListView Grid.Row="2" ItemsSource="{Binding ArchiveContents}"
+                              Background="White" BorderBrush="#CCCCCC" BorderThickness="1"
+                              FontFamily="Segoe UI" FontSize="11">
+                        <ListView.View>
+                            <GridView>
+                                <GridViewColumn Width="30">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <CheckBox IsChecked="{Binding IsSelected}"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                                <GridViewColumn Header="File" Width="300"
+                                                DisplayMemberBinding="{Binding DisplayPath}"/>
+                                <GridViewColumn Header="Size" Width="60"
+                                                DisplayMemberBinding="{Binding Size, StringFormat={}{0:N0}}"/>
+                            </GridView>
+                        </ListView.View>
+                    </ListView>
+
+                    <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+                        <Button Content="Restore Selected" Width="120" Padding="4,6" Margin="0,0,8,0"
+                                Command="{Binding ConfirmRestoreCommand}"
+                                Background="#4A90D9" Foreground="White" BorderBrush="#357ABD"
+                                FontSize="12"/>
+                        <Button Content="Cancel" Width="70" Padding="4,3"
+                                Command="{Binding CancelRestoreCommand}"
+                                Background="#D8D8D8" Foreground="#333333" BorderBrush="#BBBBBB"
+                                FontSize="11"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Border>
+
+        <!-- Compare Dialog Overlay -->
+        <Border Grid.RowSpan="3"
+                Background="#80000000"
+                Visibility="{Binding IsCompareDialogOpen, Converter={StaticResource BoolToVisibility}}"
+                Panel.ZIndex="105">
+            <Border Background="#F0F0F0" BorderBrush="#999999" BorderThickness="1"
+                    Width="560" Height="400"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    CornerRadius="4" Padding="16">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="Compare: Archive vs Workspace" FontSize="14" FontWeight="SemiBold"
+                               Foreground="#333333" Margin="0,0,0,10"/>
+
+                    <ListView Grid.Row="1" ItemsSource="{Binding CompareResults}"
+                              Background="White" BorderBrush="#CCCCCC" BorderThickness="1"
+                              FontFamily="Segoe UI" FontSize="11">
+                        <ListView.View>
+                            <GridView>
+                                <GridViewColumn Header="Status" Width="90">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Status}" FontWeight="SemiBold">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="#333333"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Status}" Value="Identical">
+                                                                <Setter Property="Foreground" Value="#4CAF50"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Status}" Value="Different">
+                                                                <Setter Property="Foreground" Value="#FF9800"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Status}" Value="OnlyInArchive">
+                                                                <Setter Property="Foreground" Value="#2196F3"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Status}" Value="OnlyLocal">
+                                                                <Setter Property="Foreground" Value="#F44336"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                                <GridViewColumn Header="File" Width="320"
+                                                DisplayMemberBinding="{Binding RelativePath}"/>
+                                <GridViewColumn Header="Archive" Width="60"
+                                                DisplayMemberBinding="{Binding ArchiveSize, StringFormat={}{0:N0}}"/>
+                                <GridViewColumn Header="Local" Width="60"
+                                                DisplayMemberBinding="{Binding LocalSize, StringFormat={}{0:N0}}"/>
+                            </GridView>
+                        </ListView.View>
+                    </ListView>
+
+                    <Button Grid.Row="2" Content="Close" Width="70" Padding="4,3"
+                            HorizontalAlignment="Right" Margin="0,12,0,0"
+                            Command="{Binding CloseCompareCommand}"
+                            Background="#D8D8D8" Foreground="#333333" BorderBrush="#BBBBBB"
+                            FontSize="11"/>
+                </Grid>
+            </Border>
         </Border>
     </Grid>
 </UserControl>
