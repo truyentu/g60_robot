@@ -13,20 +13,28 @@ public class WorkspaceService
     private const string DisplayPrefix = "KRC:\\";
 
     public string WorkspaceRoot { get; }
+    public string TemplatesDir { get; }
 
-    // Path helpers
-    public string ProgramsDir => Path.Combine(WorkspaceRoot, "R1", "Programs");
+    // Path helpers — KUKA-style structure under VirtualRoot
+    public string ProgramsDir => Path.Combine(WorkspaceRoot, "R1", "Program");
     public string SystemDir => Path.Combine(WorkspaceRoot, "R1", "System");
     public string MadaDir => Path.Combine(WorkspaceRoot, "R1", "Mada");
-    public string ConfigDir => Path.Combine(WorkspaceRoot, "Config");
     public string ToolsDir => Path.Combine(WorkspaceRoot, "Tools");
-    public string FramesDir => Path.Combine(WorkspaceRoot, "Frames");
     public string CatalogDir => Path.Combine(WorkspaceRoot, "Catalog");
     public string StationDir => Path.Combine(WorkspaceRoot, "Station");
+
+    // Legacy paths used by other services (Config, Frames, Log)
+    public string ConfigDir => Path.Combine(WorkspaceRoot, "Config");
+    public string FramesDir => Path.Combine(WorkspaceRoot, "Frames");
     public string LogDir => Path.Combine(WorkspaceRoot, "Log");
 
     public WorkspaceService(string? overridePath = null)
     {
+        var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+
+        // Resolve Assets dir (contains VirtualRoot and Templates)
+        var assetsDir = ResolveAssetsDir(baseDir);
+
         if (!string.IsNullOrWhiteSpace(overridePath))
         {
             WorkspaceRoot = Path.GetFullPath(overridePath);
@@ -41,27 +49,33 @@ public class WorkspaceService
             }
             else
             {
-                // Default: navigate from bin output to project root workspace/
-                var baseDir = AppDomain.CurrentDomain.BaseDirectory;
-                var projectRoot = Path.GetFullPath(
-                    Path.Combine(baseDir, "..", "..", "..", "..", "..", "..", ".."));
-                var wsPath = Path.Combine(projectRoot, "workspace");
-                if (Directory.Exists(wsPath))
-                {
-                    WorkspaceRoot = wsPath;
-                }
-                else
-                {
-                    // Fallback: workspace/ beside the executable
-                    WorkspaceRoot = Path.Combine(baseDir, "workspace");
-                }
+                // Default: Assets/VirtualRoot/ inside UI project
+                WorkspaceRoot = Path.Combine(assetsDir, "VirtualRoot");
             }
         }
+
+        TemplatesDir = Path.Combine(assetsDir, "Templates");
+        Log.Information("[Workspace] Root: {Root}", WorkspaceRoot);
+        Log.Information("[Workspace] Templates: {Templates}", TemplatesDir);
     }
 
-    /// <summary>
-    /// Convert real filesystem path to display path: "KRC:\R1\Programs\..."
-    /// </summary>
+    private static string ResolveAssetsDir(string baseDir)
+    {
+        // Try navigating from bin/Debug/net8.0-windows/ to project source
+        // bin/Debug/net8.0-windows/ -> ../../.. -> project root -> Assets/
+        var candidate = Path.GetFullPath(Path.Combine(baseDir, "..", "..", ".."));
+        var assetsPath = Path.Combine(candidate, "Assets");
+        if (Directory.Exists(assetsPath))
+            return assetsPath;
+
+        // Fallback: Assets/ beside executable
+        var fallback = Path.Combine(baseDir, "Assets");
+        Directory.CreateDirectory(fallback);
+        return fallback;
+    }
+
+    // ===== Display Path Conversion =====
+
     public string ToDisplayPath(string realPath)
     {
         var fullReal = Path.GetFullPath(realPath);
@@ -77,9 +91,6 @@ public class WorkspaceService
         return fullReal;
     }
 
-    /// <summary>
-    /// Convert display path "KRC:\..." back to real filesystem path
-    /// </summary>
     public string FromDisplayPath(string displayPath)
     {
         if (displayPath.StartsWith(DisplayPrefix, StringComparison.OrdinalIgnoreCase))
@@ -91,9 +102,8 @@ public class WorkspaceService
         return displayPath;
     }
 
-    /// <summary>
-    /// Ensure all workspace directories exist, then seed default data if catalog is empty.
-    /// </summary>
+    // ===== Workspace Structure =====
+
     public void EnsureWorkspaceStructure()
     {
         var dirs = new[]
@@ -108,174 +118,94 @@ public class WorkspaceService
             Directory.CreateDirectory(dir);
         }
 
-        // Seed catalog from src/config/ if workspace catalog is empty
-        SeedCatalogFromSource();
+        // Seed default data from legacy workspace/ if available
+        SeedFromLegacyWorkspace();
     }
 
-    /// <summary>
-    /// Resolve project root from workspace path (workspace/ is at project root)
-    /// </summary>
-    private string? ResolveProjectRoot()
+    private void SeedFromLegacyWorkspace()
     {
-        // workspace/ is directly under project root
-        var candidate = Path.GetFullPath(Path.Combine(WorkspaceRoot, ".."));
-        var srcConfig = Path.Combine(candidate, "src", "config", "robots");
-        if (Directory.Exists(srcConfig))
-        {
-            Log.Debug("[Workspace] Project root resolved: {Root}", candidate);
-            return candidate;
-        }
-        Log.Warning("[Workspace] Could not resolve project root from workspace: {Ws}", WorkspaceRoot);
-        return null;
-    }
+        // Find legacy workspace/ at project root for backward compatibility
+        var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+        var projectRoot = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "..", ".."));
+        var legacyWs = Path.Combine(projectRoot, "workspace");
 
-    /// <summary>
-    /// Seed workspace Catalog, Tools, Frames from src/config/ if not already populated.
-    /// Only copies when target files don't exist (guard against overwriting user changes).
-    /// </summary>
-    public void SeedCatalogFromSource()
-    {
-        var projectRoot = ResolveProjectRoot();
-        if (projectRoot == null)
-        {
-            Log.Warning("[Workspace] SeedCatalog skipped — project root not found");
-            return;
-        }
+        if (!Directory.Exists(legacyWs)) return;
 
-        var srcRobots = Path.Combine(projectRoot, "src", "config", "robots");
-        var srcTools = Path.Combine(projectRoot, "src", "config", "tools");
-        var srcFrames = Path.Combine(projectRoot, "src", "config", "frames");
-
-        // Seed robot packages into Catalog/
-        if (Directory.Exists(srcRobots))
+        // Seed Tools
+        var legacyTools = Path.Combine(legacyWs, "Tools");
+        if (Directory.Exists(legacyTools))
         {
-            foreach (var robotDir in Directory.GetDirectories(srcRobots))
+            foreach (var file in Directory.GetFiles(legacyTools, "*.yaml"))
             {
-                var robotId = Path.GetFileName(robotDir);
-                var destDir = Path.Combine(CatalogDir, robotId);
-                var destYaml = Path.Combine(destDir, "robot.yaml");
-
-                // Guard: skip if already seeded
-                if (File.Exists(destYaml))
+                var dest = Path.Combine(ToolsDir, Path.GetFileName(file));
+                if (!File.Exists(dest))
                 {
-                    Log.Debug("[Workspace] Catalog {Id} already seeded, skipping", robotId);
-                    continue;
+                    File.Copy(file, dest, overwrite: false);
+                    Log.Debug("[Workspace] Seeded tool from legacy: {Name}", Path.GetFileName(file));
                 }
+            }
+            // Also copy tool meshes
+            var legacyMeshes = Path.Combine(legacyTools, "meshes");
+            if (Directory.Exists(legacyMeshes))
+            {
+                var destMeshes = Path.Combine(ToolsDir, "meshes");
+                CopyDirectoryRecursive(legacyMeshes, destMeshes);
+            }
+        }
 
-                var srcYaml = Path.Combine(robotDir, "robot.yaml");
-                if (!File.Exists(srcYaml)) continue;
-
-                Directory.CreateDirectory(destDir);
-                File.Copy(srcYaml, destYaml, overwrite: false);
-                Log.Information("[Workspace] Seeded catalog: {Id}", robotId);
-
-                // Copy meshes if they exist
-                var srcMeshes = Path.Combine(robotDir, "meshes", "visual");
-                if (Directory.Exists(srcMeshes) && Directory.GetFiles(srcMeshes).Length > 0)
+        // Seed Catalog
+        var legacyCatalog = Path.Combine(legacyWs, "Catalog");
+        if (Directory.Exists(legacyCatalog))
+        {
+            foreach (var dir in Directory.GetDirectories(legacyCatalog))
+            {
+                var id = Path.GetFileName(dir);
+                var dest = Path.Combine(CatalogDir, id);
+                if (!Directory.Exists(dest))
                 {
-                    var destMeshes = Path.Combine(destDir, "meshes", "visual");
-                    CopyDirectoryRecursive(srcMeshes, destMeshes);
-                    Log.Information("[Workspace] Seeded meshes for {Id}: {Count} files",
-                        robotId, Directory.GetFiles(srcMeshes).Length);
+                    CopyDirectoryRecursive(dir, dest);
+                    Log.Debug("[Workspace] Seeded catalog from legacy: {Id}", id);
                 }
             }
         }
 
-        // Seed tools
-        if (Directory.Exists(srcTools))
+        // Seed Station
+        var legacyStation = Path.Combine(legacyWs, "Station", "station.json");
+        var destStation = Path.Combine(StationDir, "station.json");
+        if (File.Exists(legacyStation) && !File.Exists(destStation))
         {
-            foreach (var toolFile in Directory.GetFiles(srcTools, "*.yaml"))
+            File.Copy(legacyStation, destStation, overwrite: false);
+            Log.Debug("[Workspace] Seeded station.json from legacy");
+        }
+
+        // Seed Frames
+        var legacyFrames = Path.Combine(legacyWs, "Frames");
+        if (Directory.Exists(legacyFrames))
+        {
+            foreach (var file in Directory.GetFiles(legacyFrames, "*.yaml"))
             {
-                var destFile = Path.Combine(ToolsDir, Path.GetFileName(toolFile));
-                if (!File.Exists(destFile))
-                {
-                    File.Copy(toolFile, destFile, overwrite: false);
-                    Log.Information("[Workspace] Seeded tool: {Name}", Path.GetFileName(toolFile));
-                }
+                var dest = Path.Combine(FramesDir, Path.GetFileName(file));
+                if (!File.Exists(dest))
+                    File.Copy(file, dest, overwrite: false);
             }
-        }
-
-        // Seed frames
-        if (Directory.Exists(srcFrames))
-        {
-            foreach (var frameFile in Directory.GetFiles(srcFrames, "*.yaml"))
-            {
-                var destFile = Path.Combine(FramesDir, Path.GetFileName(frameFile));
-                if (!File.Exists(destFile))
-                {
-                    File.Copy(frameFile, destFile, overwrite: false);
-                    Log.Information("[Workspace] Seeded frame: {Name}", Path.GetFileName(frameFile));
-                }
-            }
-        }
-
-        // Seed station data from bin/config/station/ if workspace station is placeholder
-        SeedStationFromBin();
-    }
-
-    /// <summary>
-    /// Copy station.json from bin/config/station/ if workspace station is empty placeholder.
-    /// </summary>
-    private void SeedStationFromBin()
-    {
-        var wsStation = Path.Combine(StationDir, "station.json");
-        var binStation = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config", "station", "station.json");
-
-        if (!File.Exists(binStation))
-        {
-            Log.Debug("[Workspace] No bin station.json found, skipping station seed");
-            return;
-        }
-
-        // If workspace station.json doesn't exist, copy from bin
-        if (!File.Exists(wsStation))
-        {
-            File.Copy(binStation, wsStation, overwrite: false);
-            Log.Information("[Workspace] Seeded station.json from bin config");
-            return;
-        }
-
-        // If workspace station.json exists but has empty objects, replace with bin version
-        try
-        {
-            var wsContent = File.ReadAllText(wsStation);
-            // Check if it's a placeholder (has "objects": [] or no "Objects" key with data)
-            if (wsContent.Contains("\"objects\": []") || wsContent.Contains("\"Objects\": []") ||
-                (!wsContent.Contains("\"MeshPath\"") && !wsContent.Contains("\"meshPath\"")))
-            {
-                File.Copy(binStation, wsStation, overwrite: true);
-                Log.Information("[Workspace] Replaced placeholder station.json with bin version");
-            }
-            else
-            {
-                Log.Debug("[Workspace] Station.json already has objects, keeping workspace version");
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Warning(ex, "[Workspace] Error checking station.json, keeping existing");
         }
     }
 
-    /// <summary>
-    /// Copy robot from Catalog into R1/Mada/ as the active robot.
-    /// </summary>
+    // ===== Robot Catalog =====
+
     public void ActivateRobotFromCatalog(string catalogId)
     {
         var catalogDir = Path.Combine(CatalogDir, catalogId);
         var srcYaml = Path.Combine(catalogDir, "robot.yaml");
         if (!File.Exists(srcYaml)) return;
 
-        // Copy robot.yaml → R1/Mada/robot.yaml (overwrite — this IS the active robot)
         var destYaml = Path.Combine(MadaDir, "robot.yaml");
         File.Copy(srcYaml, destYaml, overwrite: true);
 
-        // Copy meshes → R1/Mada/meshes/visual/
         var srcMeshes = Path.Combine(catalogDir, "meshes", "visual");
         if (Directory.Exists(srcMeshes))
         {
             var destMeshes = Path.Combine(MadaDir, "meshes", "visual");
-            // Clear old meshes first
             if (Directory.Exists(destMeshes))
             {
                 foreach (var f in Directory.GetFiles(destMeshes))
@@ -283,17 +213,12 @@ public class WorkspaceService
             }
             Directory.CreateDirectory(destMeshes);
             foreach (var file in Directory.GetFiles(srcMeshes))
-            {
                 File.Copy(file, Path.Combine(destMeshes, Path.GetFileName(file)), overwrite: true);
-            }
         }
     }
 
     // ===== Directory Tree =====
 
-    /// <summary>
-    /// Build the directory tree starting from workspace root
-    /// </summary>
     public List<DirectoryNode> GetDirectoryTree()
     {
         var root = new DirectoryNode
@@ -330,21 +255,18 @@ public class WorkspaceService
                 parent.Children.Add(node);
             }
         }
-        catch (UnauthorizedAccessException)
-        {
-            // Skip inaccessible directories
-        }
+        catch (UnauthorizedAccessException) { }
     }
 
-    // ===== Directory Contents =====
+    // ===== Directory Contents (File Folding) =====
 
-    /// <summary>
-    /// Get contents of a directory for the file list panel
-    /// </summary>
     public List<FileItem> GetDirectoryContents(string dirPath, FilterMode filter)
     {
         var items = new List<FileItem>();
         if (!Directory.Exists(dirPath)) return items;
+
+        // Determine if this directory is read-only (System or Mada)
+        bool isReadOnlyDir = IsProtectedDirectory(dirPath);
 
         // Add subdirectories first
         try
@@ -359,6 +281,8 @@ public class WorkspaceService
                     Extension = "",
                     FullPath = subDir,
                     IsDirectory = true,
+                    IsComposite = false,
+                    IsReadOnly = isReadOnlyDir,
                     Type = FileItemType.Folder,
                     Modified = dirInfo.LastWriteTime,
                     ModifiedDisplay = dirInfo.LastWriteTime.ToString("MM/dd HH:mm", CultureInfo.InvariantCulture),
@@ -374,20 +298,26 @@ public class WorkspaceService
             var files = Directory.GetFiles(dirPath).OrderBy(f => Path.GetFileName(f)).ToArray();
 
             if (filter == FilterMode.Module)
-            {
-                AddModuleFilteredFiles(items, files);
-            }
+                AddModuleFilteredFiles(items, files, isReadOnlyDir);
             else
-            {
-                AddDetailFilteredFiles(items, files);
-            }
+                AddDetailFilteredFiles(items, files, isReadOnlyDir);
         }
         catch (UnauthorizedAccessException) { }
 
         return items;
     }
 
-    private void AddModuleFilteredFiles(List<FileItem> items, string[] files)
+    /// <summary>Check if a directory is protected (System or Mada — read-only in Navigator)</summary>
+    private bool IsProtectedDirectory(string dirPath)
+    {
+        var normalizedDir = Path.GetFullPath(dirPath).TrimEnd('\\', '/').ToLowerInvariant();
+        var normalizedSystem = Path.GetFullPath(SystemDir).TrimEnd('\\', '/').ToLowerInvariant();
+        var normalizedMada = Path.GetFullPath(MadaDir).TrimEnd('\\', '/').ToLowerInvariant();
+
+        return normalizedDir.StartsWith(normalizedSystem) || normalizedDir.StartsWith(normalizedMada);
+    }
+
+    private void AddModuleFilteredFiles(List<FileItem> items, string[] files, bool isReadOnly)
     {
         var processed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -396,16 +326,17 @@ public class WorkspaceService
             var ext = Path.GetExtension(file).ToLowerInvariant();
             var nameNoExt = Path.GetFileNameWithoutExtension(file);
 
-            if (ext == ".program")
+            if (ext == ".src")
             {
                 if (processed.Contains(nameNoExt)) continue;
                 processed.Add(nameNoExt);
 
-                // This is a module — group .program + .dat
+                // Module — group .src + .dat as one composite entry
                 var fi = new FileInfo(file);
                 var datPath = Path.ChangeExtension(file, ".dat");
+                bool hasDat = File.Exists(datPath);
                 long totalSize = fi.Length;
-                if (File.Exists(datPath))
+                if (hasDat)
                     totalSize += new FileInfo(datPath).Length;
 
                 var comment = ExtractComment(file);
@@ -418,6 +349,8 @@ public class WorkspaceService
                     Comment = comment,
                     FullPath = file,
                     IsDirectory = false,
+                    IsComposite = hasDat,
+                    IsReadOnly = isReadOnly,
                     Type = FileItemType.Module,
                     SizeBytes = totalSize,
                     SizeDisplay = FormatSize(totalSize),
@@ -427,9 +360,9 @@ public class WorkspaceService
             }
             else if (ext == ".dat")
             {
-                // If corresponding .program exists, this was already grouped
-                var progPath = Path.ChangeExtension(file, ".program");
-                if (File.Exists(progPath)) continue;
+                // Skip if corresponding .src exists (already grouped)
+                var srcPath = Path.ChangeExtension(file, ".src");
+                if (File.Exists(srcPath)) continue;
 
                 // Standalone .dat file
                 var fi = new FileInfo(file);
@@ -440,6 +373,8 @@ public class WorkspaceService
                     Extension = ext,
                     FullPath = file,
                     IsDirectory = false,
+                    IsComposite = false,
+                    IsReadOnly = isReadOnly,
                     Type = FileItemType.DataFile,
                     SizeBytes = fi.Length,
                     SizeDisplay = FormatSize(fi.Length),
@@ -449,7 +384,6 @@ public class WorkspaceService
             }
             else
             {
-                // Other file types
                 var fi = new FileInfo(file);
                 items.Add(new FileItem
                 {
@@ -458,6 +392,8 @@ public class WorkspaceService
                     Extension = ext,
                     FullPath = file,
                     IsDirectory = false,
+                    IsComposite = false,
+                    IsReadOnly = isReadOnly,
                     Type = FileItemType.Other,
                     SizeBytes = fi.Length,
                     SizeDisplay = FormatSize(fi.Length),
@@ -468,7 +404,7 @@ public class WorkspaceService
         }
     }
 
-    private void AddDetailFilteredFiles(List<FileItem> items, string[] files)
+    private void AddDetailFilteredFiles(List<FileItem> items, string[] files, bool isReadOnly)
     {
         foreach (var file in files)
         {
@@ -476,12 +412,12 @@ public class WorkspaceService
             var ext = fi.Extension.ToLowerInvariant();
             var type = ext switch
             {
-                ".program" => FileItemType.ProgramFile,
+                ".src" => FileItemType.SourceFile,
                 ".dat" => FileItemType.DataFile,
                 _ => FileItemType.Other
             };
 
-            var comment = ext == ".program" ? ExtractComment(file) : "";
+            var comment = ext == ".src" ? ExtractComment(file) : "";
 
             items.Add(new FileItem
             {
@@ -491,6 +427,8 @@ public class WorkspaceService
                 Comment = comment,
                 FullPath = file,
                 IsDirectory = false,
+                IsComposite = false,
+                IsReadOnly = isReadOnly,
                 Type = type,
                 SizeBytes = fi.Length,
                 SizeDisplay = FormatSize(fi.Length),
@@ -504,8 +442,7 @@ public class WorkspaceService
 
     public void CreateFolder(string parentPath, string name)
     {
-        var path = Path.Combine(parentPath, name);
-        Directory.CreateDirectory(path);
+        Directory.CreateDirectory(Path.Combine(parentPath, name));
     }
 
     public void DeleteFileOrFolder(string path)
@@ -513,18 +450,19 @@ public class WorkspaceService
         if (Directory.Exists(path))
         {
             Directory.Delete(path, recursive: true);
+            return;
         }
-        else if (File.Exists(path))
+
+        if (!File.Exists(path)) return;
+
+        // If deleting a .src, also delete matching .dat (composite delete)
+        if (Path.GetExtension(path).Equals(".src", StringComparison.OrdinalIgnoreCase))
         {
-            // If deleting a .program, also delete matching .dat
-            if (Path.GetExtension(path).Equals(".program", StringComparison.OrdinalIgnoreCase))
-            {
-                var datPath = Path.ChangeExtension(path, ".dat");
-                if (File.Exists(datPath))
-                    File.Delete(datPath);
-            }
-            File.Delete(path);
+            var datPath = Path.ChangeExtension(path, ".dat");
+            if (File.Exists(datPath))
+                File.Delete(datPath);
         }
+        File.Delete(path);
     }
 
     public void RenameFileOrFolder(string oldPath, string newName)
@@ -532,29 +470,29 @@ public class WorkspaceService
         if (Directory.Exists(oldPath))
         {
             var parent = Path.GetDirectoryName(oldPath)!;
-            var newPath = Path.Combine(parent, newName);
-            Directory.Move(oldPath, newPath);
+            Directory.Move(oldPath, Path.Combine(parent, newName));
+            return;
         }
-        else if (File.Exists(oldPath))
+
+        if (!File.Exists(oldPath)) return;
+
+        var dir = Path.GetDirectoryName(oldPath)!;
+        var ext = Path.GetExtension(oldPath);
+        var oldNameNoExt = Path.GetFileNameWithoutExtension(oldPath);
+        var newNameNoExt = Path.GetFileNameWithoutExtension(newName);
+
+        // Composite rename: rename both .src and .dat
+        if (ext.Equals(".src", StringComparison.OrdinalIgnoreCase))
         {
-            var parent = Path.GetDirectoryName(oldPath)!;
-            var ext = Path.GetExtension(oldPath);
-            var oldNameNoExt = Path.GetFileNameWithoutExtension(oldPath);
+            File.Move(oldPath, Path.Combine(dir, newNameNoExt + ".src"));
 
-            // Rename both .program and .dat if it's a module
-            if (ext.Equals(".program", StringComparison.OrdinalIgnoreCase))
-            {
-                var newNameNoExt = Path.GetFileNameWithoutExtension(newName);
-                File.Move(oldPath, Path.Combine(parent, newNameNoExt + ".program"));
-
-                var oldDat = Path.Combine(parent, oldNameNoExt + ".dat");
-                if (File.Exists(oldDat))
-                    File.Move(oldDat, Path.Combine(parent, newNameNoExt + ".dat"));
-            }
-            else
-            {
-                File.Move(oldPath, Path.Combine(parent, newName));
-            }
+            var oldDat = Path.Combine(dir, oldNameNoExt + ".dat");
+            if (File.Exists(oldDat))
+                File.Move(oldDat, Path.Combine(dir, newNameNoExt + ".dat"));
+        }
+        else
+        {
+            File.Move(oldPath, Path.Combine(dir, newName));
         }
     }
 
@@ -563,24 +501,42 @@ public class WorkspaceService
         if (Directory.Exists(sourcePath))
         {
             var dirName = Path.GetFileName(sourcePath);
-            var destPath = Path.Combine(destDir, dirName);
-            CopyDirectoryRecursive(sourcePath, destPath);
+            CopyDirectoryRecursive(sourcePath, Path.Combine(destDir, dirName));
+            return;
         }
-        else if (File.Exists(sourcePath))
-        {
-            var fileName = Path.GetFileName(sourcePath);
-            File.Copy(sourcePath, Path.Combine(destDir, fileName), overwrite: false);
 
-            // Also copy .dat if copying a .program
-            if (Path.GetExtension(sourcePath).Equals(".program", StringComparison.OrdinalIgnoreCase))
-            {
-                var datPath = Path.ChangeExtension(sourcePath, ".dat");
-                if (File.Exists(datPath))
-                {
-                    var datFileName = Path.GetFileName(datPath);
-                    File.Copy(datPath, Path.Combine(destDir, datFileName), overwrite: false);
-                }
-            }
+        if (!File.Exists(sourcePath)) return;
+
+        File.Copy(sourcePath, Path.Combine(destDir, Path.GetFileName(sourcePath)), overwrite: false);
+
+        // Composite copy: also copy .dat if copying .src
+        if (Path.GetExtension(sourcePath).Equals(".src", StringComparison.OrdinalIgnoreCase))
+        {
+            var datPath = Path.ChangeExtension(sourcePath, ".dat");
+            if (File.Exists(datPath))
+                File.Copy(datPath, Path.Combine(destDir, Path.GetFileName(datPath)), overwrite: false);
+        }
+    }
+
+    public void MoveFileOrFolder(string sourcePath, string destDir)
+    {
+        if (Directory.Exists(sourcePath))
+        {
+            var dirName = Path.GetFileName(sourcePath);
+            Directory.Move(sourcePath, Path.Combine(destDir, dirName));
+            return;
+        }
+
+        if (!File.Exists(sourcePath)) return;
+
+        File.Move(sourcePath, Path.Combine(destDir, Path.GetFileName(sourcePath)));
+
+        // Composite move: also move .dat if moving .src
+        if (Path.GetExtension(sourcePath).Equals(".src", StringComparison.OrdinalIgnoreCase))
+        {
+            var datPath = Path.ChangeExtension(sourcePath, ".dat");
+            if (File.Exists(datPath))
+                File.Move(datPath, Path.Combine(destDir, Path.GetFileName(datPath)));
         }
     }
 
@@ -589,33 +545,59 @@ public class WorkspaceService
         Directory.CreateDirectory(dest);
 
         foreach (var file in Directory.GetFiles(source))
-        {
             File.Copy(file, Path.Combine(dest, Path.GetFileName(file)), overwrite: false);
-        }
 
         foreach (var subDir in Directory.GetDirectories(source))
-        {
             CopyDirectoryRecursive(subDir, Path.Combine(dest, Path.GetFileName(subDir)));
+    }
+
+    // ===== Program Operations (Template System) =====
+
+    public void CreateProgramFromTemplate(string dirPath, string name, string comment = "")
+    {
+        var srcTemplatePath = Path.Combine(TemplatesDir, "Module.src");
+        var datTemplatePath = Path.Combine(TemplatesDir, "Module.dat");
+
+        string srcContent;
+        string datContent;
+
+        if (File.Exists(srcTemplatePath) && File.Exists(datTemplatePath))
+        {
+            srcContent = File.ReadAllText(srcTemplatePath)
+                .Replace("{NAME}", name)
+                .Replace("{COMMENT}", string.IsNullOrWhiteSpace(comment) ? "New program" : comment);
+            datContent = File.ReadAllText(datTemplatePath)
+                .Replace("{NAME}", name);
+        }
+        else
+        {
+            // Fallback: generate inline if templates missing
+            srcContent = GenerateDefaultSrc(name, comment);
+            datContent = GenerateDefaultDat(name);
+        }
+
+        File.WriteAllText(Path.Combine(dirPath, name + ".src"), srcContent);
+        File.WriteAllText(Path.Combine(dirPath, name + ".dat"), datContent);
+        Log.Information("[Workspace] Created program from template: {Name}", name);
+    }
+
+    // Keep legacy CreateProgram for backward compatibility
+    public void CreateProgram(string dirPath, string name, string? template = null)
+    {
+        if (template != null)
+        {
+            File.WriteAllText(Path.Combine(dirPath, name + ".src"), template);
+            File.WriteAllText(Path.Combine(dirPath, name + ".dat"), GenerateDefaultDat(name));
+        }
+        else
+        {
+            CreateProgramFromTemplate(dirPath, name);
         }
     }
 
-    // ===== Program Operations =====
-
-    public void CreateProgram(string dirPath, string name, string? template = null)
+    public string LoadProgramSource(string path)
     {
-        var programPath = Path.Combine(dirPath, name + ".program");
-        var datPath = Path.Combine(dirPath, name + ".dat");
-
-        var programContent = template ?? GenerateDefaultProgram(name);
-        var datContent = GenerateDefaultDat(name);
-
-        File.WriteAllText(programPath, programContent);
-        File.WriteAllText(datPath, datContent);
-    }
-
-    public string LoadProgramSource(string programPath)
-    {
-        return File.Exists(programPath) ? File.ReadAllText(programPath) : "";
+        return File.Exists(path) ? File.ReadAllText(path) : "";
     }
 
     public string LoadProgramData(string datPath)
@@ -635,12 +617,12 @@ public class WorkspaceService
 
     // ===== Helpers =====
 
-    private static string ExtractComment(string programPath)
+    private static string ExtractComment(string srcPath)
     {
         try
         {
-            using var reader = new StreamReader(programPath);
-            for (int i = 0; i < 10; i++) // Check first 10 lines
+            using var reader = new StreamReader(srcPath);
+            for (int i = 0; i < 10; i++)
             {
                 var line = reader.ReadLine();
                 if (line == null) break;
@@ -662,41 +644,21 @@ public class WorkspaceService
         return $"{bytes / (1024.0 * 1024.0):F1}M";
     }
 
-    private static string GenerateDefaultProgram(string name)
+    private static string GenerateDefaultSrc(string name, string comment = "")
     {
-        return $"""
-            &ACCESS RV
-            &REL 1
-            &COMMENT New program
-            &USER default
-
-            DEF {name}()
-              ;FOLD INI
-                ;FOLD BASISTECH INI
-                  BAS(#INITMOV, 0)
-                ;ENDFOLD
-              ;ENDFOLD
-
-              PTP HOME Vel=100% DEFAULT
-
-              ; TODO: Add motion commands here
-
-              PTP HOME Vel=100% DEFAULT
-
-            END
-            """;
+        var cmt = string.IsNullOrWhiteSpace(comment) ? "New program" : comment;
+        return $"&ACCESS RV\n&REL 1\n&COMMENT {cmt}\n\nDEF {name}()\n  ;FOLD INI\n    ;FOLD BASISTECH INI\n      BAS(#INITMOV, 0)\n    ;ENDFOLD\n  ;ENDFOLD\n\n  ;FOLD PTP HOME Vel=100% DEFAULT\n    PTP HOME Vel=100% DEFAULT\n  ;ENDFOLD\n\nEND\n";
     }
 
     private static string GenerateDefaultDat(string name)
     {
-        return $$"""
-            DEFDAT {{name}}
-              ;FOLD EXTERNAL DECLARATIONS; %{PE}
-              ;ENDFOLD
+        return $"DEFDAT {name}\n  ;FOLD EXTERNAL DECLARATIONS; %{{PE}}\n  ;ENDFOLD\n\n  DECL E6POS HOME={{A1 0.0, A2 -90.0, A3 90.0, A4 0.0, A5 0.0, A6 0.0}}\n\nENDDAT\n";
+    }
 
-              DECL E6POS HOME={A1 0.0, A2 -90.0, A3 90.0, A4 0.0, A5 0.0, A6 0.0}
+    // ===== Legacy compatibility: SeedCatalogFromSource =====
 
-            ENDDAT
-            """;
+    public void SeedCatalogFromSource()
+    {
+        SeedFromLegacyWorkspace();
     }
 }
