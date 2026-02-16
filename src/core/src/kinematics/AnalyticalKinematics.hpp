@@ -241,6 +241,11 @@ private:
     static Eigen::Matrix4d dhTransform(double theta, double d, double a, double alpha);
 
     /**
+     * Internal IK computation with optional reference joints for singularity handling.
+     */
+    IKSolution computeIKInternal(const Pose& target, const JointAngles* q_ref) const;
+
+    /**
      * Convert URDF joint angles to DH theta values
      */
     std::array<double, NUM_JOINTS> urdfToDH(const JointAngles& q) const;
@@ -263,10 +268,17 @@ private:
      * Solve orientation sub-problem (theta4, theta5, theta6)
      * from R_36 rotation matrix.
      *
-     * Returns 0-2 solutions (wrist flip/no-flip)
+     * Returns 0-2 solutions (wrist flip/no-flip).
+     * At wrist singularity (theta5 ≈ 0 or π), generates multiple
+     * candidate solutions with different theta4 values to allow
+     * computeIKNearest to select the smoothest one.
+     *
+     * @param th4_ref Optional: reference theta4 value for singularity handling.
+     *        When provided, generates solutions around this value.
      */
     std::vector<std::array<double, 3>> solveOrientation(
-        const Eigen::Matrix3d& R_36) const;
+        const Eigen::Matrix3d& R_36,
+        std::optional<double> th4_ref = std::nullopt) const;
 };
 
 } // namespace analytical

@@ -338,7 +338,8 @@ std::vector<std::array<double, 3>> AnalyticalKinematics::solvePosition(
 // ============================================================================
 
 std::vector<std::array<double, 3>> AnalyticalKinematics::solveOrientation(
-    const Eigen::Matrix3d& R_36) const
+    const Eigen::Matrix3d& R_36,
+    std::optional<double> th4_ref) const
 {
     // DH chain: R_36 = Rz(θ4) * Rx(+π/2) * Rz(θ5) * Rx(-π/2) * Rz(θ6)
     //         = Rz(θ4) * Ry(-θ5) * Rz(θ6)
@@ -369,22 +370,47 @@ std::vector<std::array<double, 3>> AnalyticalKinematics::solveOrientation(
     if (s5 < 1e-6) {
         // ---- Wrist Singularity: θ5 ≈ 0 or π ----
         // Only (θ4 + θ6) or (θ4 - θ6) is determinable.
-        // Convention: set θ4 = 0, solve θ6 from remaining.
-        double th5, th4, th6;
+        // Instead of forcing θ4 = 0 (which causes joint discontinuity),
+        // generate multiple candidate solutions so computeIKNearest
+        // can pick the one closest to current configuration.
+
+        double th5;
+        double total;  // the determinable combined angle
 
         if (r33 > 0) {
             // t5_eff ≈ 0, so θ5_dh ≈ 0 → R_36 ≈ Rz(θ4 + θ6)
             th5 = 0.0;
-            th4 = 0.0;
-            th6 = std::atan2(R_36(1, 0), R_36(0, 0));
+            total = std::atan2(R_36(1, 0), R_36(0, 0));  // θ4 + θ6
         } else {
             // t5_eff ≈ π, so θ5_dh ≈ -π
             th5 = -PI;
-            th4 = 0.0;
-            th6 = std::atan2(-R_36(1, 0), -R_36(0, 0));
+            total = std::atan2(-R_36(1, 0), -R_36(0, 0));  // θ4 - θ6
         }
 
-        results.push_back({th4, th5, th6});
+        if (th4_ref.has_value()) {
+            // Use reference θ4 for continuity: keep θ4 = ref, solve θ6
+            double th4 = th4_ref.value();
+            double th6 = (r33 > 0) ? (total - th4) : (total - th4);
+            // For th5=-π case: total = th4 - th6, so th6 = th4 - total
+            if (r33 <= 0) {
+                th6 = th4 - total;
+            }
+            results.push_back({th4, th5, th6});
+        } else {
+            // No reference: generate candidate solutions at multiple θ4 values
+            // so computeIKNearest can choose the nearest one
+            double candidates[] = {0.0, PI / 2, -PI / 2, PI, -PI};
+            for (double th4 : candidates) {
+                double th6;
+                if (r33 > 0) {
+                    th6 = total - th4;
+                } else {
+                    th6 = th4 - total;
+                }
+                results.push_back({th4, th5, th6});
+            }
+        }
+
         return results;
     }
 
@@ -419,6 +445,11 @@ std::vector<std::array<double, 3>> AnalyticalKinematics::solveOrientation(
 // ============================================================================
 
 IKSolution AnalyticalKinematics::computeIK(const Pose& target) const {
+    return computeIKInternal(target, nullptr);
+}
+
+IKSolution AnalyticalKinematics::computeIKInternal(
+    const Pose& target, const JointAngles* q_ref) const {
     IKSolution result;
 
     const double d6 = dh_[5].d;  // 100mm (tool flange)
@@ -461,8 +492,14 @@ IKSolution AnalyticalKinematics::computeIK(const Pose& target) const {
         // R_06 = target rotation (in DH convention)
         Eigen::Matrix3d R_36 = R_03.transpose() * R_target;
 
-        // Solve orientation
-        auto ori_solutions = solveOrientation(R_36);
+        // Solve orientation — pass th4 reference for singularity continuity
+        std::optional<double> th4_ref_dh = std::nullopt;
+        if (q_ref) {
+            // Convert q_ref (URDF) to DH for joint 4
+            auto dh_ref = urdfToDH(*q_ref);
+            th4_ref_dh = dh_ref[3];
+        }
+        auto ori_solutions = solveOrientation(R_36, th4_ref_dh);
 
         for (const auto& ori_sol : ori_solutions) {
             double th4_dh = ori_sol[0];
@@ -499,7 +536,7 @@ IKSolution AnalyticalKinematics::computeIK(const Pose& target) const {
 std::optional<JointAngles> AnalyticalKinematics::computeIKNearest(
     const Pose& target, const JointAngles& q_ref) const
 {
-    auto ik = computeIK(target);
+    auto ik = computeIKInternal(target, &q_ref);
     if (!ik.hasSolution()) {
         return std::nullopt;
     }

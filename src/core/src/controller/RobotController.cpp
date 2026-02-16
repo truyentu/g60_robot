@@ -503,32 +503,7 @@ bool RobotController::loadProgram(const std::string& source) {
             for (int i = 0; i < 6; i++) currentJoints[i] = currentJointsDeg[i];
 
             // 6. Compute IK for target
-            // Try with current joints as seed first
             auto ikResult = m_jogController->computeIK(targetPose, currentJoints);
-
-            // For LIN/CIRC: if first IK succeeded, verify the configuration is
-            // geometrically sensible (J1 should point toward target XY).
-            // If not, retry with J1 seeded from atan2(ty, tx).
-            bool isLinearMotion = (motion.type != "PTP" && motion.type != "PTP_REL");
-            if (isLinearMotion && ikResult.has_value()) {
-                double j1Result = ikResult->angles[0] * 180.0 / M_PI;
-                double j1Expected = std::atan2(ty, tx) * 180.0 / M_PI;
-                double j1Diff = std::abs(j1Result - j1Expected);
-                // Normalize to 0-180
-                if (j1Diff > 180.0) j1Diff = 360.0 - j1Diff;
-
-                if (j1Diff > 45.0) {
-                    // J1 is far from expected direction - try with better seed
-                    auto altSeed = currentJoints;
-                    altSeed[0] = j1Expected;
-                    auto altResult = m_jogController->computeIK(targetPose, altSeed);
-                    if (altResult.has_value()) {
-                        LOG_INFO("Motion {}: J1 re-seeded {:.1f} -> {:.1f} (expected {:.1f})",
-                            motion.type, j1Result, altResult->angles[0] * 180.0 / M_PI, j1Expected);
-                        ikResult = altResult;
-                    }
-                }
-            }
             if (!ikResult.has_value()) {
                 LOG_WARN("Motion {}: IK failed for point '{}' (unreachable)", motion.type, pointName);
                 std::this_thread::sleep_for(std::chrono::milliseconds(200));
@@ -623,10 +598,7 @@ bool RobotController::loadProgram(const std::string& source) {
                 double startX = linStartTcp[0], startY = linStartTcp[1], startZ = linStartTcp[2];
                 double startRx = linStartTcp[3], startRy = linStartTcp[4], startRz = linStartTcp[5];
 
-                // Use target IK joints (computed above) to guide seed interpolation.
-                // This prevents the IK solver from getting stuck in wrong configuration
-                // by giving it a seed that's a blend between current and target joints.
-                auto prevJoints = currentJoints;
+                auto prevJoints = currentJoints;  // seed chain for IK continuity
 
                 LOG_INFO("LIN start TCP=[{:.1f},{:.1f},{:.1f}] ori=[{:.1f},{:.1f},{:.1f}] -> target TCP=[{:.1f},{:.1f},{:.1f}] ori=[{:.1f},{:.1f},{:.1f}]",
                     startX, startY, startZ, startRx, startRy, startRz,
@@ -649,14 +621,10 @@ bool RobotController::loadProgram(const std::string& source) {
                     interpPose[4] = startRy + s * (ry_deg - startRy);
                     interpPose[5] = startRz + s * (rz_deg - startRz);
 
-                    // Seed = blend of previous result and target joints
-                    // This guides the solver toward the correct configuration
-                    std::array<double, 6> blendSeed;
-                    for (int i = 0; i < 6; i++) {
-                        blendSeed[i] = prevJoints[i] + s * (targetJointsDeg[i] - prevJoints[i]);
-                    }
-
-                    auto stepIK = m_jogController->computeIK(interpPose, blendSeed);
+                    // Pure temporal continuity: use previous IK result as seed.
+                    // This is the standard approach (MoveIt, industrial controllers)
+                    // to maintain configuration consistency along Cartesian paths.
+                    auto stepIK = m_jogController->computeIK(interpPose, prevJoints);
                     if (stepIK.has_value()) {
                         std::array<double, 6> stepJointsDeg;
                         for (int i = 0; i < 6; i++) {
