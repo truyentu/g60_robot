@@ -97,7 +97,5 @@ src/config/robots/*/robot_dh_backup.yaml
 src/config/robots/*/robot_dh_only.yaml.bak
 src/config/robots/*/robot_urdf.yaml
 
-# Workspace — track structure, ignore runtime data
-workspace/Log/
-workspace/R1/Mada/meshes/
-workspace/Catalog/*/meshes/
+# Workspace — runtime data, not source
+workspace/

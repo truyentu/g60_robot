@@ -64,6 +64,28 @@ void Executor::loadProgram(const ProgramStmt& program) {
                     }
                 }
             }
+            // Also handle DECL with aggregate initializer (point types)
+            else if constexpr (std::is_same_v<T, DeclareStmt>) {
+                std::string typeUpper = s.type;
+                std::transform(typeUpper.begin(), typeUpper.end(), typeUpper.begin(), ::toupper);
+                if ((typeUpper == "E6POS" || typeUpper == "POS" || typeUpper == "FRAME" ||
+                     typeUpper == "E6AXIS" || typeUpper == "AXIS") && s.initializer) {
+                    // Try to extract values from AggregateExpr initializer
+                    if (auto* agg = std::get_if<AggregateExpr>(s.initializer.get())) {
+                        std::vector<double> values;
+                        for (const auto& [key, valExpr] : agg->fields) {
+                            values.push_back(evaluateExpression(valExpr));
+                        }
+                        if (!values.empty()) {
+                            m_points[s.name] = values;
+                            LOG_DEBUG("DECL {} {} = [{}, {}, {}, ...]", s.type, s.name,
+                                values.size() > 0 ? values[0] : 0,
+                                values.size() > 1 ? values[1] : 0,
+                                values.size() > 2 ? values[2] : 0);
+                        }
+                    }
+                }
+            }
         }, *constDecl);
     }
 

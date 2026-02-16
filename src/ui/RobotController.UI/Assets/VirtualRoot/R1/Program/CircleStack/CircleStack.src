@@ -1,0 +1,140 @@
+DEF CircleStack()
+  $TOOL = TOOL_DATA[1]
+  $BASE = BASE_DATA[0]
+
+  ; Go to home
+  $VEL.CP = 0.5
+  PTP pHome
+
+  ; Approach above circle center
+  LIN pApproach
+
+  ; ============================
+  ; Circle 1 at Z=400
+  ; ============================
+  $VEL.CP = 0.05
+  LIN c1p1
+  LIN c1p2
+  LIN c1p3
+  LIN c1p4
+  LIN c1p5
+  LIN c1p6
+  LIN c1p7
+  LIN c1p8
+  LIN c1p9
+  LIN c1p10
+  LIN c1p11
+  LIN c1p12
+  LIN c1p1
+
+  ; Lift to Circle 2 at Z=450
+  $VEL.CP = 0.2
+  LIN c2p1
+
+  ; ============================
+  ; Circle 2 at Z=450
+  ; ============================
+  $VEL.CP = 0.05
+  LIN c2p2
+  LIN c2p3
+  LIN c2p4
+  LIN c2p5
+  LIN c2p6
+  LIN c2p7
+  LIN c2p8
+  LIN c2p9
+  LIN c2p10
+  LIN c2p11
+  LIN c2p12
+  LIN c2p1
+
+  ; Lift to Circle 3 at Z=500
+  $VEL.CP = 0.2
+  LIN c3p1
+
+  ; ============================
+  ; Circle 3 at Z=500
+  ; ============================
+  $VEL.CP = 0.05
+  LIN c3p2
+  LIN c3p3
+  LIN c3p4
+  LIN c3p5
+  LIN c3p6
+  LIN c3p7
+  LIN c3p8
+  LIN c3p9
+  LIN c3p10
+  LIN c3p11
+  LIN c3p12
+  LIN c3p1
+
+  ; Lift to Circle 4 at Z=550
+  $VEL.CP = 0.2
+  LIN c4p1
+
+  ; ============================
+  ; Circle 4 at Z=550
+  ; ============================
+  $VEL.CP = 0.05
+  LIN c4p2
+  LIN c4p3
+  LIN c4p4
+  LIN c4p5
+  LIN c4p6
+  LIN c4p7
+  LIN c4p8
+  LIN c4p9
+  LIN c4p10
+  LIN c4p11
+  LIN c4p12
+  LIN c4p1
+
+  ; Lift to Circle 5 at Z=600
+  $VEL.CP = 0.2
+  LIN c5p1
+
+  ; ============================
+  ; Circle 5 at Z=600
+  ; ============================
+  $VEL.CP = 0.05
+  LIN c5p2
+  LIN c5p3
+  LIN c5p4
+  LIN c5p5
+  LIN c5p6
+  LIN c5p7
+  LIN c5p8
+  LIN c5p9
+  LIN c5p10
+  LIN c5p11
+  LIN c5p12
+  LIN c5p1
+
+  ; Lift to Circle 6 at Z=650
+  $VEL.CP = 0.2
+  LIN c6p1
+
+  ; ============================
+  ; Circle 6 at Z=650
+  ; ============================
+  $VEL.CP = 0.05
+  LIN c6p2
+  LIN c6p3
+  LIN c6p4
+  LIN c6p5
+  LIN c6p6
+  LIN c6p7
+  LIN c6p8
+  LIN c6p9
+  LIN c6p10
+  LIN c6p11
+  LIN c6p12
+  LIN c6p1
+
+  ; Retract
+  $VEL.CP = 0.5
+  LIN pApproach
+  PTP pHome
+
+END

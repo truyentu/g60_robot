@@ -11,8 +11,37 @@ using Serilog;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Text.RegularExpressions;
+using System.Windows.Media.Media3D;
 
 namespace RobotController.UI.ViewModels;
+
+/// <summary>
+/// A declaration parsed from a .dat file (DECL type name = value)
+/// </summary>
+public class DatDeclaration
+{
+    public string Type { get; set; } = "";   // E6POS, REAL, INT, BOOL, etc.
+    public string Name { get; set; } = "";
+    public string RawValue { get; set; } = ""; // The full value string ({X 100, ...} or "10.0")
+}
+
+/// <summary>
+/// Variable info for the Watch panel
+/// </summary>
+public partial class WatchVariable : ObservableObject
+{
+    [ObservableProperty]
+    private string _name = "";
+
+    [ObservableProperty]
+    private string _type = "";  // REAL, INT, E6POS, SYSTEM
+
+    [ObservableProperty]
+    private string _value = "";
+
+    [ObservableProperty]
+    private bool _isChanged;  // Flash highlight when value changes
+}
 
 /// <summary>
 /// Point information for display
@@ -83,6 +112,8 @@ END";
     private string _programName = "WeldProgram";
 
     private string? _currentFilePath;
+    private string? _currentDatPath;
+    private List<DatDeclaration> _datDeclarations = new();
 
     [ObservableProperty]
     private int _currentLine = 0;
@@ -196,6 +227,18 @@ END";
             var cache = RegexHelper.BuildCoordinateCache(ProgramSource);
             var hasPos = cache.TryGetValue(targetName, out var pos);
 
+            // Fallback: check Points collection (.dat file data)
+            if (!hasPos)
+            {
+                var point = Points.FirstOrDefault(p =>
+                    p.Name.Equals(targetName, StringComparison.OrdinalIgnoreCase));
+                if (point != null)
+                {
+                    pos = (point.X, point.Y, point.Z);
+                    hasPos = true;
+                }
+            }
+
             // Send message to viewport for 3D highlighting
             WeakReferenceMessenger.Default.Send(new EditorCaretOnMotionLineMessage(
                 new EditorMotionLineInfo
@@ -258,20 +301,43 @@ END";
             var newTarget = RobTarget.FromPose(CaretTargetName, tcpPose);
             var newValue = newTarget.ToKrlString();
 
-            // 4. Find the variable definition in the document text
-            var definition = RegexHelper.FindVariableDefinition(ProgramSource, CaretTargetName);
-            if (definition == null)
+            // 4. Try to update in .dat declarations first (preferred after .dat split)
+            var datDecl = _datDeclarations.FirstOrDefault(d =>
+                d.Name.Equals(CaretTargetName, StringComparison.OrdinalIgnoreCase) && IsPointType(d.Type));
+
+            if (datDecl != null)
             {
-                TouchUpStatus = $"Definition for '{CaretTargetName}' not found in document";
-                return;
+                // Update _datDeclarations RawValue
+                datDecl.RawValue = newValue;
+
+                // Update Points collection
+                var point = Points.FirstOrDefault(p =>
+                    p.Name.Equals(CaretTargetName, StringComparison.OrdinalIgnoreCase));
+                if (point != null)
+                {
+                    point.X = tcpPose[0]; point.Y = tcpPose[1]; point.Z = tcpPose[2];
+                    point.Rx = tcpPose[3]; point.Ry = tcpPose[4]; point.Rz = tcpPose[5];
+                }
+
+                SaveDatFile();
+                await _ipcClient.SetPointAsync(CaretTargetName, tcpPose);
+            }
+            else
+            {
+                // Fallback: try to find in ProgramSource (legacy inline DECL)
+                var definition = RegexHelper.FindVariableDefinition(ProgramSource, CaretTargetName);
+                if (definition == null)
+                {
+                    TouchUpStatus = $"Definition for '{CaretTargetName}' not found";
+                    return;
+                }
+
+                var (offset, length, oldValue) = definition.Value;
+                var newSource = ProgramSource.Remove(offset, length).Insert(offset, newValue);
+                ProgramSource = newSource;
             }
 
-            // 5. Replace the value in the document
-            var (offset, length, oldValue) = definition.Value;
-            var newSource = ProgramSource.Remove(offset, length).Insert(offset, newValue);
-            ProgramSource = newSource;
-
-            // 6. Notify viewport that a point changed
+            // 5. Notify viewport that a point changed
             WeakReferenceMessenger.Default.Send(new PointDefinitionChangedMessage(CaretTargetName));
 
             var statusMsg = $"Updated {CaretTargetName}: ({tcpPose[0]:F1}, {tcpPose[1]:F1}, {tcpPose[2]:F1})";
@@ -315,6 +381,16 @@ END";
     partial void OnIsOnMotionLineChanged(bool value) => ModifyPositionCommand.NotifyCanExecuteChanged();
     partial void OnCaretTargetNameChanged(string value) => ModifyPositionCommand.NotifyCanExecuteChanged();
 
+    partial void OnProgramSourceChanged(string value)
+    {
+        // Auto-clear path preview when program source changes
+        if (IsPathPreviewVisible)
+        {
+            _viewportService.ClearPathPreview();
+            IsPathPreviewVisible = false;
+        }
+    }
+
     // ========================================================================
     // Viewport -> Editor: Scroll to line on 3D segment click
     // ========================================================================
@@ -343,7 +419,9 @@ END";
     {
         try
         {
-            var response = await _ipcClient.LoadProgramAsync(ProgramSource);
+            // Send merged source (.dat DECL + .src) to C++ Core
+            var mergedSource = GetMergedSource();
+            var response = await _ipcClient.LoadProgramAsync(mergedSource);
             Errors.Clear();
 
             if (response == null)
@@ -374,6 +452,11 @@ END";
     [RelayCommand]
     private async Task RunProgramAsync()
     {
+        // Auto-enable TCP trace: clear previous trace and start recording
+        _viewportService.ClearTcpTrace();
+        _viewportService.SetTcpTraceEnabled(true);
+        WeakReferenceMessenger.Default.Send(new TcpTraceAutoToggleMessage(true));
+
         if (_ipcClient.IsConnected)
         {
             await LoadProgramAsync();
@@ -425,6 +508,10 @@ END";
                 CurrentLine = response.CurrentLine;
                 if (response.State == "COMPLETED" || response.State == "ERROR")
                     IsRunning = false;
+
+                // Auto-refresh watch variables after step
+                if (IsWatchPanelVisible)
+                    _ = RefreshVariablesAsync();
             }
         }
         else
@@ -711,6 +798,7 @@ END";
         ProgramSource = File.ReadAllText(srcPath);
         ProgramName = Path.GetFileNameWithoutExtension(srcPath);
         Errors.Clear();
+        LoadDatFile(srcPath);
         ShowToast($"Opened: {Path.GetFileName(srcPath)}");
         Log.Information("Opened from Navigator: {Path}", srcPath);
     }
@@ -726,6 +814,7 @@ END";
         ProgramSource = File.ReadAllText(srcPath);
         ProgramName = Path.GetFileNameWithoutExtension(srcPath);
         Errors.Clear();
+        LoadDatFile(srcPath);
 
         // Editing mode: editable, no execution pointer
         IsReadOnly = false;
@@ -747,6 +836,7 @@ END";
         ProgramSource = File.ReadAllText(srcPath);
         ProgramName = Path.GetFileNameWithoutExtension(srcPath);
         Errors.Clear();
+        LoadDatFile(srcPath);
 
         // Execution mode: locked, show program pointer
         IsReadOnly = true;
@@ -855,6 +945,219 @@ END";
         }
     }
 
+    // ========================================================================
+    // .DAT File Loading & Saving
+    // ========================================================================
+
+    /// <summary>
+    /// Load and parse the .dat file matching a .src file path.
+    /// Extracts DECL statements and populates the Points collection.
+    /// </summary>
+    private void LoadDatFile(string srcPath)
+    {
+        _currentDatPath = Path.ChangeExtension(srcPath, ".dat");
+        _datDeclarations.Clear();
+        Points.Clear();
+
+        if (!File.Exists(_currentDatPath))
+        {
+            Log.Debug("No .dat file found for {Src}", srcPath);
+            return;
+        }
+
+        try
+        {
+            var datContent = File.ReadAllText(_currentDatPath);
+            ParseDatContent(datContent);
+            Log.Information("Loaded .dat file: {Path} ({Count} declarations)", _currentDatPath, _datDeclarations.Count);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to load .dat file: {Path}", _currentDatPath);
+        }
+    }
+
+    /// <summary>
+    /// Parse DECL statements from .dat file content.
+    /// Populates _datDeclarations and Points collection.
+    /// </summary>
+    private void ParseDatContent(string datContent)
+    {
+        // Match: DECL TYPE NAME = VALUE (where VALUE can be an aggregate or scalar)
+        var declRegex = new Regex(
+            @"^\s*DECL\s+(\w+)\s+(\w+)\s*=\s*(.+)$",
+            RegexOptions.Multiline | RegexOptions.IgnoreCase);
+
+        foreach (Match match in declRegex.Matches(datContent))
+        {
+            var type = match.Groups[1].Value.ToUpperInvariant();
+            var name = match.Groups[2].Value;
+            var rawValue = match.Groups[3].Value.Trim();
+
+            _datDeclarations.Add(new DatDeclaration
+            {
+                Type = type,
+                Name = name,
+                RawValue = rawValue
+            });
+
+            // Extract point coordinates for E6POS/POS/FRAME types
+            if (type is "E6POS" or "POS" or "FRAME" or "E6AXIS" or "AXIS")
+            {
+                var point = ParsePointFromAggregate(name, type, rawValue);
+                if (point != null)
+                    Points.Add(point);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Parse a KRL aggregate string into a PointInfo.
+    /// Handles both Cartesian {X, Y, Z, A, B, C} and Joint {A1..A6} formats.
+    /// </summary>
+    private static PointInfo? ParsePointFromAggregate(string name, string type, string rawValue)
+    {
+        var fields = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        var fieldRegex = new Regex(@"(\w+)\s+([-\d.eE+]+)");
+
+        foreach (Match fm in fieldRegex.Matches(rawValue))
+        {
+            if (double.TryParse(fm.Groups[2].Value,
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var val))
+            {
+                fields[fm.Groups[1].Value] = val;
+            }
+        }
+
+        if (fields.Count == 0) return null;
+
+        if (type is "E6AXIS" or "AXIS")
+        {
+            // Joint angles: A1..A6 → map to X=A1, Y=A2, Z=A3, Rx=A4, Ry=A5, Rz=A6
+            return new PointInfo
+            {
+                Name = name,
+                X = fields.GetValueOrDefault("A1"),
+                Y = fields.GetValueOrDefault("A2"),
+                Z = fields.GetValueOrDefault("A3"),
+                Rx = fields.GetValueOrDefault("A4"),
+                Ry = fields.GetValueOrDefault("A5"),
+                Rz = fields.GetValueOrDefault("A6")
+            };
+        }
+
+        // Cartesian: X, Y, Z, A, B, C
+        return new PointInfo
+        {
+            Name = name,
+            X = fields.GetValueOrDefault("X"),
+            Y = fields.GetValueOrDefault("Y"),
+            Z = fields.GetValueOrDefault("Z"),
+            Rx = fields.GetValueOrDefault("A"),
+            Ry = fields.GetValueOrDefault("B"),
+            Rz = fields.GetValueOrDefault("C")
+        };
+    }
+
+    /// <summary>
+    /// Build merged source: DECL lines from .dat prepended to .src content.
+    /// Used when sending LOAD_PROGRAM to C++ Core.
+    /// </summary>
+    public string GetMergedSource()
+    {
+        if (_datDeclarations.Count == 0)
+            return ProgramSource;
+
+        var declLines = new System.Text.StringBuilder();
+        foreach (var decl in _datDeclarations)
+        {
+            // Use CONST for point types so C++ Executor extracts coordinates into m_points
+            var keyword = IsPointType(decl.Type) ? "CONST" : "DECL";
+            declLines.AppendLine($"{keyword} {decl.Type} {decl.Name} = {decl.RawValue}");
+        }
+        declLines.AppendLine();
+
+        return declLines.ToString() + ProgramSource;
+    }
+
+    private static bool IsPointType(string type)
+    {
+        return type.Equals("E6POS", StringComparison.OrdinalIgnoreCase) ||
+               type.Equals("E6AXIS", StringComparison.OrdinalIgnoreCase) ||
+               type.Equals("POS", StringComparison.OrdinalIgnoreCase) ||
+               type.Equals("AXIS", StringComparison.OrdinalIgnoreCase) ||
+               type.Equals("FRAME", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Save the current Points collection + other DECL back to the .dat file.
+    /// </summary>
+    private void SaveDatFile()
+    {
+        if (string.IsNullOrEmpty(_currentDatPath)) return;
+
+        try
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"DEFDAT {ProgramName}");
+            sb.AppendLine("  ;FOLD EXTERNAL DECLARATIONS; %{PE}");
+            sb.AppendLine("  ;ENDFOLD");
+            sb.AppendLine();
+
+            // Write point declarations (E6POS/E6AXIS) from Points collection
+            foreach (var point in Points)
+            {
+                // Determine if this was originally an E6AXIS type
+                var originalDecl = _datDeclarations.FirstOrDefault(
+                    d => d.Name.Equals(point.Name, StringComparison.OrdinalIgnoreCase));
+                var type = originalDecl?.Type ?? "E6POS";
+
+                if (type is "E6AXIS" or "AXIS")
+                {
+                    sb.AppendLine($"  DECL {type} {point.Name}={{A1 {point.X:F1}, A2 {point.Y:F1}, A3 {point.Z:F1}, A4 {point.Rx:F1}, A5 {point.Ry:F1}, A6 {point.Rz:F1}}}");
+                }
+                else
+                {
+                    sb.AppendLine($"  DECL {type} {point.Name}={{X {point.X:F2}, Y {point.Y:F2}, Z {point.Z:F2}, A {point.Rx:F2}, B {point.Ry:F2}, C {point.Rz:F2}}}");
+                }
+            }
+
+            // Write non-point declarations (REAL, INT, BOOL, etc.)
+            foreach (var decl in _datDeclarations)
+            {
+                if (decl.Type is not ("E6POS" or "POS" or "FRAME" or "E6AXIS" or "AXIS"))
+                {
+                    sb.AppendLine($"  DECL {decl.Type} {decl.Name}={decl.RawValue}");
+                }
+            }
+
+            sb.AppendLine();
+            sb.AppendLine("ENDDAT");
+
+            File.WriteAllText(_currentDatPath, sb.ToString());
+            Log.Information("Saved .dat file: {Path}", _currentDatPath);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to save .dat file: {Path}", _currentDatPath);
+            ShowToast($"Failed to save .dat: {ex.Message}", "error", 5000);
+        }
+    }
+
+    /// <summary>
+    /// Ensure a .dat file exists for the current program. Creates one if missing.
+    /// </summary>
+    private void EnsureDatFile()
+    {
+        if (string.IsNullOrEmpty(_currentDatPath)) return;
+        if (File.Exists(_currentDatPath)) return;
+
+        // Create minimal .dat file
+        SaveDatFile();
+    }
+
     [RelayCommand]
     private async Task TeachPointAsync()
     {
@@ -865,10 +1168,9 @@ END";
             if (status == null) return;
 
             // Generate point name
-            string pointName = $"P{Points.Count + 1}";
+            string pointName = GenerateNextPointName();
 
-            // Add to local points list
-            Points.Add(new PointInfo
+            var point = new PointInfo
             {
                 Name = pointName,
                 X = status.TcpPosition.Count > 0 ? status.TcpPosition[0] : 0,
@@ -877,15 +1179,32 @@ END";
                 Rx = status.TcpPosition.Count > 3 ? status.TcpPosition[3] : 0,
                 Ry = status.TcpPosition.Count > 4 ? status.TcpPosition[4] : 0,
                 Rz = status.TcpPosition.Count > 5 ? status.TcpPosition[5] : 0
+            };
+
+            // Add to local points list
+            Points.Add(point);
+
+            // Add to dat declarations
+            _datDeclarations.Add(new DatDeclaration
+            {
+                Type = "E6POS",
+                Name = pointName,
+                RawValue = $"{{X {point.X:F2}, Y {point.Y:F2}, Z {point.Z:F2}, A {point.Rx:F2}, B {point.Ry:F2}, C {point.Rz:F2}}}"
             });
+
+            // Save to .dat file
+            EnsureDatFile();
+            SaveDatFile();
 
             // Send to Core
             await _ipcClient.SetPointAsync(pointName, status.TcpPosition.ToArray());
 
-            Log.Information("Taught point {Name}", pointName);
+            ShowToast($"Taught {pointName}: ({point.X:F1}, {point.Y:F1}, {point.Z:F1})");
+            Log.Information("Taught point {Name} at ({X:F1}, {Y:F1}, {Z:F1})", pointName, point.X, point.Y, point.Z);
         }
         catch (Exception ex)
         {
+            ShowToast($"Teach failed: {ex.Message}", "error", 5000);
             Log.Error(ex, "Failed to teach point");
         }
     }
@@ -918,6 +1237,320 @@ END";
         {
             Log.Error(ex, "Failed to refresh points");
         }
+    }
+
+    // ========================================================================
+    // Point Management Commands (Delete, Rename, Re-teach)
+    // ========================================================================
+
+    /// <summary>Currently selected point in the Points panel.</summary>
+    [ObservableProperty]
+    private PointInfo? _selectedPoint;
+
+    [RelayCommand]
+    private void DeletePoint(PointInfo? point)
+    {
+        point ??= SelectedPoint;
+        if (point == null) return;
+
+        // Check if point is used in .src
+        var usage = Regex.Match(ProgramSource, $@"\b{Regex.Escape(point.Name)}\b", RegexOptions.IgnoreCase);
+        if (usage.Success)
+        {
+            ShowToast($"Warning: {point.Name} is used in program. Removed from .dat only.", "warning", 5000);
+        }
+
+        Points.Remove(point);
+        _datDeclarations.RemoveAll(d => d.Name.Equals(point.Name, StringComparison.OrdinalIgnoreCase));
+        SaveDatFile();
+        ShowToast($"Deleted point {point.Name}");
+        Log.Information("Deleted point {Name}", point.Name);
+    }
+
+    [RelayCommand]
+    private void RenamePoint(string? newName)
+    {
+        if (SelectedPoint == null || string.IsNullOrWhiteSpace(newName)) return;
+
+        var oldName = SelectedPoint.Name;
+        if (oldName.Equals(newName, StringComparison.OrdinalIgnoreCase)) return;
+
+        // Check duplicate
+        if (Points.Any(p => p.Name.Equals(newName, StringComparison.OrdinalIgnoreCase)))
+        {
+            ShowToast($"Point name '{newName}' already exists", "error", 3000);
+            return;
+        }
+
+        // Update in .src (replace all references)
+        ProgramSource = Regex.Replace(ProgramSource,
+            $@"\b{Regex.Escape(oldName)}\b",
+            newName,
+            RegexOptions.IgnoreCase);
+
+        // Update in dat declarations
+        var decl = _datDeclarations.FirstOrDefault(d => d.Name.Equals(oldName, StringComparison.OrdinalIgnoreCase));
+        if (decl != null) decl.Name = newName;
+
+        // Update PointInfo
+        SelectedPoint.Name = newName;
+        SaveDatFile();
+
+        ShowToast($"Renamed {oldName} → {newName}");
+        Log.Information("Renamed point {OldName} → {NewName}", oldName, newName);
+    }
+
+    [RelayCommand]
+    private async Task ReteachPointAsync()
+    {
+        if (SelectedPoint == null) return;
+
+        try
+        {
+            var tcpPose = _viewportService.GetCurrentTcpPose();
+            if (tcpPose == null || tcpPose.Length < 6)
+            {
+                var status = await _ipcClient.GetStatusAsync();
+                if (status?.TcpPosition == null || status.TcpPosition.Count < 6)
+                {
+                    ShowToast("Cannot get robot position", "error", 5000);
+                    return;
+                }
+                tcpPose = status.TcpPosition.ToArray();
+            }
+
+            // Update coordinates
+            SelectedPoint.X = tcpPose[0];
+            SelectedPoint.Y = tcpPose[1];
+            SelectedPoint.Z = tcpPose[2];
+            SelectedPoint.Rx = tcpPose[3];
+            SelectedPoint.Ry = tcpPose[4];
+            SelectedPoint.Rz = tcpPose[5];
+
+            // Update dat declaration
+            var decl = _datDeclarations.FirstOrDefault(
+                d => d.Name.Equals(SelectedPoint.Name, StringComparison.OrdinalIgnoreCase));
+            if (decl != null)
+            {
+                // Format based on declaration type
+                if (decl.Type.Equals("E6AXIS", StringComparison.OrdinalIgnoreCase) ||
+                    decl.Type.Equals("AXIS", StringComparison.OrdinalIgnoreCase))
+                {
+                    decl.RawValue = $"{{A1 {tcpPose[0]:F2}, A2 {tcpPose[1]:F2}, A3 {tcpPose[2]:F2}, A4 {tcpPose[3]:F2}, A5 {tcpPose[4]:F2}, A6 {tcpPose[5]:F2}}}";
+                }
+                else
+                {
+                    decl.RawValue = $"{{X {tcpPose[0]:F2}, Y {tcpPose[1]:F2}, Z {tcpPose[2]:F2}, A {tcpPose[3]:F2}, B {tcpPose[4]:F2}, C {tcpPose[5]:F2}}}";
+                }
+            }
+
+            SaveDatFile();
+
+            // Also update in Core
+            await _ipcClient.SetPointAsync(SelectedPoint.Name, tcpPose);
+
+            ShowToast($"Re-taught {SelectedPoint.Name}: ({tcpPose[0]:F1}, {tcpPose[1]:F1}, {tcpPose[2]:F1})");
+            Log.Information("Re-taught {Name}", SelectedPoint.Name);
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Re-teach failed: {ex.Message}", "error", 5000);
+            Log.Error(ex, "Re-teach failed");
+        }
+    }
+
+    [RelayCommand]
+    private void GoToPointUsage(PointInfo? point)
+    {
+        point ??= SelectedPoint;
+        if (point == null) return;
+
+        // Find first usage in .src
+        var lines = ProgramSource.Split('\n');
+        for (int i = 0; i < lines.Length; i++)
+        {
+            if (Regex.IsMatch(lines[i], $@"\b{Regex.Escape(point.Name)}\b", RegexOptions.IgnoreCase) &&
+                RegexHelper.IsMotionInstruction(lines[i]))
+            {
+                CaretLineNumber = i + 1;
+                // Scroll editor to this line
+                ScrollToLineRequest = i + 1;
+                return;
+            }
+        }
+
+        ShowToast($"{point.Name} not used in program");
+    }
+
+    // ========================================================================
+    // Variable Watch Panel
+    // ========================================================================
+
+    [ObservableProperty]
+    private bool _isWatchPanelVisible;
+
+    public ObservableCollection<WatchVariable> WatchVariables { get; } = new();
+
+    [RelayCommand]
+    private void ToggleWatchPanel()
+    {
+        IsWatchPanelVisible = !IsWatchPanelVisible;
+        if (IsWatchPanelVisible)
+        {
+            _ = RefreshVariablesAsync();
+        }
+    }
+
+    [RelayCommand]
+    private async Task RefreshVariablesAsync()
+    {
+        try
+        {
+            var response = await _ipcClient.GetProgramStateAsync(true);
+            if (response == null) return;
+
+            var previousValues = WatchVariables.ToDictionary(w => w.Name, w => w.Value);
+            WatchVariables.Clear();
+
+            // User variables
+            if (response.Variables != null)
+            {
+                foreach (var (name, value) in response.Variables)
+                {
+                    var strValue = value.ToString("G6");
+                    var isChanged = previousValues.TryGetValue(name, out var prev) && prev != strValue;
+                    WatchVariables.Add(new WatchVariable { Name = name, Type = "REAL", Value = strValue, IsChanged = isChanged });
+                }
+            }
+
+            // System variables
+            if (response.SystemVariables != null)
+            {
+                foreach (var (name, value) in response.SystemVariables)
+                {
+                    var strValue = value.ToString("G6");
+                    var isChanged = previousValues.TryGetValue(name, out var prev) && prev != strValue;
+                    WatchVariables.Add(new WatchVariable { Name = name, Type = "SYSTEM", Value = strValue, IsChanged = isChanged });
+                }
+            }
+
+            // Points
+            if (response.Points != null)
+            {
+                foreach (var (name, values) in response.Points)
+                {
+                    var strValue = values.Length >= 3
+                        ? $"({values[0]:F1}, {values[1]:F1}, {values[2]:F1})"
+                        : string.Join(", ", values.Select(v => v.ToString("F1")));
+                    var isChanged = previousValues.TryGetValue(name, out var prev) && prev != strValue;
+                    WatchVariables.Add(new WatchVariable { Name = name, Type = "E6POS", Value = strValue, IsChanged = isChanged });
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to refresh watch variables");
+        }
+    }
+
+    // ========================================================================
+    // Path Preview
+    // ========================================================================
+
+    [ObservableProperty]
+    private bool _isPathPreviewVisible;
+
+    [RelayCommand]
+    private void PreviewPath()
+    {
+        if (string.IsNullOrWhiteSpace(ProgramSource))
+        {
+            ShowToast("No program loaded", "error", 3000);
+            return;
+        }
+
+        // Parse motion statements from .src
+        var motionRegex = new Regex(@"^\s*(PTP|LIN|CIRC)\s+(\w+)", RegexOptions.IgnoreCase | RegexOptions.Multiline);
+        var matches = motionRegex.Matches(ProgramSource);
+
+        if (matches.Count == 0)
+        {
+            ShowToast("No motion statements found", "error", 3000);
+            return;
+        }
+
+        // Build lookup from Points collection
+        var pointLookup = Points.ToDictionary(
+            p => p.Name.ToUpperInvariant(),
+            p => new Point3D(p.X, p.Y, p.Z));
+
+        // Fallback: also include points from inline DECL/CONST in ProgramSource (legacy programs)
+        var inlineCache = RegexHelper.BuildCoordinateCache(ProgramSource);
+        foreach (var (name, coords) in inlineCache)
+        {
+            var key = name.ToUpperInvariant();
+            if (!pointLookup.ContainsKey(key))
+                pointLookup[key] = new Point3D(coords.x, coords.y, coords.z);
+        }
+
+        // Build segments and markers
+        var segments = new List<PathSegment>();
+        var markers = new List<WaypointMarker>();
+        Point3D? lastPoint = null;
+        var usedPoints = new HashSet<string>();
+
+        for (int i = 0; i < matches.Count; i++)
+        {
+            var motionType = matches[i].Groups[1].Value.ToUpperInvariant();
+            var targetName = matches[i].Groups[2].Value.ToUpperInvariant();
+
+            if (!pointLookup.TryGetValue(targetName, out var targetPos))
+                continue;
+
+            // Add segment from last point to this target
+            if (lastPoint.HasValue)
+            {
+                segments.Add(new PathSegment
+                {
+                    From = lastPoint.Value,
+                    To = targetPos,
+                    MotionType = motionType,
+                    PointName = matches[i].Groups[2].Value
+                });
+            }
+
+            // Add waypoint marker (only once per unique point)
+            if (!usedPoints.Contains(targetName))
+            {
+                markers.Add(new WaypointMarker
+                {
+                    Position = targetPos,
+                    Label = matches[i].Groups[2].Value,
+                    IsEndpoint = i == 0 || i == matches.Count - 1
+                });
+                usedPoints.Add(targetName);
+            }
+
+            lastPoint = targetPos;
+        }
+
+        if (segments.Count == 0)
+        {
+            ShowToast("No resolvable path segments (points not found)", "error", 3000);
+            return;
+        }
+
+        _viewportService.ShowPathPreview(segments);
+        _viewportService.ShowWaypointMarkers(markers);
+        IsPathPreviewVisible = true;
+        ShowToast($"Path preview: {segments.Count} segments, {markers.Count} waypoints");
+    }
+
+    [RelayCommand]
+    private void ClearPreview()
+    {
+        _viewportService.ClearPathPreview();
+        IsPathPreviewVisible = false;
     }
 
     // ========================================================================
@@ -961,11 +1594,28 @@ END";
             // 2. Auto-generate point name
             var pointName = GenerateNextPointName();
 
-            // 3. Create DECL E6POS definition (KRL)
-            var target = RobTarget.FromPose(pointName, tcpPose);
-            var constLine = $"DECL E6POS {pointName} = {target.ToKrlString()}";
+            // 3. Add point to .dat declarations + Points collection
+            var point = new PointInfo
+            {
+                Name = pointName,
+                X = tcpPose[0], Y = tcpPose[1], Z = tcpPose[2],
+                Rx = tcpPose[3], Ry = tcpPose[4], Rz = tcpPose[5]
+            };
+            Points.Add(point);
 
-            // 4. Create KRL velocity + motion instruction
+            var rawValue = $"{{X {tcpPose[0]:F2}, Y {tcpPose[1]:F2}, Z {tcpPose[2]:F2}, A {tcpPose[3]:F2}, B {tcpPose[4]:F2}, C {tcpPose[5]:F2}}}";
+            _datDeclarations.Add(new DatDeclaration
+            {
+                Type = "E6POS",
+                Name = pointName,
+                RawValue = rawValue
+            });
+
+            // 4. Save to .dat file
+            EnsureDatFile();
+            SaveDatFile();
+
+            // 5. Create KRL velocity + motion instruction (only motion line goes into .src)
             var velLine = $"    $VEL.CP = {TeachVelocity:F2}";
             var approxSuffix = TeachApproximation switch
             {
@@ -977,16 +1627,8 @@ END";
             };
             var motionLine = $"    {TeachMotionType} {pointName}{approxSuffix}";
 
-            // 5. Insert into editor (velocity line + motion line)
-            InsertTeachLines(constLine, velLine + "\n" + motionLine);
-
-            // 6. Update Points list
-            Points.Add(new PointInfo
-            {
-                Name = pointName,
-                X = tcpPose[0], Y = tcpPose[1], Z = tcpPose[2],
-                Rx = tcpPose[3], Ry = tcpPose[4], Rz = tcpPose[5]
-            });
+            // 6. Insert motion line into .src at caret (no DECL in .src — it's in .dat)
+            InsertMotionLine(velLine + "\n" + motionLine);
 
             // 7. Toast
             ShowToast($"Taught {pointName}: ({tcpPose[0]:F1}, {tcpPose[1]:F1}, {tcpPose[2]:F1})");
@@ -1002,15 +1644,35 @@ END";
 
     private string GenerateNextPointName()
     {
-        var regex = new Regex(@"(?:DECL|CONST)\s+(?:E6POS|POS)\s+(p\d+)", RegexOptions.IgnoreCase);
-        var matches = regex.Matches(ProgramSource);
+        // Scan Points collection (from .dat file) and ProgramSource (legacy inline)
         var maxNum = 0;
-        foreach (Match m in matches)
+        var nameRegex = new Regex(@"^p(\d+)$", RegexOptions.IgnoreCase);
+
+        // Check Points collection first
+        foreach (var p in Points)
         {
-            var numStr = m.Groups[1].Value[1..];
+            var m = nameRegex.Match(p.Name);
+            if (m.Success && int.TryParse(m.Groups[1].Value, out var num) && num > maxNum)
+                maxNum = num;
+        }
+
+        // Also check _datDeclarations (covers non-point DECLs that have pN names)
+        foreach (var d in _datDeclarations)
+        {
+            var m = nameRegex.Match(d.Name);
+            if (m.Success && int.TryParse(m.Groups[1].Value, out var num) && num > maxNum)
+                maxNum = num;
+        }
+
+        // Fallback: also scan ProgramSource for legacy inline programs
+        var srcRegex = new Regex(@"(?:DECL|CONST)\s+(?:E6POS|POS)\s+(p\d+)", RegexOptions.IgnoreCase);
+        foreach (Match sm in srcRegex.Matches(ProgramSource))
+        {
+            var numStr = sm.Groups[1].Value[1..];
             if (int.TryParse(numStr, out var num) && num > maxNum)
                 maxNum = num;
         }
+
         return $"p{maxNum + 1}";
     }
 
@@ -1061,6 +1723,45 @@ END";
         ProgramSource = string.Join('\n', lines);
     }
 
+    /// <summary>
+    /// Insert only a motion line into .src at caret position (no DECL — that goes to .dat).
+    /// </summary>
+    private void InsertMotionLine(string motionLine)
+    {
+        var lines = ProgramSource.Split('\n').ToList();
+
+        int motionInsertIndex;
+        if (CaretLineNumber > 0)
+        {
+            motionInsertIndex = CaretLineNumber;
+        }
+        else
+        {
+            // Insert before END or at end
+            motionInsertIndex = -1;
+            for (int i = lines.Count - 1; i >= 0; i--)
+            {
+                if (lines[i].TrimStart().StartsWith("END", StringComparison.OrdinalIgnoreCase))
+                {
+                    motionInsertIndex = i;
+                    break;
+                }
+            }
+            if (motionInsertIndex < 0)
+                motionInsertIndex = lines.Count;
+        }
+        motionInsertIndex = Math.Clamp(motionInsertIndex, 0, lines.Count);
+
+        // Handle multi-line inserts (e.g., "$VEL.CP = 0.10\nLIN p1")
+        var insertLines = motionLine.Split('\n');
+        for (int i = 0; i < insertLines.Length; i++)
+        {
+            lines.Insert(motionInsertIndex + i, insertLines[i]);
+        }
+
+        ProgramSource = string.Join('\n', lines);
+    }
+
     private async Task PollProgramStateAsync()
     {
         while (IsRunning && !IsPaused)
@@ -1072,6 +1773,9 @@ END";
                 {
                     ExecutionState = state.State;
                     CurrentLine = state.CurrentLine;
+
+                    // Update trace motion type from current line content
+                    UpdateTraceMotionType(state.CurrentLine);
 
                     if (state.State == "COMPLETED" || state.State == "ERROR" || state.State == "STOPPED")
                     {
@@ -1087,5 +1791,21 @@ END";
                 break;
             }
         }
+    }
+
+    private void UpdateTraceMotionType(int lineNumber)
+    {
+        if (lineNumber <= 0 || string.IsNullOrEmpty(ProgramSource)) return;
+
+        var lines = ProgramSource.Split('\n');
+        if (lineNumber > lines.Length) return;
+
+        var line = lines[lineNumber - 1].TrimStart();
+        if (line.StartsWith("PTP", StringComparison.OrdinalIgnoreCase))
+            _viewportService.SetTraceMotionType("PTP");
+        else if (line.StartsWith("LIN", StringComparison.OrdinalIgnoreCase))
+            _viewportService.SetTraceMotionType("LIN");
+        else if (line.StartsWith("CIRC", StringComparison.OrdinalIgnoreCase))
+            _viewportService.SetTraceMotionType("CIRC");
     }
 }

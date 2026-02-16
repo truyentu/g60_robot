@@ -1,7 +1,9 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using RobotController.Common.Messages;
 using RobotController.Common.Services;
+using RobotController.UI.Messages;
 using RobotController.UI.Models;
 using RobotController.UI.Services;
 using RobotController.UI.ViewModels.Pages;
@@ -426,6 +428,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         // Subscribe to tool change for viewport update
         _ipcClient.ToolChanged += OnToolChangedForViewport;
+
+        // Subscribe to TCP trace auto-toggle from ProgramEditor
+        WeakReferenceMessenger.Default.Register<TcpTraceAutoToggleMessage>(this, (r, m) =>
+        {
+            _dispatcher.Invoke(() => ShowTcpTrace = m.Value);
+        });
 
         // Initialize context-sensitive softkeys
         InitializeSoftkeys();

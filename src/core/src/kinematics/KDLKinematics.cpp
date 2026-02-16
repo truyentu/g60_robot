@@ -192,6 +192,13 @@ std::optional<IKSolution> KDLKinematics::computeIK(
         sol.isValid = true;
         sol.iterations = ikSolver_->lastNrOfIter;
 
+        // Normalize result angles to be closest to seed (avoid 2π wrapping)
+        for (int i = 0; i < NUM_JOINTS; ++i) {
+            double diff = sol.angles[i] - seed[i];
+            while (diff > M_PI) { sol.angles[i] -= 2 * M_PI; diff -= 2 * M_PI; }
+            while (diff < -M_PI) { sol.angles[i] += 2 * M_PI; diff += 2 * M_PI; }
+        }
+
         // Clamp to joint limits if set
         if (!jointLimits_.empty()) {
             for (size_t i = 0; i < jointLimits_.size() && i < NUM_JOINTS; ++i) {

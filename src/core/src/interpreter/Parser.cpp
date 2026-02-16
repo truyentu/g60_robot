@@ -381,8 +381,19 @@ StmtPtr Parser::parseFunctionCall(const std::string& name) {
 
     if (match({TokenType::LPAREN})) {
         while (!check(TokenType::RPAREN) && !isAtEnd()) {
+            // Handle KRL named parameters: Name := Value
+            std::string argName = "";
+            if (check(TokenType::IDENTIFIER)) {
+                size_t saved = m_current;
+                Token id = advance();
+                if (match({TokenType::COLON}) && match({TokenType::ASSIGN})) {
+                    argName = id.lexeme;
+                } else {
+                    m_current = saved; // Not a named param, rewind
+                }
+            }
             ExprPtr argValue = parseExpression();
-            stmt.args.push_back({"", argValue});
+            stmt.args.push_back({argName, argValue});
             if (!match({TokenType::COMMA})) break;
         }
         consume(TokenType::RPAREN, "Expected ')'");

@@ -242,6 +242,15 @@ public class GetProgramStateResponse
 
     [JsonPropertyName("program_name")]
     public string ProgramName { get; set; } = "";
+
+    [JsonPropertyName("variables")]
+    public Dictionary<string, double>? Variables { get; set; }
+
+    [JsonPropertyName("system_variables")]
+    public Dictionary<string, double>? SystemVariables { get; set; }
+
+    [JsonPropertyName("points")]
+    public Dictionary<string, double[]>? Points { get; set; }
 }
 
 /// <summary>

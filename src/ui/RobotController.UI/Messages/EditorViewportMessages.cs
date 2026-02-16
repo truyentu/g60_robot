@@ -55,3 +55,19 @@ public class PointDefinitionChangedMessage : ValueChangedMessage<string>
 {
     public PointDefinitionChangedMessage(string variableName) : base(variableName) { }
 }
+
+/// <summary>
+/// Sent from ViewModel to Editor View: scroll to a specific line number.
+/// </summary>
+public class ScrollToLineMessage : ValueChangedMessage<int>
+{
+    public ScrollToLineMessage(int lineNumber) : base(lineNumber) { }
+}
+
+/// <summary>
+/// Sent from ProgramEditor to MainViewModel: auto-toggle TCP trace on/off.
+/// </summary>
+public class TcpTraceAutoToggleMessage : ValueChangedMessage<bool>
+{
+    public TcpTraceAutoToggleMessage(bool enabled) : base(enabled) { }
+}

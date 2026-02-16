@@ -440,23 +440,26 @@ bool RobotController::loadProgram(const std::string& source) {
             double ty = targetValues[1];
             double tz = targetValues[2];
 
-            // Convert quaternion [q1,q2,q3,q4] to RPY (degrees) if available
-            // robtarget format: [x,y,z, q1,q2,q3,q4, cf1,cf4,cf6,cfx, e1..e6]
-            // q1=w, q2=x, q3=y, q4=z (ABB convention)
+            // Extract orientation from target values
+            // KRL E6POS format: {X, Y, Z, A, B, C} where A=rotZ, B=rotY, C=rotX (ZYX Euler, degrees)
+            // ABB robtarget: {x, y, z, qw, qx, qy, qz, ...} (quaternion)
             double rx_deg = 0, ry_deg = 0, rz_deg = 0;
-            if (targetValues.size() >= 7) {
+            if (targetValues.size() == 6) {
+                // KRL E6POS: A=rotZ, B=rotY, C=rotX
+                rz_deg = targetValues[3];  // A
+                ry_deg = targetValues[4];  // B
+                rx_deg = targetValues[5];  // C
+            } else if (targetValues.size() >= 7) {
+                // ABB quaternion convention
                 double qw = targetValues[3];
                 double qx = targetValues[4];
                 double qy = targetValues[5];
                 double qz = targetValues[6];
 
-                // Quaternion to RPY (ZYX Euler)
-                // Roll (X)
                 double sinr_cosp = 2.0 * (qw * qx + qy * qz);
                 double cosr_cosp = 1.0 - 2.0 * (qx * qx + qy * qy);
                 double rx_rad = std::atan2(sinr_cosp, cosr_cosp);
 
-                // Pitch (Y)
                 double sinp = 2.0 * (qw * qy - qz * qx);
                 double ry_rad;
                 if (std::abs(sinp) >= 1.0)
@@ -464,7 +467,6 @@ bool RobotController::loadProgram(const std::string& source) {
                 else
                     ry_rad = std::asin(sinp);
 
-                // Yaw (Z)
                 double siny_cosp = 2.0 * (qw * qz + qx * qy);
                 double cosy_cosp = 1.0 - 2.0 * (qy * qy + qz * qz);
                 double rz_rad = std::atan2(siny_cosp, cosy_cosp);
@@ -501,7 +503,32 @@ bool RobotController::loadProgram(const std::string& source) {
             for (int i = 0; i < 6; i++) currentJoints[i] = currentJointsDeg[i];
 
             // 6. Compute IK for target
+            // Try with current joints as seed first
             auto ikResult = m_jogController->computeIK(targetPose, currentJoints);
+
+            // For LIN/CIRC: if first IK succeeded, verify the configuration is
+            // geometrically sensible (J1 should point toward target XY).
+            // If not, retry with J1 seeded from atan2(ty, tx).
+            bool isLinearMotion = (motion.type != "PTP" && motion.type != "PTP_REL");
+            if (isLinearMotion && ikResult.has_value()) {
+                double j1Result = ikResult->angles[0] * 180.0 / M_PI;
+                double j1Expected = std::atan2(ty, tx) * 180.0 / M_PI;
+                double j1Diff = std::abs(j1Result - j1Expected);
+                // Normalize to 0-180
+                if (j1Diff > 180.0) j1Diff = 360.0 - j1Diff;
+
+                if (j1Diff > 45.0) {
+                    // J1 is far from expected direction - try with better seed
+                    auto altSeed = currentJoints;
+                    altSeed[0] = j1Expected;
+                    auto altResult = m_jogController->computeIK(targetPose, altSeed);
+                    if (altResult.has_value()) {
+                        LOG_INFO("Motion {}: J1 re-seeded {:.1f} -> {:.1f} (expected {:.1f})",
+                            motion.type, j1Result, altResult->angles[0] * 180.0 / M_PI, j1Expected);
+                        ikResult = altResult;
+                    }
+                }
+            }
             if (!ikResult.has_value()) {
                 LOG_WARN("Motion {}: IK failed for point '{}' (unreachable)", motion.type, pointName);
                 std::this_thread::sleep_for(std::chrono::milliseconds(200));
@@ -513,6 +540,13 @@ bool RobotController::loadProgram(const std::string& source) {
             for (int i = 0; i < 6; i++) {
                 targetJointsDeg[i] = ikResult->angles[i] * 180.0 / M_PI;
             }
+
+            LOG_INFO("Motion {} '{}': joints [{:.1f},{:.1f},{:.1f},{:.1f},{:.1f},{:.1f}] -> [{:.1f},{:.1f},{:.1f},{:.1f},{:.1f},{:.1f}]",
+                motion.type, pointName,
+                currentJointsDeg[0], currentJointsDeg[1], currentJointsDeg[2],
+                currentJointsDeg[3], currentJointsDeg[4], currentJointsDeg[5],
+                targetJointsDeg[0], targetJointsDeg[1], targetJointsDeg[2],
+                targetJointsDeg[3], targetJointsDeg[4], targetJointsDeg[5]);
 
             // 8. Interpolate from current to target joints
             // Read velocity from KRL system variables
@@ -532,24 +566,24 @@ bool RobotController::loadProgram(const std::string& source) {
             }
 
             // Calculate interpolation steps
-            double maxJointDelta = 0;
-            for (int i = 0; i < 6; i++) {
-                maxJointDelta = std::max(maxJointDelta, std::abs(targetJointsDeg[i] - currentJointsDeg[i]));
-            }
-
-            // Time estimation: for joint moves use joint speed, for linear use cartesian speed
             double stepTimeMs = 20.0;  // 50 Hz update rate
             double totalTimeMs;
+
             if (isJoint) {
-                // Joint move: base on max joint delta, assume ~180 deg/s at vmax
+                // Joint move: base on max joint delta
+                double maxJointDelta = 0;
+                for (int i = 0; i < 6; i++) {
+                    maxJointDelta = std::max(maxJointDelta, std::abs(targetJointsDeg[i] - currentJointsDeg[i]));
+                }
                 double jointSpeed = std::min(speed_mm_s / 5000.0, 1.0) * 180.0;  // deg/s
                 if (jointSpeed < 10.0) jointSpeed = 10.0;
                 totalTimeMs = (maxJointDelta / jointSpeed) * 1000.0;
             } else {
                 // Linear move: base on cartesian distance
-                double dx = tx - (m_status.tcpPose[0]);
-                double dy = ty - (m_status.tcpPose[1]);
-                double dz = tz - (m_status.tcpPose[2]);
+                auto startTcp = m_jogController->getTcpPose();
+                double dx = tx - startTcp[0];
+                double dy = ty - startTcp[1];
+                double dz = tz - startTcp[2];
                 double dist = std::sqrt(dx*dx + dy*dy + dz*dz);
                 if (speed_mm_s < 1.0) speed_mm_s = 100.0;
                 totalTimeMs = (dist / speed_mm_s) * 1000.0;
@@ -562,29 +596,83 @@ bool RobotController::loadProgram(const std::string& source) {
             int numSteps = static_cast<int>(totalTimeMs / stepTimeMs);
             if (numSteps < 2) numSteps = 2;
 
-            LOG_DEBUG("Motion {}: interpolating {} steps over {:.0f}ms (maxDelta={:.1f} deg)",
-                      motion.type, numSteps, totalTimeMs, maxJointDelta);
+            LOG_DEBUG("Motion {}: interpolating {} steps over {:.0f}ms",
+                      motion.type, numSteps, totalTimeMs);
 
             // 9. Execute interpolation steps
-            for (int step = 1; step <= numSteps; step++) {
-                // Check for pause/stop
-                if (m_programExecutor->getState() == interpreter::ExecutionState::STOPPED) {
-                    return;
+            if (isJoint) {
+                // PTP: joint-space interpolation (correct for joint moves)
+                for (int step = 1; step <= numSteps; step++) {
+                    if (m_programExecutor->getState() == interpreter::ExecutionState::STOPPED)
+                        return;
+
+                    double t = static_cast<double>(step) / numSteps;
+                    double s = t * t * (3.0 - 2.0 * t);  // smoothstep
+
+                    std::array<double, 6> interpJoints;
+                    for (int i = 0; i < 6; i++) {
+                        interpJoints[i] = currentJointsDeg[i] + s * (targetJointsDeg[i] - currentJointsDeg[i]);
+                    }
+                    m_activeDriver->setJointPositionsDirect(interpJoints);
+                    std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(stepTimeMs)));
                 }
+            } else {
+                // LIN/CIRC: Cartesian-space interpolation with IK per step
+                // This ensures TCP follows a straight line in Cartesian space
+                auto linStartTcp = m_jogController->getTcpPose();
+                double startX = linStartTcp[0], startY = linStartTcp[1], startZ = linStartTcp[2];
+                double startRx = linStartTcp[3], startRy = linStartTcp[4], startRz = linStartTcp[5];
 
-                double t = static_cast<double>(step) / numSteps;
+                // Use target IK joints (computed above) to guide seed interpolation.
+                // This prevents the IK solver from getting stuck in wrong configuration
+                // by giving it a seed that's a blend between current and target joints.
+                auto prevJoints = currentJoints;
 
-                // Smooth interpolation (ease in-out)
-                double s = t * t * (3.0 - 2.0 * t);  // smoothstep
+                LOG_INFO("LIN start TCP=[{:.1f},{:.1f},{:.1f}] ori=[{:.1f},{:.1f},{:.1f}] -> target TCP=[{:.1f},{:.1f},{:.1f}] ori=[{:.1f},{:.1f},{:.1f}]",
+                    startX, startY, startZ, startRx, startRy, startRz,
+                    tx, ty, tz, rx_deg, ry_deg, rz_deg);
 
-                std::array<double, 6> interpJoints;
-                for (int i = 0; i < 6; i++) {
-                    interpJoints[i] = currentJointsDeg[i] + s * (targetJointsDeg[i] - currentJointsDeg[i]);
+                int ikFailCount = 0;
+                for (int step = 1; step <= numSteps; step++) {
+                    if (m_programExecutor->getState() == interpreter::ExecutionState::STOPPED)
+                        return;
+
+                    double t = static_cast<double>(step) / numSteps;
+                    double s = t * t * (3.0 - 2.0 * t);  // smoothstep
+
+                    // Interpolate Cartesian position and orientation
+                    std::array<double, 6> interpPose;
+                    interpPose[0] = startX + s * (tx - startX);
+                    interpPose[1] = startY + s * (ty - startY);
+                    interpPose[2] = startZ + s * (tz - startZ);
+                    interpPose[3] = startRx + s * (rx_deg - startRx);
+                    interpPose[4] = startRy + s * (ry_deg - startRy);
+                    interpPose[5] = startRz + s * (rz_deg - startRz);
+
+                    // Seed = blend of previous result and target joints
+                    // This guides the solver toward the correct configuration
+                    std::array<double, 6> blendSeed;
+                    for (int i = 0; i < 6; i++) {
+                        blendSeed[i] = prevJoints[i] + s * (targetJointsDeg[i] - prevJoints[i]);
+                    }
+
+                    auto stepIK = m_jogController->computeIK(interpPose, blendSeed);
+                    if (stepIK.has_value()) {
+                        std::array<double, 6> stepJointsDeg;
+                        for (int i = 0; i < 6; i++) {
+                            stepJointsDeg[i] = stepIK->angles[i] * 180.0 / M_PI;
+                        }
+                        m_activeDriver->setJointPositionsDirect(stepJointsDeg);
+                        for (int i = 0; i < 6; i++) prevJoints[i] = stepJointsDeg[i];
+                    } else {
+                        ikFailCount++;
+                    }
+
+                    std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(stepTimeMs)));
                 }
-
-                m_activeDriver->setJointPositionsDirect(interpJoints);
-
-                std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(stepTimeMs)));
+                if (ikFailCount > 0) {
+                    LOG_WARN("LIN '{}': {} IK failures out of {} steps", pointName, ikFailCount, numSteps);
+                }
             }
 
             LOG_DEBUG("Motion {} to '{}' completed", motion.type, pointName);
@@ -2220,6 +2308,42 @@ void RobotController::registerIpcHandlers() {
             response["state"] = interpreter::executionStateToString(getProgramState());
             response["current_line"] = getProgramLine();
             response["program_name"] = getProgramName();
+
+            // Include variables/points if requested (avoid overhead on polling)
+            bool includeVars = false;
+            if (request.payload.contains("include_variables")) {
+                includeVars = request.payload["include_variables"].get<bool>();
+            } else if (request.payload.contains("includeVariables")) {
+                includeVars = request.payload["includeVariables"].get<bool>();
+            }
+
+            if (includeVars && m_programExecutor) {
+                // User variables
+                nlohmann::json varsJson = nlohmann::json::object();
+                for (const auto& [name, value] : m_programExecutor->getVariables()) {
+                    varsJson[name] = value;
+                }
+                response["variables"] = varsJson;
+
+                // System variables
+                const auto& sysVars = m_programExecutor->getSystemVars();
+                nlohmann::json sysJson = nlohmann::json::object();
+                sysJson["$OV_PRO"] = sysVars.ovPro;
+                sysJson["$VEL.CP"] = sysVars.velCp;
+                sysJson["$ACC.CP"] = sysVars.accCp;
+                sysJson["$APO.CDIS"] = sysVars.apoCdis;
+                sysJson["$APO.CPTP"] = sysVars.apoCptp;
+                sysJson["$TOOL"] = sysVars.toolIndex;
+                sysJson["$BASE"] = sysVars.baseIndex;
+                response["system_variables"] = sysJson;
+
+                // Points
+                nlohmann::json pointsJson = nlohmann::json::object();
+                for (const auto& [name, values] : m_programExecutor->getPoints()) {
+                    pointsJson[name] = values;
+                }
+                response["points"] = pointsJson;
+            }
 
             return response;
         });

@@ -13,6 +13,27 @@ using Serilog;
 namespace RobotController.UI.Services;
 
 /// <summary>
+/// A path segment between two waypoints for preview visualization
+/// </summary>
+public class PathSegment
+{
+    public Point3D From { get; set; }
+    public Point3D To { get; set; }
+    public string MotionType { get; set; } = "PTP"; // PTP, LIN, CIRC
+    public string PointName { get; set; } = "";
+}
+
+/// <summary>
+/// A waypoint marker for preview visualization
+/// </summary>
+public class WaypointMarker
+{
+    public Point3D Position { get; set; }
+    public string Label { get; set; } = "";
+    public bool IsEndpoint { get; set; } // true for start/end points
+}
+
+/// <summary>
 /// Interface for 3D viewport service
 /// </summary>
 public interface IViewportService
@@ -222,6 +243,22 @@ public interface IViewportService
 
     /// <summary>Set the current motion type for color-coding the trace</summary>
     void SetTraceMotionType(string motionType);
+
+    // ========================================================================
+    // Path Preview (static path visualization)
+    // ========================================================================
+
+    /// <summary>Show path preview lines between waypoints</summary>
+    void ShowPathPreview(List<PathSegment> segments);
+
+    /// <summary>Show waypoint markers (spheres + labels) at target positions</summary>
+    void ShowWaypointMarkers(List<WaypointMarker> markers);
+
+    /// <summary>Clear all path preview visuals</summary>
+    void ClearPathPreview();
+
+    /// <summary>Get the path preview container for adding to viewport</summary>
+    ModelVisual3D PathPreviewContainer { get; }
 }
 
 /// <summary>
@@ -301,6 +338,9 @@ public class ViewportService : IViewportService
     // Per-motion-type trace groups (separate LinesVisual3D for color coding)
     private readonly Dictionary<string, (LinesVisual3D visual, int count)> _traceLines = new();
 
+    // Path Preview (static path visualization)
+    private readonly ModelVisual3D _pathPreviewContainer = new();
+
     // TCP pose from C++ Core FK (authoritative for IK requests)
     private double[]? _coreTcpPose;
 
@@ -314,6 +354,7 @@ public class ViewportService : IViewportService
     public ModelVisual3D SceneObjectsContainer => _sceneObjectsContainer;
     public bool IsTcpTraceEnabled => _tcpTraceEnabled;
     public ModelVisual3D TcpTraceContainer => _tcpTraceContainer;
+    public ModelVisual3D PathPreviewContainer => _pathPreviewContainer;
 
     public event EventHandler? ModelUpdated;
     public event EventHandler<TcpPickedEventArgs>? TcpPointPicked;
@@ -1848,5 +1889,132 @@ public class ViewportService : IViewportService
         {
             _pathHighlightGroup?.Children.Clear();
         });
+    }
+
+    // ========================================================================
+    // Path Preview (static path visualization)
+    // ========================================================================
+
+    public void ShowPathPreview(List<PathSegment> segments)
+    {
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            // Clear existing preview lines (keep markers if any)
+            var linesToRemove = _pathPreviewContainer.Children
+                .OfType<LinesVisual3D>().ToList();
+            foreach (var l in linesToRemove)
+                _pathPreviewContainer.Children.Remove(l);
+
+            // Group segments by motion type for color coding
+            var ptpPoints = new Point3DCollection();
+            var linPoints = new Point3DCollection();
+            var circPoints = new Point3DCollection();
+
+            foreach (var seg in segments)
+            {
+                switch (seg.MotionType.ToUpperInvariant())
+                {
+                    case "PTP":
+                        ptpPoints.Add(seg.From);
+                        ptpPoints.Add(seg.To);
+                        break;
+                    case "CIRC":
+                        circPoints.Add(seg.From);
+                        circPoints.Add(seg.To);
+                        break;
+                    default: // LIN
+                        linPoints.Add(seg.From);
+                        linPoints.Add(seg.To);
+                        break;
+                }
+            }
+
+            // PTP: blue dashed (using thinner line as WPF 3D doesn't support dash natively)
+            if (ptpPoints.Count > 0)
+            {
+                var ptpVisual = new LinesVisual3D
+                {
+                    Points = ptpPoints,
+                    Color = System.Windows.Media.Color.FromRgb(66, 133, 244),  // Blue
+                    Thickness = 1.5
+                };
+                _pathPreviewContainer.Children.Add(ptpVisual);
+            }
+
+            // LIN: green solid
+            if (linPoints.Count > 0)
+            {
+                var linVisual = new LinesVisual3D
+                {
+                    Points = linPoints,
+                    Color = System.Windows.Media.Color.FromRgb(76, 175, 80),   // Green
+                    Thickness = 2.5
+                };
+                _pathPreviewContainer.Children.Add(linVisual);
+            }
+
+            // CIRC: orange
+            if (circPoints.Count > 0)
+            {
+                var circVisual = new LinesVisual3D
+                {
+                    Points = circPoints,
+                    Color = System.Windows.Media.Color.FromRgb(255, 152, 0),   // Orange
+                    Thickness = 2.5
+                };
+                _pathPreviewContainer.Children.Add(circVisual);
+            }
+
+            Log.Information("[ViewportService] Path preview: {Count} segments", segments.Count);
+        });
+    }
+
+    public void ShowWaypointMarkers(List<WaypointMarker> markers)
+    {
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            // Remove existing marker visuals (ModelVisual3D children that aren't LinesVisual3D)
+            var markersToRemove = _pathPreviewContainer.Children
+                .OfType<ModelVisual3D>().ToList();
+            foreach (var m in markersToRemove)
+                _pathPreviewContainer.Children.Remove(m);
+
+            foreach (var marker in markers)
+            {
+                var group = new Model3DGroup();
+
+                // Sphere
+                var meshBuilder = new MeshBuilder();
+                meshBuilder.AddSphere(marker.Position, marker.IsEndpoint ? 10.0 : 6.0, 12, 12);
+                var mesh = meshBuilder.ToMesh();
+
+                var color = marker.IsEndpoint
+                    ? System.Windows.Media.Color.FromRgb(255, 235, 59)  // Yellow
+                    : System.Windows.Media.Color.FromRgb(224, 224, 224); // White/Light gray
+
+                var material = new DiffuseMaterial(new SolidColorBrush(color));
+                var geoModel = new GeometryModel3D(mesh, material);
+                group.Children.Add(geoModel);
+
+                // Add emissive for glow
+                var emissive = new EmissiveMaterial(new SolidColorBrush(
+                    System.Windows.Media.Color.FromArgb(80, color.R, color.G, color.B)));
+                geoModel.BackMaterial = emissive;
+
+                var visual = new ModelVisual3D { Content = group };
+                _pathPreviewContainer.Children.Add(visual);
+            }
+
+            Log.Information("[ViewportService] Waypoint markers: {Count}", markers.Count);
+        });
+    }
+
+    public void ClearPathPreview()
+    {
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            _pathPreviewContainer.Children.Clear();
+        });
+        Log.Information("[ViewportService] Path preview cleared");
     }
 }

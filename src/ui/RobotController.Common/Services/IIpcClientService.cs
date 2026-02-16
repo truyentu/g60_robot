@@ -129,6 +129,8 @@ public interface IIpcClientService : IDisposable
 
     Task<GetProgramStateResponse?> GetProgramStateAsync(CancellationToken cancellationToken = default);
 
+    Task<GetProgramStateResponse?> GetProgramStateAsync(bool includeVariables, CancellationToken cancellationToken = default);
+
     Task<bool> SetPointAsync(string name, double[] values, CancellationToken cancellationToken = default);
 
     Task<GetPointsResponse?> GetPointsAsync(CancellationToken cancellationToken = default);

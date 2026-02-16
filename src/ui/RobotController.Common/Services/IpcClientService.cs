@@ -804,7 +804,13 @@ public class IpcClientService : IIpcClientService
 
     public async Task<GetProgramStateResponse?> GetProgramStateAsync(CancellationToken cancellationToken = default)
     {
-        var request = IpcMessage.Create(MessageTypes.GET_PROGRAM_STATE, JsonSerializer.SerializeToElement(new { }, IpcMessage.CamelCaseOptions));
+        return await GetProgramStateAsync(false, cancellationToken);
+    }
+
+    public async Task<GetProgramStateResponse?> GetProgramStateAsync(bool includeVariables, CancellationToken cancellationToken = default)
+    {
+        var payload = new { include_variables = includeVariables };
+        var request = IpcMessage.Create(MessageTypes.GET_PROGRAM_STATE, JsonSerializer.SerializeToElement(payload, IpcMessage.CamelCaseOptions));
         var response = await SendRequestAsync(request, cancellationToken);
 
         if (response != null && response.Payload.ValueKind != JsonValueKind.Undefined)

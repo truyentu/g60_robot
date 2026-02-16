@@ -73,8 +73,11 @@ public partial class MainWindow : Window
         // Initialize TCP Path Trace container
         TcpTraceVisual.Children.Add(_viewportService.TcpTraceContainer);
 
-        // Set initial Navigator layout (default NavIndex=9 → split-screen)
-        UpdateNavigatorLayout(_viewModel?.SelectedNavIndex ?? 9);
+        // Initialize Path Preview container
+        PathPreviewVisual.Children.Add(_viewportService.PathPreviewContainer);
+
+        // Set initial split-screen layout
+        UpdateSplitScreenLayout(_viewModel?.SelectedNavIndex ?? 9);
     }
 
     private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -140,26 +143,42 @@ public partial class MainWindow : Window
                     _viewportService.ShowTcpGizmo(show3DJog);
                 }
 
-                // Toggle Navigator split-screen layout
-                UpdateNavigatorLayout(_viewModel?.SelectedNavIndex ?? 0);
+                // Toggle split-screen layout (Navigator or ProgramEditor)
+                UpdateSplitScreenLayout(_viewModel?.SelectedNavIndex ?? 0);
             });
         }
     }
 
-    private void UpdateNavigatorLayout(int navIndex)
+    private void UpdateSplitScreenLayout(int navIndex)
     {
+        // Hide both panels first
+        NavigatorPanel.Visibility = Visibility.Collapsed;
+        ProgramEditorPanel.Visibility = Visibility.Collapsed;
+
         if (navIndex == 9)
         {
+            // Navigator: fixed 300px on the left, viewport fills the rest
             NavigatorColumn.Width = new GridLength(300);
+            NavigatorColumn.MinWidth = 200;
             NavSplitterColumn.Width = new GridLength(3);
             NavigatorPanel.Visibility = Visibility.Visible;
             NavSplitter.Visibility = Visibility.Visible;
         }
+        else if (navIndex == 1)
+        {
+            // ProgramEditor: ~60% left, viewport ~40% right (star sizing, user can drag splitter)
+            NavigatorColumn.Width = new GridLength(1.5, GridUnitType.Star);
+            NavigatorColumn.MinWidth = 400;
+            NavSplitterColumn.Width = new GridLength(3);
+            ProgramEditorPanel.Visibility = Visibility.Visible;
+            NavSplitter.Visibility = Visibility.Visible;
+        }
         else
         {
+            // No split: viewport takes full width
             NavigatorColumn.Width = new GridLength(0);
+            NavigatorColumn.MinWidth = 0;
             NavSplitterColumn.Width = new GridLength(0);
-            NavigatorPanel.Visibility = Visibility.Collapsed;
             NavSplitter.Visibility = Visibility.Collapsed;
         }
     }
