@@ -8,7 +8,6 @@
  * Part of Phase 10: Kinematics Overhaul (IMPL_P10_01)
  */
 
-#define _USE_MATH_DEFINES
 #include <cmath>
 
 #ifndef M_PI

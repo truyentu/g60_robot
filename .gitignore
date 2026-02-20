@@ -99,3 +99,6 @@ src/config/robots/*/robot_urdf.yaml
 
 # Workspace — runtime data, not source
 workspace/
+
+# Debug logs
+debug_logs/

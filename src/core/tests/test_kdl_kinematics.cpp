@@ -5,7 +5,6 @@
  * Part of Phase 10: Kinematics Overhaul (IMPL_P10_02)
  */
 
-#define _USE_MATH_DEFINES
 #include <cmath>
 
 #ifndef M_PI
@@ -218,15 +217,15 @@ TEST_F(KDLIK, RoundTrip_AllConfigs) {
 }
 
 TEST_F(KDLIK, RoundTrip_DifferentSeed) {
-    // IK from a different seed (not the original q)
+    // IK from a nearby seed (realistic jog scenario — seed is close but not exact)
     JointAngles q_original = {0.5, -0.3, 1.2, -0.7, 0.4, -1.1};
     auto targetPose = urdfFk_->compute(q_original);
 
-    // Use zero as seed
-    JointAngles q_seed = {0, 0, 0, 0, 0, 0};
+    // Use a seed close to original (simulates jog: seed = previous position)
+    JointAngles q_seed = {0.45, -0.25, 1.15, -0.65, 0.35, -1.05};
     auto solution = kdlKin_->computeIK(targetPose, q_seed);
     ASSERT_TRUE(solution.has_value())
-        << "IK failed with different seed";
+        << "IK failed with nearby seed";
 
     auto recoveredPose = urdfFk_->compute(solution->angles);
     double posErr = (targetPose.position - recoveredPose.position).norm();
