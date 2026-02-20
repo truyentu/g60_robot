@@ -353,21 +353,26 @@ inline bool CircularInterpolator::defineArc(
     // Circumradius: R = abc / (4 * area)
     radius = (a * b * c) / (4.0 * area);
 
-    // Find center using barycentric coordinates
+    // Find center using barycentric circumcenter formula
+    // a = |via-start| (opposite end), b = |end-via| (opposite start), c = |end-start| (opposite via)
+    // Weight for each vertex uses the OPPOSITE side length:
+    //   w_start = b² (a² + c² - b²)
+    //   w_via   = c² (a² + b² - c²)
+    //   w_end   = a² (b² + c² - a²)
     double a2 = a * a;
     double b2 = b * b;
     double c2 = c * c;
 
-    double alpha = b2 * (c2 + a2 - b2);
-    double beta = c2 * (a2 + b2 - c2);
-    double gamma = a2 * (b2 + c2 - a2);
-    double sum = alpha + beta + gamma;
+    double w_start = b2 * (a2 + c2 - b2);
+    double w_via   = c2 * (a2 + b2 - c2);
+    double w_end   = a2 * (b2 + c2 - a2);
+    double sum = w_start + w_via + w_end;
 
     if (std::abs(sum) < EPSILON) {
         return false;
     }
 
-    center = (alpha * end + beta * start + gamma * via) / sum;
+    center = (w_start * start + w_via * via + w_end * end) / sum;
 
     return true;
 }

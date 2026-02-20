@@ -272,6 +272,10 @@ double Executor::getSystemVariable(const std::string& name, const std::string& s
     // $BASE (index)
     if (upper == "BASE") return static_cast<double>(m_sysVars.baseIndex);
 
+    // $ORI_TYPE, $CIRC_TYPE (orientation control for CIRC)
+    if (upper == "ORI_TYPE") return static_cast<double>(m_sysVars.oriType);
+    if (upper == "CIRC_TYPE") return static_cast<double>(m_sysVars.circType);
+
     // Position fields
     if (upper == "POS_ACT") {
         return !m_currentPosition.empty() ? m_currentPosition[0] : 0.0;
@@ -324,6 +328,17 @@ void Executor::setSystemVariable(const std::string& name, const std::string& sub
     } else if (upper == "BASE") {
         m_sysVars.baseIndex = static_cast<int>(value);
         LOG_DEBUG("$BASE = BASE_DATA[{}]", m_sysVars.baseIndex);
+        if (m_baseChangeCallback) m_baseChangeCallback(m_sysVars.baseIndex);
+    } else if (upper == "ORI_TYPE") {
+        m_sysVars.oriType = static_cast<int>(value);
+        const char* names[] = {"#VAR", "#CONSTANT", "#JOINT"};
+        int idx = std::clamp(m_sysVars.oriType, 0, 2);
+        LOG_DEBUG("$ORI_TYPE = {} ({})", m_sysVars.oriType, names[idx]);
+    } else if (upper == "CIRC_TYPE") {
+        m_sysVars.circType = static_cast<int>(value);
+        const char* names[] = {"#BASE", "#PATH"};
+        int idx = std::clamp(m_sysVars.circType, 0, 1);
+        LOG_DEBUG("$CIRC_TYPE = {} ({})", m_sysVars.circType, names[idx]);
     }
 }
 
@@ -691,6 +706,15 @@ double Executor::evaluateExpression(const ExprPtr& expr) {
                 if constexpr (std::is_same_v<V, double>) return v;
                 else if constexpr (std::is_same_v<V, int>) return static_cast<double>(v);
                 else if constexpr (std::is_same_v<V, bool>) return v ? 1.0 : 0.0;
+                else if constexpr (std::is_same_v<V, std::string>) {
+                    // KRL hash enum literals → integer values
+                    if (v == "#VAR")      return 0.0;  // $ORI_TYPE default
+                    if (v == "#CONSTANT") return 1.0;
+                    if (v == "#JOINT")    return 2.0;
+                    if (v == "#BASE")     return 0.0;  // $CIRC_TYPE default
+                    if (v == "#PATH")     return 1.0;
+                    return 0.0;
+                }
                 else return 0.0;
             }, e.value);
         }
@@ -987,27 +1011,49 @@ std::vector<double> Executor::parseRobtargetValues(const std::string& raw) {
     std::vector<double> allNumbers;
     std::string current;
     bool inNumber = false;
+    bool pendingMinus = false;
 
     for (size_t i = 0; i < raw.size(); ++i) {
         char c = raw[i];
-        if (std::isdigit(c) || c == '.' || c == '-' ||
+        if (c == '-') {
+            // Check if this is exponent sign (e.g. 1.5E-3)
+            if (inNumber && !current.empty() &&
+                (current.back() == 'E' || current.back() == 'e')) {
+                current += c;
+                continue;
+            }
+            // Flush any current number
+            if (inNumber && !current.empty()) {
+                try { allNumbers.push_back(std::stod(current)); } catch (...) {}
+                current.clear();
+                inNumber = false;
+            }
+            pendingMinus = true;
+            continue;
+        }
+        if (c == ' ' && pendingMinus && !inNumber) {
+            // Allow spaces between minus and number: "- 62.50" → -62.50
+            continue;
+        }
+        if (std::isdigit(c) || c == '.' ||
             c == 'E' || c == 'e' || (c == '+' && i > 0 && (raw[i-1] == 'E' || raw[i-1] == 'e'))) {
+            if (pendingMinus) {
+                current = "-";
+                pendingMinus = false;
+            }
             current += c;
             inNumber = true;
         } else {
             if (inNumber && !current.empty()) {
-                try {
-                    allNumbers.push_back(std::stod(current));
-                } catch (...) {}
+                try { allNumbers.push_back(std::stod(current)); } catch (...) {}
                 current.clear();
                 inNumber = false;
             }
+            pendingMinus = false;
         }
     }
     if (!current.empty()) {
-        try {
-            allNumbers.push_back(std::stod(current));
-        } catch (...) {}
+        try { allNumbers.push_back(std::stod(current)); } catch (...) {}
     }
 
     if (allNumbers.size() >= 3) {

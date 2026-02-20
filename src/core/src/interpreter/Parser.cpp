@@ -324,8 +324,13 @@ StmtPtr Parser::parseConstDeclaration() {
                 break;
             } else {
                 rawValue += tok.lexeme;
-                if (tok.type != TokenType::COMMA) rawValue += " ";
                 advance();
+                // Don't add space after MINUS when next token is NUMBER
+                // so "-62.50" stays as "-62.50" not "- 62.50"
+                if (tok.type != TokenType::COMMA &&
+                    !(tok.type == TokenType::MINUS && !isAtEnd() && peek().type == TokenType::NUMBER)) {
+                    rawValue += " ";
+                }
             }
         }
     } else if (check(TokenType::LBRACKET)) {

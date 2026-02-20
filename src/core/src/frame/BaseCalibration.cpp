@@ -1,6 +1,5 @@
 #include "BaseCalibration.hpp"
 #include "../logging/Logger.hpp"
-#define _USE_MATH_DEFINES
 #include <cmath>
 
 #ifndef M_PI

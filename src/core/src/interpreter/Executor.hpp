@@ -75,6 +75,7 @@ public:
     using LineCallback = std::function<void(int line)>;
     using WaitCallback = std::function<void(double seconds)>;
     using IOCallback = std::function<void(int index, bool value)>;
+    using BaseChangeCallback = std::function<void(int baseIndex)>;
 
     Executor();
     ~Executor();
@@ -113,6 +114,7 @@ public:
     void setLineCallback(LineCallback cb) { m_lineCallback = cb; }
     void setWaitCallback(WaitCallback cb) { m_waitCallback = cb; }
     void setOutputCallback(IOCallback cb) { m_outputCallback = cb; }
+    void setBaseChangeCallback(BaseChangeCallback cb) { m_baseChangeCallback = std::move(cb); }
 
     // Point database
     void setPoint(const std::string& name, const std::vector<double>& values);
@@ -147,6 +149,10 @@ public:
         // Tool and Base (indices)
         int toolIndex = 1;                 // $TOOL = TOOL_DATA[N]
         int baseIndex = 0;                 // $BASE = BASE_DATA[N]
+
+        // Orientation control for CIRC
+        int oriType = 0;                   // $ORI_TYPE: 0=#VAR, 1=#CONSTANT, 2=#JOINT
+        int circType = 0;                  // $CIRC_TYPE: 0=#BASE, 1=#PATH
 
         SystemVariables() {
             velAxis.fill(100.0);
@@ -209,6 +215,7 @@ private:
     LineCallback m_lineCallback;
     WaitCallback m_waitCallback;
     IOCallback m_outputCallback;
+    BaseChangeCallback m_baseChangeCallback;
 
     // Execution
     void executeStatements(const std::vector<StmtPtr>& statements);

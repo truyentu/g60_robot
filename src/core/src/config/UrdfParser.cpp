@@ -11,7 +11,6 @@
 #include <fstream>
 #include <sstream>
 #include <regex>
-#define _USE_MATH_DEFINES
 #include <cmath>
 #include <algorithm>
 #include <set>
