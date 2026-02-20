@@ -47,7 +47,31 @@ void JogController::initializeUrdfKinematics(
     }
     m_kdlKin->setJointLimits(limits);
 
+    // Initialize TWA config from joint limits
+    m_twaConfig.psThreshold = 0.3;   // PS≈0.3 ↔ J5≈10° (from survey test)
+    m_twaConfig.dlsLambdaMax = 0.1;
+    m_twaConfig.jointLimitWeights = kinematics::Vector6d::Ones();
+    m_twaConfig.singularityWeights = kinematics::Vector6d::Ones();
+    for (size_t i = 0; i < joints.size() && i < kinematics::NUM_JOINTS; ++i) {
+        m_twaConfig.jointMidPositions[i] = (joints[i].minAngle + joints[i].maxAngle) / 2.0;
+        m_twaConfig.jointMinLimits[i] = joints[i].minAngle;
+        m_twaConfig.jointMaxLimits[i] = joints[i].maxAngle;
+    }
+
     LOG_INFO("JogController: URDF FK + KDL IK initialized ({} joints)", joints.size());
+    LOG_INFO("JogController: TWA config limits (rad):");
+    for (size_t i = 0; i < joints.size() && i < kinematics::NUM_JOINTS; ++i) {
+        LOG_INFO("  J{}: min={:.4f} max={:.4f} mid={:.4f} (deg: [{:.1f}, {:.1f}])",
+            i + 1,
+            m_twaConfig.jointMinLimits[i], m_twaConfig.jointMaxLimits[i],
+            m_twaConfig.jointMidPositions[i],
+            m_twaConfig.jointMinLimits[i] * 180.0 / M_PI,
+            m_twaConfig.jointMaxLimits[i] * 180.0 / M_PI);
+    }
+    LOG_INFO("JogController: Jog soft limits (deg):");
+    for (int i = 0; i < 6; ++i) {
+        LOG_INFO("  J{}: [{:.1f}, {:.1f}]", i + 1, m_minLimits[i], m_maxLimits[i]);
+    }
 }
 
 void JogController::setToolTransform(const Eigen::Matrix4d& T_tool) {
@@ -67,6 +91,7 @@ void JogController::setJointLimits(int joint, double minDeg, double maxDeg) {
     if (joint >= 0 && joint < 6) {
         m_minLimits[joint] = minDeg;
         m_maxLimits[joint] = maxDeg;
+        LOG_INFO("JogController: setJointLimits J{}=[{:.1f}, {:.1f}] deg", joint + 1, minDeg, maxDeg);
         if (m_firmwareDriver) {
             m_firmwareDriver->setJointLimits(joint, minDeg, maxDeg);
         }
@@ -276,6 +301,12 @@ std::string JogController::startCartesianJog(int axis, int direction, double spe
 
     bool isLinear = (axis < 3);
     double maxSpeed = isLinear ? MAX_TCP_LINEAR_SPEED : MAX_TCP_ROT_SPEED;
+
+    // Apply T1 speed cap (KSS 8.3 §3.5.12)
+    if (isLinear && maxSpeed * (speedPercent / 100.0) > m_speedCapMmPerS) {
+        maxSpeed = m_speedCapMmPerS / (speedPercent / 100.0);
+    }
+
     double targetSpeed = maxSpeed * (speedPercent / 100.0) * direction;
 
     m_cartesianStreaming = true;
@@ -294,6 +325,7 @@ std::string JogController::startCartesianJog(int axis, int direction, double spe
     // (which drifts due to IK epsilon) to compute each step's direction,
     // we lock the rotation at session start and use it throughout.
     m_jogTotalDistance = 0.0;
+    m_jogMaxDistance = 0.0;
     {
         auto positions = m_firmwareDriver->getJointPositions();
         kinematics::JointAngles jointRad;
@@ -307,6 +339,10 @@ std::string JogController::startCartesianJog(int axis, int direction, double spe
             Eigen::Matrix4d T_tcp = T_flange * m_toolTransform;
             m_jogStartTcpPose = kinematics::TCPPose::fromTransform(T_tcp);
         }
+
+        // Smart Seed: record start joints as first snapshot
+        m_jogJointHistory.clear();
+        m_jogJointHistory.push_back({0.0, jointRad});
     }
 
     LOG_DEBUG("JogController: Cartesian velocity streaming started axis={} dir={} speed={}% frame={} targetV={} "
@@ -315,6 +351,73 @@ std::string JogController::startCartesianJog(int axis, int direction, double spe
               m_jogStartTcpPose.position[0], m_jogStartTcpPose.position[1], m_jogStartTcpPose.position[2]);
 
     return "";
+}
+
+// ============================================================================
+// TWA Helper Methods
+// ============================================================================
+
+kinematics::Vector3d JogController::getTorchAxis() const {
+    if (!m_urdfFk || !m_firmwareDriver) {
+        return kinematics::Vector3d(0, 0, 1);
+    }
+    auto positions = m_firmwareDriver->getJointPositions();
+    kinematics::JointAngles jointRad;
+    for (int i = 0; i < 6; i++)
+        jointRad[i] = positions[i] * M_PI / 180.0;
+
+    auto flangePose = m_urdfFk->compute(jointRad);
+
+    if (m_hasToolOffset) {
+        Eigen::Matrix4d T_tcp = flangePose.toTransform() * m_toolTransform;
+        auto tcpPose = kinematics::TCPPose::fromTransform(T_tcp);
+        return tcpPose.rotation.col(2);
+    }
+
+    return flangePose.rotation.col(2);
+}
+
+kinematics::Vector6d JogController::buildDesiredTwist(double dt) const {
+    kinematics::Vector6d twist = kinematics::Vector6d::Zero();
+
+    bool isLinear = (m_currentAxis < 3);
+    double velocity = m_tcpVelocity * m_currentDirection;
+
+    if (isLinear) {
+        kinematics::Vector3d direction = kinematics::Vector3d::Zero();
+
+        if (m_currentFrame == 2) {
+            // Tool frame: project through initial rotation
+            kinematics::Vector3d axis_tool = kinematics::Vector3d::Zero();
+            axis_tool[m_currentAxis] = 1.0;
+            direction = m_jogStartTcpPose.rotation * axis_tool;
+        } else {
+            direction[m_currentAxis] = 1.0;
+        }
+
+        // KDL twist ordering: [angular(3), linear(3)]
+        twist(3) = direction[0] * velocity * dt;
+        twist(4) = direction[1] * velocity * dt;
+        twist(5) = direction[2] * velocity * dt;
+    } else {
+        int rotAxis = m_currentAxis - 3;
+        kinematics::Vector3d direction = kinematics::Vector3d::Zero();
+
+        if (m_currentFrame == 2) {
+            kinematics::Vector3d rot_tool = kinematics::Vector3d::Zero();
+            rot_tool[rotAxis] = 1.0;
+            direction = m_jogStartTcpPose.rotation * rot_tool;
+        } else {
+            direction[rotAxis] = 1.0;
+        }
+
+        double velocityRad = velocity * M_PI / 180.0;
+        twist(0) = direction[0] * velocityRad * dt;
+        twist(1) = direction[1] * velocityRad * dt;
+        twist(2) = direction[2] * velocityRad * dt;
+    }
+
+    return twist;
 }
 
 void JogController::updateCartesianVelocityStreaming(double dt) {
@@ -344,22 +447,109 @@ void JogController::updateCartesianVelocityStreaming(double dt) {
         m_tcpVelocity = 0.0;
         m_currentDirection = 0;
         m_currentSpeed = 0.0;
+        m_singularityActive = false;
+        m_currentPS = 0.0;
+        m_currentVelocityScale = 1.0;
         LOG_DEBUG("JogController: Cartesian streaming fully stopped");
         return;
     }
 
-    // === Accumulate total distance (absolute from start) ===
-    double stepDelta = m_tcpVelocity * dt;  // mm or deg
+    // === TWA Singularity Check ===
+    // Compute PS index from current Jacobian to detect proximity to singularity.
+    // For jog mode: only use velocity scaling on position-level IK.
+    // Velocity-level IK (TWA branch) is disabled for jog — it causes jumps and
+    // orientation drift. Position-level IK handles tool frame jog correctly.
+    auto positions = m_firmwareDriver->getJointPositions();
+    kinematics::JointAngles jointRadForTWA;
+    for (int i = 0; i < 6; i++) {
+        jointRadForTWA[i] = positions[i] * M_PI / 180.0;
+    }
+
+    kinematics::Jacobian J = m_kdlKin->computeJacobian(jointRadForTWA);
+    double ps = kinematics::TwistDecomposition::computePS(J);
+
+    // Guard: PS = 1e6 means degenerate Jacobian (workspace boundary, not wrist singularity)
+    static constexpr double PS_DEGENERATE_GUARD = 1e5;
+    if (ps >= PS_DEGENERATE_GUARD) {
+        ps = 0.0;
+    }
+    m_currentPS = ps;
+
+    // Hysteresis: enter at psThreshold (0.3), exit at psThresholdExit (0.2)
+    double enterThreshold = m_twaConfig.psThreshold;
+    double exitThreshold = m_twaConfig.psThresholdExit;
+
+    if (!m_singularityActive && ps > enterThreshold) {
+        m_singularityActive = true;
+        m_singEntryJoints = jointRadForTWA;
+        LOG_WARN("JogController: Entering singularity zone PS={:.2f} (threshold={:.2f})",
+                 ps, enterThreshold);
+    } else if (m_singularityActive && ps < exitThreshold) {
+        LOG_INFO("JogController: Exiting singularity zone PS={:.2f} (exit={:.2f})",
+                 ps, exitThreshold);
+        m_singularityActive = false;
+    }
+
+    // Smooth quadratic velocity scaling (same formula as TwistDecomposition::resolve)
+    double velocityScale = 1.0;
+    if (m_singularityActive && enterThreshold > 0.0) {
+        double ratio = enterThreshold / ps;
+        double ratioSq = ratio * ratio;
+        velocityScale = std::max(m_twaConfig.velocityScaleMin,
+                                  1.0 - (1.0 - m_twaConfig.velocityScaleMin) * (1.0 - ratioSq));
+    }
+    m_currentVelocityScale = velocityScale;
+
+    // ================================================================
+    // Position-level IK path (always used for jog)
+    // Velocity scaling from PS is applied via velocityScale above.
+    // ================================================================
+    double stepDelta = m_tcpVelocity * velocityScale * dt;  // TWA-scaled velocity
     m_jogTotalDistance += stepDelta;
+
+    // === Smart Seed: Record joint snapshots & select IK seed ===
+    // When moving forward (totalDistance increasing beyond high-water mark):
+    //   - Record joint snapshots every SEED_SNAPSHOT_INTERVAL mm
+    //   - Use current joints as IK seed (normal behavior)
+    // When moving backward (totalDistance < maxDistance):
+    //   - Lookup the closest snapshot at or below current totalDistance
+    //   - Use that snapshot's joints as IK seed → solver retraces original branch
+    double absDist = std::abs(m_jogTotalDistance);
+    bool movingForward = (absDist >= m_jogMaxDistance - 0.01);
+
+    if (movingForward) {
+        m_jogMaxDistance = absDist;
+        // Record snapshot if passed next interval
+        double lastSnapshotDist = m_jogJointHistory.empty() ? 0.0 : m_jogJointHistory.back().distance;
+        if (absDist >= lastSnapshotDist + SEED_SNAPSHOT_INTERVAL) {
+            m_jogJointHistory.push_back({absDist, jointRadForTWA});
+        }
+    }
 
     // Skip if total distance too small (avoid unnecessary IK computations)
     if (std::abs(m_jogTotalDistance) < 0.0001) return;
 
-    // === Get current joint positions (for IK seed only) ===
-    auto positions = m_firmwareDriver->getJointPositions();
-    kinematics::JointAngles jointRad;
-    for (int i = 0; i < 6; i++) {
-        jointRad[i] = positions[i] * M_PI / 180.0;
+    // === Select IK seed: historical snapshot when reversing, current when advancing ===
+    kinematics::JointAngles jointRad = jointRadForTWA;  // default: current joints
+    if (!movingForward && m_jogJointHistory.size() > 1) {
+        // Binary search for closest snapshot at or below current distance
+        // History is sorted by distance (ascending) since we only append when advancing
+        size_t lo = 0, hi = m_jogJointHistory.size() - 1;
+        while (lo < hi) {
+            size_t mid = lo + (hi - lo + 1) / 2;
+            if (m_jogJointHistory[mid].distance <= absDist) {
+                lo = mid;
+            } else {
+                hi = mid - 1;
+            }
+        }
+        jointRad = m_jogJointHistory[lo].joints;
+
+        // Trim history beyond current position (robot won't go forward from here)
+        if (lo + 1 < m_jogJointHistory.size()) {
+            m_jogJointHistory.resize(lo + 1);
+        }
+        m_jogMaxDistance = absDist;
     }
 
     // === Compute target TCP pose ABSOLUTELY from start pose ===
@@ -460,7 +650,12 @@ void JogController::updateCartesianVelocityStreaming(double dt) {
                      m_hasToolOffset);
         }
 
-        if (orientErrDeg > 0.5) {
+        // Orientation tolerance: relaxed near singularity (like ABB SingArea\Wrist)
+        // At wrist singularity J4/J6 coupling makes exact orientation impossible,
+        // but the deviation is only around the tool axis (spin) which doesn't affect welding.
+        double orientTolerance = m_singularityActive ? 5.0 : 0.5;  // degrees
+
+        if (orientErrDeg > orientTolerance) {
             LOG_WARN("JogController: IK orientation drift REJECTED! posErr={:.3f}mm orientErr={:.1f}deg "
                      "target RPY=[{:.1f},{:.1f},{:.1f}] actual RPY=[{:.1f},{:.1f},{:.1f}]",
                      posErr, orientErrDeg,
@@ -640,9 +835,33 @@ std::array<double, 6> JogController::getTcpPose() const {
     return result;
 }
 
+kinematics::TCPPose JogController::getTcpPoseObject() const {
+    if (!m_urdfFk || !m_firmwareDriver) {
+        return {};
+    }
+
+    auto positions = m_firmwareDriver->getJointPositions();
+    kinematics::JointAngles jointRad;
+    for (int i = 0; i < 6; i++) {
+        jointRad[i] = positions[i] * M_PI / 180.0;
+    }
+
+    auto flangePose = m_urdfFk->compute(jointRad);
+
+    kinematics::TCPPose pose = flangePose;
+    if (m_hasToolOffset) {
+        Eigen::Matrix4d T_flange = flangePose.toTransform();
+        Eigen::Matrix4d T_tcp = T_flange * m_toolTransform;
+        pose = kinematics::TCPPose::fromTransform(T_tcp);
+    }
+
+    return pose;
+}
+
 std::optional<kinematics::IKSolution> JogController::computeIK(
     const std::array<double, 6>& targetPose,
-    const std::array<double, 6>& currentJoints) const
+    const std::array<double, 6>& currentJoints,
+    bool skipConfigFlipCheck) const
 {
     if (!m_kdlKin || !m_kdlKin->isInitialized()) {
         LOG_WARN("JogController::computeIK: KDL kinematics not initialized");
@@ -680,7 +899,7 @@ std::optional<kinematics::IKSolution> JogController::computeIK(
     }
 
     // Compute IK via KDL
-    auto result = m_kdlKin->computeIK(flangeTarget, jointRad);
+    auto result = m_kdlKin->computeIK(flangeTarget, jointRad, skipConfigFlipCheck);
     if (!result.has_value()) {
         // Fallback to DH IK if available
         if (m_ik) {
@@ -714,6 +933,45 @@ std::optional<kinematics::IKSolution> JogController::computeIK(
                      verifyTcp.position[0], verifyTcp.position[1], verifyTcp.position[2],
                      tcpPosErr, orientErrDeg, m_hasToolOffset, result->iterations);
         }
+    }
+
+    return result;
+}
+
+std::optional<kinematics::IKSolution> JogController::computeIK(
+    const kinematics::TCPPose& targetTcpPose,
+    const std::array<double, 6>& currentJoints,
+    bool skipConfigFlipCheck) const
+{
+    if (!m_kdlKin || !m_kdlKin->isInitialized()) {
+        LOG_WARN("JogController::computeIK(TCPPose): KDL kinematics not initialized");
+        return std::nullopt;
+    }
+
+    // If tool offset exists, back-calculate flange target
+    kinematics::TCPPose flangeTarget = targetTcpPose;
+    if (m_hasToolOffset) {
+        Eigen::Matrix4d T_tcp_desired = targetTcpPose.toTransform();
+        Eigen::Matrix4d T_flange_desired = T_tcp_desired * m_toolInvTransform;
+        flangeTarget = kinematics::TCPPose::fromTransform(T_flange_desired);
+    }
+
+    // Convert current joints from degrees to radians
+    kinematics::JointAngles jointRad;
+    for (int i = 0; i < 6; i++) {
+        jointRad[i] = currentJoints[i] * M_PI / 180.0;
+    }
+
+    // Compute IK via KDL
+    auto result = m_kdlKin->computeIK(flangeTarget, jointRad, skipConfigFlipCheck);
+    if (!result.has_value()) {
+        if (m_ik) {
+            auto dhResult = m_ik->compute(flangeTarget, jointRad);
+            if (dhResult.has_value()) {
+                return dhResult;
+            }
+        }
+        return std::nullopt;
     }
 
     return result;
@@ -782,6 +1040,15 @@ std::string JogController::generateJogGcode(int axis, double targetAngle, double
 
 double JogController::calculateFeedRate(int axis, double speedPercent) {
     return m_maxVelocities[axis] * (speedPercent / 100.0) * 60.0;
+}
+
+int JogController::getCriticalJoint() const {
+    auto positions = m_firmwareDriver->getJointPositions();
+    kinematics::JointAngles current;
+    for (int i = 0; i < 6; i++)
+        current[i] = positions[i] * M_PI / 180.0;
+    return kinematics::TwistDecomposition::findCriticalJoint(
+        current, m_twaConfig.jointMinLimits, m_twaConfig.jointMaxLimits);
 }
 
 } // namespace jog

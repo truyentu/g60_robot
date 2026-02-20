@@ -75,6 +75,7 @@ set(CORE_SOURCES
     src/kinematics/UrdfForwardKinematics.cpp
     src/kinematics/KDLKinematics.cpp
     src/kinematics/AnalyticalKinematics.cpp
+    src/kinematics/TwistDecomposition.cpp
 )
 
 set(CORE_HEADERS
@@ -104,6 +105,7 @@ set(CORE_HEADERS
     src/kinematics/UrdfForwardKinematics.hpp
     src/kinematics/KDLKinematics.hpp
     src/kinematics/AnalyticalKinematics.hpp
+    src/kinematics/TwistDecomposition.hpp
     src/trajectory/TrajectoryTypes.hpp
     src/trajectory/VelocityProfile.hpp
     src/trajectory/Interpolators.hpp
@@ -329,6 +331,36 @@ if(WIN32)
 endif()
 
 gtest_discover_tests(test_kdl_kinematics)
+
+# ============================================================================
+# Twist Decomposition (TWA) Tests
+# ============================================================================
+add_executable(test_twist_decomposition
+    tests/test_twist_decomposition.cpp
+    src/kinematics/TwistDecomposition.cpp
+)
+
+target_include_directories(test_twist_decomposition
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_twist_decomposition
+    PRIVATE
+        GTest::gtest
+        GTest::gtest_main
+        Eigen3::Eigen
+)
+
+if(WIN32)
+    target_compile_definitions(test_twist_decomposition PRIVATE
+        NOMINMAX
+    )
+    target_compile_options(test_twist_decomposition PRIVATE /utf-8)
+endif()
+
+gtest_discover_tests(test_twist_decomposition)
 
 # ============================================================================
 # Analytical Kinematics Tests (DH FK/IK round-trip)
@@ -1051,9 +1083,167 @@ target_link_libraries(test_tool_jog_zdrift
 )
 
 if(WIN32)
-    target_compile_definitions(test_tool_jog_zdrift PRIVATE NOMINMAX)
+    target_compile_definitions(test_tool_jog_zdrift PRIVATE NOMINMAX _USE_MATH_DEFINES)
     target_compile_options(test_tool_jog_zdrift PRIVATE /utf-8)
 endif()
+
+# ============================================================================
+# JogController TWA Integration Tests
+# ============================================================================
+add_executable(test_jog_twa_integration
+    tests/test_jog_twa_integration.cpp
+    src/jog/JogController.cpp
+    src/jog/RuckigSmoother.cpp
+    src/firmware/FirmwareSimulator.cpp
+    src/kinematics/UrdfForwardKinematics.cpp
+    src/kinematics/KDLKinematics.cpp
+    src/kinematics/TwistDecomposition.cpp
+    src/kinematics/AnalyticalKinematics.cpp
+    src/tool/ToolTypes.cpp
+    src/logging/Logger.cpp
+)
+
+target_include_directories(test_jog_twa_integration
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_jog_twa_integration
+    PRIVATE
+        GTest::gtest
+        GTest::gtest_main
+        Eigen3::Eigen
+        spdlog::spdlog
+        orocos-kdl
+        Boost::system
+        ruckig::ruckig
+)
+
+if(WIN32)
+    target_compile_definitions(test_jog_twa_integration PRIVATE
+        NOMINMAX
+        _WIN32_WINNT=0x0A00
+        _USE_MATH_DEFINES
+    )
+    target_compile_options(test_jog_twa_integration PRIVATE /utf-8)
+endif()
+
+# ============================================================================
+# Tool Frame Jog Tests
+# ============================================================================
+add_executable(test_tool_frame_jog
+    tests/test_tool_frame_jog.cpp
+    src/jog/JogController.cpp
+    src/jog/RuckigSmoother.cpp
+    src/firmware/FirmwareSimulator.cpp
+    src/kinematics/UrdfForwardKinematics.cpp
+    src/kinematics/KDLKinematics.cpp
+    src/kinematics/TwistDecomposition.cpp
+    src/kinematics/AnalyticalKinematics.cpp
+    src/tool/ToolTypes.cpp
+    src/logging/Logger.cpp
+)
+
+target_include_directories(test_tool_frame_jog
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_tool_frame_jog
+    PRIVATE
+        GTest::gtest
+        GTest::gtest_main
+        Eigen3::Eigen
+        spdlog::spdlog
+        orocos-kdl
+        Boost::system
+        ruckig::ruckig
+)
+
+if(WIN32)
+    target_compile_definitions(test_tool_frame_jog PRIVATE
+        NOMINMAX
+        _WIN32_WINNT=0x0A00
+        _USE_MATH_DEFINES
+    )
+    target_compile_options(test_tool_frame_jog PRIVATE /utf-8)
+endif()
+
+gtest_discover_tests(test_jog_twa_integration)
+
+# ============================================================================
+# PS Threshold Survey Test
+# ============================================================================
+add_executable(test_ps_threshold_survey
+    tests/test_ps_threshold_survey.cpp
+    src/kinematics/UrdfForwardKinematics.cpp
+    src/kinematics/KDLKinematics.cpp
+    src/kinematics/TwistDecomposition.cpp
+    src/logging/Logger.cpp
+)
+
+target_include_directories(test_ps_threshold_survey
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_ps_threshold_survey
+    PRIVATE
+        GTest::gtest
+        GTest::gtest_main
+        Eigen3::Eigen
+        spdlog::spdlog
+        orocos-kdl
+)
+
+if(WIN32)
+    target_compile_definitions(test_ps_threshold_survey PRIVATE
+        NOMINMAX
+        _WIN32_WINNT=0x0A00
+        _USE_MATH_DEFINES
+    )
+    target_compile_options(test_ps_threshold_survey PRIVATE /utf-8)
+endif()
+
+# ============================================================================
+# PS Verification Tests
+# ============================================================================
+add_executable(test_ps_verification
+    tests/test_ps_verification.cpp
+    src/kinematics/UrdfForwardKinematics.cpp
+    src/kinematics/KDLKinematics.cpp
+    src/kinematics/TwistDecomposition.cpp
+    src/logging/Logger.cpp
+)
+
+target_include_directories(test_ps_verification
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_ps_verification
+    PRIVATE
+        GTest::gtest
+        GTest::gtest_main
+        Eigen3::Eigen
+        spdlog::spdlog
+        orocos-kdl
+)
+
+if(WIN32)
+    target_compile_definitions(test_ps_verification PRIVATE
+        NOMINMAX
+        _WIN32_WINNT=0x0A00
+        _USE_MATH_DEFINES
+    )
+    target_compile_options(test_ps_verification PRIVATE /utf-8)
+endif()
+
+gtest_discover_tests(test_ps_verification)
 
 # ============================================================================
 # Post-Build: Copy Config Files

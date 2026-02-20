@@ -6,10 +6,12 @@
 #include "../kinematics/UrdfForwardKinematics.hpp"
 #include "../kinematics/KDLKinematics.hpp"
 #include "../kinematics/InverseKinematics.hpp"
+#include "../kinematics/TwistDecomposition.hpp"
 #include <Eigen/Dense>
 #include <memory>
 #include <array>
 #include <optional>
+#include <vector>
 
 namespace robot_controller {
 namespace jog {
@@ -51,13 +53,23 @@ public:
     // Get TCP pose from FK (returns [x,y,z,rx,ry,rz])
     std::array<double, 6> getTcpPose() const;
 
+    // Get TCP pose as full TCPPose object (with rotation matrix, avoids gimbal lock)
+    kinematics::TCPPose getTcpPoseObject() const;
+
     // Compute IK for a target pose (for 3D gizmo jogging)
     // targetPose: [x,y,z,rx,ry,rz] in mm/degrees
     // currentJoints: [j1..j6] in degrees
     // Returns: IKSolution if successful, nullopt if failed
     std::optional<kinematics::IKSolution> computeIK(
         const std::array<double, 6>& targetPose,
-        const std::array<double, 6>& currentJoints) const;
+        const std::array<double, 6>& currentJoints,
+        bool skipConfigFlipCheck = false) const;
+
+    // Compute IK from TCPPose directly (avoids RPY gimbal lock issues)
+    std::optional<kinematics::IKSolution> computeIK(
+        const kinematics::TCPPose& targetTcpPose,
+        const std::array<double, 6>& currentJoints,
+        bool skipConfigFlipCheck = false) const;
 
     void update(double dt);
     void emergencyStop();
@@ -100,6 +112,18 @@ private:
     kinematics::TCPPose m_jogStartTcpPose;      // TCP pose when jog session started
     double m_jogTotalDistance{0.0};               // Accumulated distance (mm or deg)
 
+    // Smart Seed: joint history for IK seed selection when reversing jog direction.
+    // Snapshots of joints are recorded every SEED_SNAPSHOT_INTERVAL mm along the path.
+    // When totalDistance decreases (jog reversal), the closest snapshot is used as
+    // IK seed to guide the solver back to the original configuration branch.
+    struct JointSnapshot {
+        double distance;
+        kinematics::JointAngles joints;  // radians
+    };
+    std::vector<JointSnapshot> m_jogJointHistory;
+    double m_jogMaxDistance{0.0};         // High-water mark of totalDistance
+    static constexpr double SEED_SNAPSHOT_INTERVAL = 5.0;  // mm between snapshots
+
     std::array<double, 6> m_minLimits{-170, -190, -120, -185, -120, -350};
     std::array<double, 6> m_maxLimits{170, 45, 156, 185, 120, 350};
     std::array<double, 6> m_maxVelocities{156, 156, 176, 343, 384, 721};
@@ -117,6 +141,9 @@ private:
     Eigen::Matrix4d m_toolInvTransform = Eigen::Matrix4d::Identity();
     bool m_hasToolOffset = false;
 
+    // T1 mode speed cap: 1000 mm/s
+    double m_speedCapMmPerS = 1000.0;
+
     static constexpr double SOFT_LIMIT_MARGIN = 0.5;
     static constexpr double CONTINUOUS_JOG_RANGE = 9999.0;
     static constexpr double CARTESIAN_JOG_STEP = 5.0;     // mm per incremental jog step
@@ -125,6 +152,28 @@ private:
     static constexpr double MAX_TCP_ROT_SPEED = 180.0;     // deg/s at 100% speed
     static constexpr double TCP_ACCEL_RATE = 2000.0;       // mm/s^2 acceleration
     static constexpr double TCP_ROT_ACCEL_RATE = 600.0;    // deg/s^2 rotation acceleration
+
+    // TWA (Twist Decomposition Algorithm) for singularity avoidance
+    kinematics::TWAConfig m_twaConfig;
+    kinematics::JointAngles m_singEntryJoints{};    // Recorded at singularity entry
+    bool m_singularityActive{false};
+    double m_currentPS{0.0};
+    double m_currentVelocityScale{1.0};
+
+    // TWA helper methods for full resolution
+    kinematics::Vector3d getTorchAxis() const;
+    kinematics::Vector6d buildDesiredTwist(double dt) const;
+
+public:
+    void setSpeedCap(double capMmPerS) { m_speedCapMmPerS = capMmPerS; }
+    double getSpeedCap() const { return m_speedCapMmPerS; }
+
+    // TWA singularity accessors (for RobotController IPC publishing)
+    double getCurrentPS() const { return m_currentPS; }
+    bool isSingularityActive() const { return m_singularityActive; }
+    double getVelocityScale() const { return m_currentVelocityScale; }
+    int getCriticalJoint() const;
+    kinematics::KDLKinematics* getKDL() const { return m_kdlKin.get(); }
 };
 
 } // namespace jog

@@ -5,8 +5,8 @@
  * Part of Phase 10: Kinematics Overhaul (IMPL_P10_02)
  */
 
-#define _USE_MATH_DEFINES
 #include <cmath>
+#include <fstream>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -167,9 +167,20 @@ TCPPose KDLKinematics::computeFK(const JointAngles& q) const {
 // ============================================================================
 
 std::optional<IKSolution> KDLKinematics::computeIK(
-    const TCPPose& target, const JointAngles& seed) const
+    const TCPPose& target, const JointAngles& seed, bool skipConfigFlipCheck) const
 {
-    if (!initialized_ || !ikSolver_) return std::nullopt;
+    // Debug file logging
+    static std::ofstream dbg;
+    static bool dbgOpened = false;
+    if (!dbgOpened) {
+        dbg.open("ik_debug.txt", std::ios::trunc);
+        dbgOpened = true;
+    }
+
+    if (!initialized_ || !ikSolver_) {
+        dbg << "[FAIL] not initialized\n"; dbg.flush();
+        return std::nullopt;
+    }
 
     unsigned int nj = chain_.getNrOfJoints();
     KDL::JntArray q_seed(nj), q_result(nj);
@@ -180,7 +191,20 @@ std::optional<IKSolution> KDLKinematics::computeIK(
 
     KDL::Frame target_frame = poseToKdlFrame(target);
 
+    dbg << "=== computeIK call === skipFlip=" << skipConfigFlipCheck << "\n";
+    dbg << "  target pos=[" << target.position[0] << "," << target.position[1] << "," << target.position[2] << "]\n";
+    dbg << "  seed deg=[";
+    for (int i=0;i<6;i++) dbg << seed[i]*180/M_PI << (i<5?",":"");
+    dbg << "]\n";
+
     int ret = ikSolver_->CartToJnt(q_seed, target_frame, q_result);
+
+    dbg << "  KDL ret=" << ret << " lastTransDiff=" << ikSolver_->lastTransDiff
+        << " lastRotDiff=" << ikSolver_->lastRotDiff
+        << " iterations=" << ikSolver_->lastNrOfIter << "\n";
+    dbg << "  q_result deg=[";
+    for (unsigned int i=0;i<nj;i++) dbg << q_result(i)*180/M_PI << (i<nj-1?",":"");
+    dbg << "]\n";
 
     if (ret >= 0 || ret == KDL::ChainIkSolverPos_LMA::E_GRADIENT_JOINTS_TOO_SMALL
                  || ret == KDL::ChainIkSolverPos_LMA::E_INCREMENT_JOINTS_TOO_SMALL) {
@@ -199,23 +223,42 @@ std::optional<IKSolution> KDLKinematics::computeIK(
             while (diff < -M_PI) { sol.angles[i] += 2 * M_PI; diff += 2 * M_PI; }
         }
 
+        dbg << "  normalized deg=[";
+        for (int i=0;i<6;i++) dbg << sol.angles[i]*180/M_PI << (i<5?",":"");
+        dbg << "]\n";
+
         // Clamp to joint limits if set
         if (!jointLimits_.empty()) {
+            dbg << "  jointLimits count=" << jointLimits_.size() << "\n";
             for (size_t i = 0; i < jointLimits_.size() && i < NUM_JOINTS; ++i) {
+                dbg << "    J" << i+1 << ": val=" << sol.angles[i]*180/M_PI
+                    << " limits=[" << jointLimits_[i].first*180/M_PI
+                    << "," << jointLimits_[i].second*180/M_PI << "]";
                 if (sol.angles[i] < jointLimits_[i].first ||
                     sol.angles[i] > jointLimits_[i].second) {
-                    // Out of limits - try to normalize angle
                     double a = sol.angles[i];
                     while (a > M_PI) a -= 2 * M_PI;
                     while (a < -M_PI) a += 2 * M_PI;
                     if (a >= jointLimits_[i].first && a <= jointLimits_[i].second) {
                         sol.angles[i] = a;
+                        dbg << " -> normalized to " << a*180/M_PI;
                     } else {
+                        dbg << " -> OUT OF LIMITS (normalized=" << a*180/M_PI << ")";
+                        LOG_WARN("KDL IK: Joint {} out of limits: {:.1f}deg (limits [{:.1f}, {:.1f}]deg)",
+                            i+1, a * 180.0 / M_PI,
+                            jointLimits_[i].first * 180.0 / M_PI,
+                            jointLimits_[i].second * 180.0 / M_PI);
                         sol.isValid = false;
+                        dbg << "\n"; dbg.flush();
                         break;
                     }
+                } else {
+                    dbg << " OK";
                 }
+                dbg << "\n";
             }
+        } else {
+            dbg << "  no joint limits set\n";
         }
 
         if (sol.isValid) {
@@ -223,8 +266,15 @@ std::optional<IKSolution> KDLKinematics::computeIK(
             auto verifyPose = computeFK(sol.angles);
             sol.residualError = (verifyPose.position - target.position).norm();
 
+            dbg << "  FK verify pos=[" << verifyPose.position[0] << ","
+                << verifyPose.position[1] << "," << verifyPose.position[2]
+                << "] target pos=[" << target.position[0] << ","
+                << target.position[1] << "," << target.position[2]
+                << "] posErr=" << sol.residualError << "mm\n";
+
             // Check position residual
             if (sol.residualError > 1.0) {  // > 1mm position error
+                dbg << "  -> REJECTED: position residual " << sol.residualError << "mm > 1.0mm\n";
                 LOG_WARN("KDLKinematics: IK position residual too large: {:.3f}mm", sol.residualError);
                 sol.isValid = false;
             }
@@ -233,21 +283,127 @@ std::optional<IKSolution> KDLKinematics::computeIK(
             if (sol.isValid) {
                 Matrix3d R_err = verifyPose.rotation.transpose() * target.rotation;
                 double oriErr = std::acos(std::clamp((R_err.trace() - 1.0) / 2.0, -1.0, 1.0));
+                dbg << "  oriErr=" << oriErr*180/M_PI << "deg\n";
                 if (oriErr > 0.01) {  // > 0.01 rad (~0.57°)
-                    LOG_WARN("KDLKinematics: IK orientation residual too large: {:.4f}rad ({:.2f}deg)",
-                             oriErr, oriErr * 180.0 / M_PI);
+                    dbg << "  -> REJECTED: orientation residual " << oriErr*180/M_PI << "deg > 0.57deg\n";
+                    LOG_WARN("KDLKinematics: IK orientation residual too large: {:.4f}rad ({:.2f}deg) skipFlip={}",
+                             oriErr, oriErr * 180.0 / M_PI, skipConfigFlipCheck);
                     sol.isValid = false;
                 }
             }
+        } else {
+            dbg << "  sol.isValid=false after joint limits check\n";
         }
 
+        if (sol.isValid && !skipConfigFlipCheck) {
+            // Reject configuration flips on structural joints (J1-J3 only).
+            // J4-J6 (wrist joints) can legitimately change significantly during
+            // CIRC arcs and Cartesian motions — only reject extreme flips (>90°).
+            static constexpr double MAX_STRUCT_JUMP_RAD = 0.52;  // ~30 degrees for J1-J3
+            static constexpr double MAX_WRIST_JUMP_RAD = 1.57;   // ~90 degrees for J4-J6
+
+            double maxStructJump = 0;
+            int structJumpIdx = -1;
+            for (int i = 0; i < 3; ++i) {  // Only J1-J3 (structural)
+                double jump = std::abs(sol.angles[i] - seed[i]);
+                if (jump > maxStructJump) { maxStructJump = jump; structJumpIdx = i; }
+            }
+
+            double maxWristJump = 0;
+            int wristJumpIdx = -1;
+            for (int i = 3; i < NUM_JOINTS; ++i) {  // J4-J6 (wrist)
+                double jump = std::abs(sol.angles[i] - seed[i]);
+                if (jump > maxWristJump) { maxWristJump = jump; wristJumpIdx = i; }
+            }
+
+            if (maxStructJump > MAX_STRUCT_JUMP_RAD) {
+                LOG_WARN("KDL IK: Rejected config flip — J{} jump {:.1f}deg (max {:.0f}deg). "
+                    "seed=[{:.1f},{:.1f},{:.1f},{:.1f},{:.1f},{:.1f}] "
+                    "result=[{:.1f},{:.1f},{:.1f},{:.1f},{:.1f},{:.1f}]",
+                    structJumpIdx+1, maxStructJump * 180.0 / M_PI, MAX_STRUCT_JUMP_RAD * 180.0 / M_PI,
+                    seed[0]*180/M_PI, seed[1]*180/M_PI, seed[2]*180/M_PI,
+                    seed[3]*180/M_PI, seed[4]*180/M_PI, seed[5]*180/M_PI,
+                    sol.angles[0]*180/M_PI, sol.angles[1]*180/M_PI, sol.angles[2]*180/M_PI,
+                    sol.angles[3]*180/M_PI, sol.angles[4]*180/M_PI, sol.angles[5]*180/M_PI);
+                return std::nullopt;
+            }
+
+            if (maxWristJump > MAX_WRIST_JUMP_RAD) {
+                LOG_WARN("KDL IK: Rejected wrist flip — J{} jump {:.1f}deg (max {:.0f}deg). "
+                    "seed=[{:.1f},{:.1f},{:.1f},{:.1f},{:.1f},{:.1f}] "
+                    "result=[{:.1f},{:.1f},{:.1f},{:.1f},{:.1f},{:.1f}]",
+                    wristJumpIdx+1, maxWristJump * 180.0 / M_PI, MAX_WRIST_JUMP_RAD * 180.0 / M_PI,
+                    seed[0]*180/M_PI, seed[1]*180/M_PI, seed[2]*180/M_PI,
+                    seed[3]*180/M_PI, seed[4]*180/M_PI, seed[5]*180/M_PI,
+                    sol.angles[0]*180/M_PI, sol.angles[1]*180/M_PI, sol.angles[2]*180/M_PI,
+                    sol.angles[3]*180/M_PI, sol.angles[4]*180/M_PI, sol.angles[5]*180/M_PI);
+                return std::nullopt;
+            }
+
+            // Wrist singularity guard: when J5 is near 0, J4 and J6 axes align
+            // and the IK solver can distribute rotation arbitrarily between them.
+            // Only clamp the "spin" component (J4-J6 coupling) — preserve the
+            // "useful" component (J4+J6 sum) that affects TCP pose.
+            static constexpr double WRIST_SPIN_MAX_RAD = 0.10;   // ~5.7 deg max spin drift per step
+            bool nearWristSing = (std::abs(sol.angles[4]) < 0.18);  // ~10 degrees
+            if (nearWristSing) {
+                double dJ4 = sol.angles[3] - seed[3];
+                double dJ6 = sol.angles[5] - seed[5];
+
+                // Decompose into sum (affects TCP) and diff (wrist spin, redundant near singularity)
+                // When J5≈0: Rz(J4)·Ry(0)·Rz(J6) ≈ Rz(J4+J6) → only sum matters
+                double dSum  = dJ4 + dJ6;  // "useful" rotation
+                double dDiff = dJ4 - dJ6;  // "spin" redundancy
+
+                // Only clamp the spin component if it's large
+                if (std::abs(dDiff) > 2.0 * WRIST_SPIN_MAX_RAD) {
+                    // Redistribute: keep sum the same, reduce diff
+                    double clampedDiff = (dDiff > 0 ? 1.0 : -1.0) * WRIST_SPIN_MAX_RAD;
+                    double newJ4 = seed[3] + (dSum + clampedDiff) / 2.0;
+                    double newJ6 = seed[5] + (dSum - clampedDiff) / 2.0;
+                    sol.angles[3] = newJ4;
+                    sol.angles[5] = newJ6;
+                    LOG_DEBUG("KDL IK: Wrist spin clamp (J5={:.1f}deg) — "
+                        "dDiff {:.1f}->{:.1f}deg, sum preserved {:.1f}deg",
+                        sol.angles[4] * 180.0 / M_PI,
+                        dDiff * 180.0 / M_PI, clampedDiff * 180.0 / M_PI,
+                        dSum * 180.0 / M_PI);
+                }
+            }
+
+            // Diagnostic: warn if any joint jumped significantly (after clamping)
+            double maxJumpPost = 0;
+            int jumpIdxPost = -1;
+            for (int i = 0; i < NUM_JOINTS; ++i) {
+                double jump = std::abs(sol.angles[i] - seed[i]);
+                if (jump > maxJumpPost) { maxJumpPost = jump; jumpIdxPost = i; }
+            }
+            if (maxJumpPost > 0.35) {  // > ~20 degrees — warn but accept
+                LOG_WARN("KDL IK: J{} jump {:.1f}deg seed=[{:.1f},{:.1f},{:.1f},{:.1f},{:.1f},{:.1f}] result=[{:.1f},{:.1f},{:.1f},{:.1f},{:.1f},{:.1f}]",
+                    jumpIdxPost+1, maxJumpPost * 180.0 / M_PI,
+                    seed[0]*180/M_PI, seed[1]*180/M_PI, seed[2]*180/M_PI,
+                    seed[3]*180/M_PI, seed[4]*180/M_PI, seed[5]*180/M_PI,
+                    sol.angles[0]*180/M_PI, sol.angles[1]*180/M_PI, sol.angles[2]*180/M_PI,
+                    sol.angles[3]*180/M_PI, sol.angles[4]*180/M_PI, sol.angles[5]*180/M_PI);
+            }
+            dbg << "  -> SUCCESS (config flip check)\n"; dbg.flush();
+        }
+
+        // Return valid solution (either after config flip check or skipped)
         if (sol.isValid) {
+            dbg << "  -> SUCCESS\n"; dbg.flush();
             return sol;
         }
     }
 
-    LOG_DEBUG("KDLKinematics: IK failed with ret={}, lastDiff={:.6f}, lastTransDiff={:.6f}mm, lastRotDiff={:.6f}rad",
-        ret, ikSolver_->lastDifference, ikSolver_->lastTransDiff, ikSolver_->lastRotDiff);
+    dbg << "  -> FINAL FAIL: ret=" << ret << " (did not enter ret>=0 branch)\n";
+    dbg.flush();
+
+    LOG_WARN("KDLKinematics: IK failed — ret={}, lastTransDiff={:.2f}mm, lastRotDiff={:.3f}rad, "
+        "skipFlip={}, seed=[{:.1f},{:.1f},{:.1f},{:.1f},{:.1f},{:.1f}]",
+        ret, ikSolver_->lastTransDiff, ikSolver_->lastRotDiff, skipConfigFlipCheck,
+        seed[0]*180/M_PI, seed[1]*180/M_PI, seed[2]*180/M_PI,
+        seed[3]*180/M_PI, seed[4]*180/M_PI, seed[5]*180/M_PI);
 
     return std::nullopt;
 }
@@ -304,6 +460,12 @@ double KDLKinematics::computeManipulability(const JointAngles& q) const {
     Jacobian J = computeJacobian(q);
     Matrix6d JJT = J * J.transpose();
     return std::sqrt(std::abs(JJT.determinant()));
+}
+
+Eigen::VectorXd KDLKinematics::computeSingularValues(const JointAngles& q) const {
+    Jacobian J = computeJacobian(q);
+    Eigen::JacobiSVD<Jacobian> svd(J);
+    return svd.singularValues();
 }
 
 // ============================================================================

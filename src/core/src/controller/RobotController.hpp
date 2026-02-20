@@ -156,6 +156,7 @@ private:
     void updateStatus();
     void publishStatus();
     void registerIpcHandlers();
+    void saveBaseFrames();
 
     // Components
     std::unique_ptr<state::StateMachine> m_stateMachine;

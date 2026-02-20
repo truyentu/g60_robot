@@ -50,7 +50,8 @@ public:
      * IK - single solution closest to seed
      */
     std::optional<IKSolution> computeIK(const TCPPose& target,
-                                         const JointAngles& seed) const;
+                                         const JointAngles& seed,
+                                         bool skipConfigFlipCheck = false) const;
 
     /**
      * Jacobian (6xN from KDL)
@@ -62,6 +63,12 @@ public:
      */
     bool isNearSingularity(const JointAngles& q, double threshold = 0.01) const;
     double computeManipulability(const JointAngles& q) const;
+
+    /**
+     * Singular values of Jacobian (for TWA PS index computation)
+     * Returns sorted descending: σ₁ ≥ σ₂ ≥ ... ≥ σ₆
+     */
+    Eigen::VectorXd computeSingularValues(const JointAngles& q) const;
 
     /**
      * Set joint limits for IK solution clamping

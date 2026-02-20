@@ -14,20 +14,31 @@
 #include "../ipc/RobotPackagePayloads.hpp"
 #include "../ipc/JogPayloads.hpp"
 #include "../kinematics/UrdfForwardKinematics.hpp"
+#include "../kinematics/TwistDecomposition.hpp"
 #include "../config/RobotPackageLoader.hpp"
 #include "../config/UrdfParser.hpp"
 #include "../kinematics/DHParameters.hpp"
+#include "../trajectory/Interpolators.hpp"
 // V2: STM32EthernetDriver for hardware connection
 #include "../firmware/STM32EthernetDriver.hpp"
 #include <chrono>
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <Eigen/Geometry>
+#include <fstream>
 #include <sstream>
 
 namespace robot_controller {
 
 using namespace state;
+
+// Debug file logger for CIRC diagnostics
+static void circDebugLog(const std::string& msg) {
+    static std::ofstream dbg("E:/DEV_CONTEXT_PROJECTs/Robot_controller/debug_logs/circ_cpp_debug.txt", std::ios::app);
+    dbg << msg << "\n";
+    dbg.flush();
+}
 using namespace config;
 using namespace ipc;
 
@@ -478,16 +489,90 @@ bool RobotController::loadProgram(const std::string& source) {
 
             std::array<double, 6> targetPose = {tx, ty, tz, rx_deg, ry_deg, rz_deg};
 
+            // === BASE FRAME TRANSFORM ===
+            // If active base is not world, transform target from base coords to world coords
+            if (m_baseFrameManager && m_baseFrameManager->getActiveBaseId() != "world") {
+                frame::Frame baseTarget{tx, ty, tz, rx_deg, ry_deg, rz_deg};
+                frame::Frame worldTarget = m_baseFrameManager->transformToWorld(baseTarget);
+                tx = worldTarget.x;  ty = worldTarget.y;  tz = worldTarget.z;
+                rx_deg = worldTarget.rx; ry_deg = worldTarget.ry; rz_deg = worldTarget.rz;
+                targetPose = {tx, ty, tz, rx_deg, ry_deg, rz_deg};
+                LOG_INFO("  BASE transform: base({:.1f},{:.1f},{:.1f}) -> world({:.1f},{:.1f},{:.1f})",
+                         baseTarget.x, baseTarget.y, baseTarget.z, tx, ty, tz);
+            }
+
             LOG_INFO("Motion {} to '{}': [{:.1f}, {:.1f}, {:.1f}, {:.1f}, {:.1f}, {:.1f}]",
                      motion.type, pointName, tx, ty, tz, rx_deg, ry_deg, rz_deg);
 
-            // Log CIRC-specific parameters
-            if (motion.auxPoint) {
-                LOG_INFO("  CIRC auxPoint present");
+            // Resolve CIRC-specific parameters: auxPoint and CA angle
+            std::vector<double> auxValues;
+            double caAngleDeg = 0.0;
+            bool hasCaAngle = false;
+            bool isCirc = (motion.type == "CIRC" || motion.type == "CIRC_REL");
+
+            if (isCirc && motion.auxPoint) {
+                LOG_INFO("CIRC: resolving auxPoint...");
+                circDebugLog("=== CIRC motion: resolving auxPoint ===");
+                std::visit([&](auto&& e) {
+                    using T = std::decay_t<decltype(e)>;
+                    if constexpr (std::is_same_v<T, interpreter::PointExpr>) {
+                        circDebugLog("  auxPoint is PointExpr: name='" + e.name + "' inline_values=" + std::to_string(e.values.size()));
+                        if (!e.values.empty()) {
+                            auxValues = e.values;
+                        } else {
+                            auxValues = m_programExecutor->getPoint(e.name);
+                            circDebugLog("  getPoint('" + e.name + "') returned " + std::to_string(auxValues.size()) + " values");
+                        }
+                    }
+                    else if constexpr (std::is_same_v<T, interpreter::VariableExpr>) {
+                        circDebugLog("  auxPoint is VariableExpr: name='" + e.name + "'");
+                        auxValues = m_programExecutor->getPoint(e.name);
+                    }
+                    else if constexpr (std::is_same_v<T, interpreter::AggregateExpr>) {
+                        circDebugLog("  auxPoint is AggregateExpr with " + std::to_string(e.fields.size()) + " fields");
+                        for (const auto& [fieldName, fieldExpr] : e.fields) {
+                            auxValues.push_back(m_programExecutor->evaluateExpression(fieldExpr));
+                        }
+                    }
+                }, *motion.auxPoint);
+
+                if (auxValues.size() < 3) {
+                    circDebugLog("  FALLBACK TO LIN: auxValues.size()=" + std::to_string(auxValues.size()));
+                    LOG_WARN("CIRC: auxPoint has < 3 values (got {}), falling back to LIN", auxValues.size());
+                    isCirc = false;
+                } else {
+                    char buf[128];
+                    snprintf(buf, sizeof(buf), "  auxPoint resolved: [%.1f, %.1f, %.1f]", auxValues[0], auxValues[1], auxValues[2]);
+                    circDebugLog(buf);
+                    LOG_INFO("  CIRC auxPoint resolved: [{:.1f}, {:.1f}, {:.1f}]",
+                        auxValues[0], auxValues[1], auxValues[2]);
+                }
+            } else if (isCirc && !motion.auxPoint) {
+                circDebugLog("  FALLBACK TO LIN: no auxPoint in MotionStmt");
+                LOG_WARN("CIRC: no auxPoint provided, falling back to LIN");
+                isCirc = false;
             }
-            if (motion.circAngle) {
-                double angle = m_programExecutor->evaluateExpression(motion.circAngle);
-                LOG_INFO("  CIRC CA angle: {:.1f} deg", angle);
+
+            // Transform CIRC auxPoint from base to world if active base != world
+            if (isCirc && m_baseFrameManager && m_baseFrameManager->getActiveBaseId() != "world"
+                && auxValues.size() >= 3) {
+                frame::Frame baseAux{auxValues[0], auxValues[1], auxValues[2],
+                                     auxValues.size() >= 6 ? auxValues[3] : 0.0,
+                                     auxValues.size() >= 6 ? auxValues[4] : 0.0,
+                                     auxValues.size() >= 6 ? auxValues[5] : 0.0};
+                frame::Frame worldAux = m_baseFrameManager->transformToWorld(baseAux);
+                auxValues[0] = worldAux.x; auxValues[1] = worldAux.y; auxValues[2] = worldAux.z;
+                if (auxValues.size() >= 6) {
+                    auxValues[3] = worldAux.rx; auxValues[4] = worldAux.ry; auxValues[5] = worldAux.rz;
+                }
+                LOG_INFO("  BASE transform auxPoint: -> world({:.1f},{:.1f},{:.1f})",
+                         worldAux.x, worldAux.y, worldAux.z);
+            }
+
+            if (isCirc && motion.circAngle) {
+                caAngleDeg = m_programExecutor->evaluateExpression(motion.circAngle);
+                hasCaAngle = true;
+                LOG_INFO("  CIRC CA angle: {:.1f} deg", caAngleDeg);
             }
 
             // 4. Check if kinematics available
@@ -503,32 +588,53 @@ bool RobotController::loadProgram(const std::string& source) {
             for (int i = 0; i < 6; i++) currentJoints[i] = currentJointsDeg[i];
 
             // 6. Compute IK for target
-            auto ikResult = m_jogController->computeIK(targetPose, currentJoints);
-            if (!ikResult.has_value()) {
-                LOG_WARN("Motion {}: IK failed for point '{}' (unreachable)", motion.type, pointName);
-                std::this_thread::sleep_for(std::chrono::milliseconds(200));
-                return;
+            //    For PTP: need target joints for joint-space interpolation
+            //    For LIN/CIRC: skip pre-check — per-step IK with seed chain handles continuity
+            bool isJointMotion = (motion.type == "PTP" || motion.type == "PTP_REL");
+            std::optional<kinematics::IKSolution> ikResult;
+
+            if (isJointMotion) {
+                ikResult = m_jogController->computeIK(targetPose, currentJoints, /*skipConfigFlipCheck=*/true);
+
+                // PTP retry: if seed was far from target (local minimum), try with zero seed
+                if (!ikResult.has_value()) {
+                    std::array<double, 6> zeroSeed = {0, 0, 0, 0, 0, 0};
+                    ikResult = m_jogController->computeIK(targetPose, zeroSeed, /*skipConfigFlipCheck=*/true);
+                    if (ikResult.has_value()) {
+                        LOG_INFO("Motion PTP '{}': IK succeeded with zero seed fallback", pointName);
+                    }
+                }
+
+                if (!ikResult.has_value()) {
+                    LOG_WARN("Motion {}: IK failed for point '{}' (unreachable)", motion.type, pointName);
+                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                    return;
+                }
             }
 
             // 7. Convert IK result from radians to degrees
-            std::array<double, 6> targetJointsDeg;
-            for (int i = 0; i < 6; i++) {
-                targetJointsDeg[i] = ikResult->angles[i] * 180.0 / M_PI;
+            std::array<double, 6> targetJointsDeg{};
+            if (ikResult.has_value()) {
+                for (int i = 0; i < 6; i++) {
+                    targetJointsDeg[i] = ikResult->angles[i] * 180.0 / M_PI;
+                }
+                LOG_INFO("Motion {} '{}': joints [{:.1f},{:.1f},{:.1f},{:.1f},{:.1f},{:.1f}] -> [{:.1f},{:.1f},{:.1f},{:.1f},{:.1f},{:.1f}]",
+                    motion.type, pointName,
+                    currentJointsDeg[0], currentJointsDeg[1], currentJointsDeg[2],
+                    currentJointsDeg[3], currentJointsDeg[4], currentJointsDeg[5],
+                    targetJointsDeg[0], targetJointsDeg[1], targetJointsDeg[2],
+                    targetJointsDeg[3], targetJointsDeg[4], targetJointsDeg[5]);
+            } else {
+                LOG_INFO("Motion {} '{}': using per-step IK with seed chain (Cartesian motion)",
+                    motion.type, pointName);
             }
-
-            LOG_INFO("Motion {} '{}': joints [{:.1f},{:.1f},{:.1f},{:.1f},{:.1f},{:.1f}] -> [{:.1f},{:.1f},{:.1f},{:.1f},{:.1f},{:.1f}]",
-                motion.type, pointName,
-                currentJointsDeg[0], currentJointsDeg[1], currentJointsDeg[2],
-                currentJointsDeg[3], currentJointsDeg[4], currentJointsDeg[5],
-                targetJointsDeg[0], targetJointsDeg[1], targetJointsDeg[2],
-                targetJointsDeg[3], targetJointsDeg[4], targetJointsDeg[5]);
 
             // 8. Interpolate from current to target joints
             // Read velocity from KRL system variables
             double overrideFactor = m_programExecutor->getSystemVariable("OV_PRO") / 100.0;
             if (overrideFactor < 0.01) overrideFactor = 0.01;
 
-            bool isJoint = (motion.type == "PTP" || motion.type == "PTP_REL");
+            bool isJoint = isJointMotion;
             double speed_mm_s;
             if (isJoint) {
                 // PTP: use $VEL_AXIS[1] (%), map to mm/s
@@ -538,6 +644,11 @@ bool RobotController::loadProgram(const std::string& source) {
                 // LIN/CIRC: use $VEL.CP (m/s) -> mm/s
                 double velCp = m_programExecutor->getSystemVariable("VEL", "CP");
                 speed_mm_s = velCp * 1000.0 * overrideFactor;
+            }
+
+            // T1 mode speed cap: 250 mm/s (KSS 8.3 §3.5.12)
+            if (m_status.mode == RobotMode::T1 && speed_mm_s > 250.0) {
+                speed_mm_s = 250.0;
             }
 
             // Calculate interpolation steps
@@ -554,19 +665,91 @@ bool RobotController::loadProgram(const std::string& source) {
                 if (jointSpeed < 10.0) jointSpeed = 10.0;
                 totalTimeMs = (maxJointDelta / jointSpeed) * 1000.0;
             } else {
-                // Linear move: base on cartesian distance
+                // LIN/CIRC move: base on cartesian distance (arc length for CIRC)
                 auto startTcp = m_jogController->getTcpPose();
                 double dx = tx - startTcp[0];
                 double dy = ty - startTcp[1];
                 double dz = tz - startTcp[2];
                 double dist = std::sqrt(dx*dx + dy*dy + dz*dz);
+
+                // For CIRC, compute arc length instead of chord length
+                if (isCirc && auxValues.size() >= 3) {
+                    kinematics::Vector3d pS(startTcp[0], startTcp[1], startTcp[2]);
+                    kinematics::Vector3d pV(auxValues[0], auxValues[1], auxValues[2]);
+                    kinematics::Vector3d pE(tx, ty, tz);
+
+                    // Project to XY for helix
+                    kinematics::Vector3d pSxy = pS, pVxy = pV, pExy = pE;
+                    double dz_helix = pE.z() - pS.z();
+                    if (std::abs(dz_helix) > 0.01) {
+                        pSxy.z() = 0; pVxy.z() = 0; pExy.z() = 0;
+                    }
+
+                    bool sEqualsE = (pSxy - pExy).norm() < 0.1;
+                    kinematics::Vector3d c, n;
+                    double r;
+                    bool ok = false;
+
+                    if (sEqualsE) {
+                        // Full circle: compute center from start + via
+                        kinematics::Vector3d sv = pVxy - pSxy;
+                        if (sv.norm() > 0.01) {
+                            kinematics::Vector3d pSynth = 2.0 * pVxy - pSxy;
+                            kinematics::Vector3d v1 = pVxy - pSxy;
+                            kinematics::Vector3d v2 = pSynth - pSxy;
+                            if (v1.cross(v2).norm() < 1e-6) {
+                                c = (pSxy + pVxy) * 0.5;
+                                r = sv.norm() * 0.5;
+                                n = kinematics::Vector3d::UnitZ();
+                            } else {
+                                trajectory::CircularInterpolator::defineArc(pSxy, pVxy, pSynth, c, r, n);
+                            }
+                            ok = true;
+                        }
+                    } else {
+                        ok = trajectory::CircularInterpolator::defineArc(pSxy, pVxy, pExy, c, r, n);
+                    }
+
+                    if (ok) {
+                        kinematics::Vector3d sDir = (pSxy - c).normalized();
+                        kinematics::Vector3d vDir = (pVxy - c).normalized();
+                        kinematics::Vector3d crossSV = sDir.cross(vDir);
+                        double signSV = crossSV.dot(n);
+
+                        double sweepAngle;
+                        if (sEqualsE) {
+                            if (hasCaAngle) {
+                                sweepAngle = std::abs(caAngleDeg) * M_PI / 180.0;
+                            } else {
+                                sweepAngle = 2.0 * M_PI;
+                            }
+                        } else {
+                            kinematics::Vector3d eDir = (pExy - c).normalized();
+                            double dotSE = std::clamp(sDir.dot(eDir), -1.0, 1.0);
+                            double natAngle = std::acos(dotSE);
+                            kinematics::Vector3d crossSE = sDir.cross(eDir);
+                            double signSE = crossSE.dot(n);
+                            if (signSV >= 0 && signSE >= 0) sweepAngle = natAngle;
+                            else if (signSV >= 0 && signSE < 0) sweepAngle = 2.0*M_PI - natAngle;
+                            else if (signSV < 0 && signSE >= 0) sweepAngle = natAngle;
+                            else sweepAngle = 2.0*M_PI - natAngle;
+                            if (hasCaAngle) sweepAngle = std::abs(caAngleDeg) * M_PI / 180.0;
+                        }
+                        dist = r * sweepAngle;
+                        // For helix, add the Z component to arc length
+                        if (std::abs(dz_helix) > 0.01) {
+                            dist = std::sqrt(dist*dist + dz_helix*dz_helix);
+                        }
+                    }
+                }
+
                 if (speed_mm_s < 1.0) speed_mm_s = 100.0;
                 totalTimeMs = (dist / speed_mm_s) * 1000.0;
             }
 
             // Clamp to reasonable range
             if (totalTimeMs < 100.0) totalTimeMs = 100.0;
-            if (totalTimeMs > 10000.0) totalTimeMs = 10000.0;
+            if (totalTimeMs > 30000.0) totalTimeMs = 30000.0;
 
             int numSteps = static_cast<int>(totalTimeMs / stepTimeMs);
             if (numSteps < 2) numSteps = 2;
@@ -593,16 +776,260 @@ bool RobotController::loadProgram(const std::string& source) {
                 }
             } else {
                 // LIN/CIRC: Cartesian-space interpolation with IK per step
-                // This ensures TCP follows a straight line in Cartesian space
                 auto linStartTcp = m_jogController->getTcpPose();
                 double startX = linStartTcp[0], startY = linStartTcp[1], startZ = linStartTcp[2];
-                double startRx = linStartTcp[3], startRy = linStartTcp[4], startRz = linStartTcp[5];
 
                 auto prevJoints = currentJoints;  // seed chain for IK continuity
 
-                LOG_INFO("LIN start TCP=[{:.1f},{:.1f},{:.1f}] ori=[{:.1f},{:.1f},{:.1f}] -> target TCP=[{:.1f},{:.1f},{:.1f}] ori=[{:.1f},{:.1f},{:.1f}]",
-                    startX, startY, startZ, startRx, startRy, startRz,
-                    tx, ty, tz, rx_deg, ry_deg, rz_deg);
+                // Build start quaternion from FK rotation matrix (NOT from RPY)
+                auto startFkPose = m_jogController->getTcpPoseObject();
+                Eigen::Quaterniond qStart(startFkPose.rotation);
+                qStart.normalize();
+
+                // Build target quaternion from target RPY (from E6POS data)
+                double rx_rad = rx_deg * M_PI / 180.0;
+                double ry_rad = ry_deg * M_PI / 180.0;
+                double rz_rad = rz_deg * M_PI / 180.0;
+                Eigen::Matrix3d R_target;
+                R_target = Eigen::AngleAxisd(rz_rad, Eigen::Vector3d::UnitZ())
+                         * Eigen::AngleAxisd(ry_rad, Eigen::Vector3d::UnitY())
+                         * Eigen::AngleAxisd(rx_rad, Eigen::Vector3d::UnitX());
+                Eigen::Quaterniond qEnd(R_target);
+                qEnd.normalize();
+
+                if (qStart.dot(qEnd) < 0) {
+                    qEnd = Eigen::Quaterniond(-qEnd.w(), -qEnd.x(), -qEnd.y(), -qEnd.z());
+                }
+
+                // ----------------------------------------------------------------
+                // CIRC arc geometry setup
+                // ----------------------------------------------------------------
+                bool useArc = false;
+                bool isHelix = false;
+                Eigen::Vector3d arcCenter, arcNormal, arcStartDir;
+                double arcRadius = 0, arcSweepAngle = 0;
+                double helixDeltaZ = 0;  // Z offset for helix
+
+                if (isCirc && auxValues.size() >= 3) {
+                    Eigen::Vector3d pStart(startX, startY, startZ);
+                    Eigen::Vector3d pVia(auxValues[0], auxValues[1], auxValues[2]);
+                    Eigen::Vector3d pEnd(tx, ty, tz);
+                    {
+                        char buf[256];
+                        snprintf(buf, sizeof(buf), "CIRC geometry: Start=[%.1f,%.1f,%.1f] Via=[%.1f,%.1f,%.1f] End=[%.1f,%.1f,%.1f]",
+                            pStart.x(), pStart.y(), pStart.z(),
+                            pVia.x(), pVia.y(), pVia.z(),
+                            pEnd.x(), pEnd.y(), pEnd.z());
+                        circDebugLog(buf);
+                    }
+                    LOG_INFO("CIRC geometry: Start=[{:.1f},{:.1f},{:.1f}] Via=[{:.1f},{:.1f},{:.1f}] End=[{:.1f},{:.1f},{:.1f}]",
+                        pStart.x(), pStart.y(), pStart.z(),
+                        pVia.x(), pVia.y(), pVia.z(),
+                        pEnd.x(), pEnd.y(), pEnd.z());
+
+                    // Determine if the arc is a true helix (3 points NOT coplanar)
+                    // vs a planar arc that may include Z variation
+                    Eigen::Vector3d v_sv = pVia - pStart;
+                    Eigen::Vector3d v_se = pEnd - pStart;
+                    Eigen::Vector3d arcPlaneNormal = v_sv.cross(v_se);
+                    double planeNormLen = arcPlaneNormal.norm();
+
+                    helixDeltaZ = pEnd.z() - pStart.z();
+
+                    // Points are coplanar if cross product gives a valid normal
+                    // Use the ORIGINAL 3D points for arc fitting (no XY projection)
+                    Eigen::Vector3d pArcS = pStart, pArcV = pVia, pArcE = pEnd;
+
+                    if (planeNormLen < 1e-6) {
+                        // Collinear — cannot define arc, will fall through to LIN
+                        LOG_WARN("CIRC: 3 points are collinear, cannot define arc");
+                    } else {
+                        // Check if it's a helix: all 3 points coplanar means NOT helix
+                        // Helix = via point is OFF the plane defined by start, end, and
+                        // the normal. We check: does via have a Z component that deviates
+                        // from the plane of start-end at constant Z?
+                        // Simple check: if all 3 points are coplanar, it's a planar 3D arc
+                        // If not coplanar (which can't happen with 3 points), it's always planar.
+                        // TRUE helix: start.z != end.z AND the arc should be in XY with Z ramp
+                        // This only applies when the user intends a spiral motion.
+                        // For now: only use helix mode when arc normal is nearly vertical (Z-axis)
+                        // AND there's a Z delta — meaning the arc is "in XY plane" but start/end differ in Z
+                        arcPlaneNormal.normalize();
+                        double normalZ = std::abs(arcPlaneNormal.z());
+
+                        if (std::abs(helixDeltaZ) > 0.01 && normalZ > 0.95) {
+                            // Arc plane is nearly horizontal (XY) but start/end Z differ → helix
+                            isHelix = true;
+                            pArcS.z() = 0; pArcV.z() = 0; pArcE.z() = 0;
+                            LOG_INFO("CIRC helix detected: deltaZ={:.1f}mm, normalZ={:.3f}", helixDeltaZ, normalZ);
+                        } else {
+                            // Planar 3D arc (in YZ, XZ, or any arbitrary plane) — use as-is
+                            LOG_INFO("CIRC 3D planar arc: normal=[{:.3f},{:.3f},{:.3f}]",
+                                arcPlaneNormal.x(), arcPlaneNormal.y(), arcPlaneNormal.z());
+                        }
+                    }
+
+                    // Check if start ≈ end (full circle with CA 360)
+                    bool startEqualsEnd = (pArcS - pArcE).norm() < 0.1;
+
+                    kinematics::Vector3d center, normal;
+                    double radius;
+                    bool arcDefined = false;
+
+                    if (startEqualsEnd) {
+                        // Full circle: start == end, so 3-point circumcenter fails.
+                        // Center = midpoint of start and via (start is on circle, via is on circle,
+                        // and for CA 360 the via is typically at 90° or 180° on the arc).
+                        // Use: center lies on perpendicular bisector of start-via, in the plane
+                        // containing start, via, and the Z-axis hint.
+                        //
+                        // For the common case (via at 90° on circle): center is equidistant from
+                        // both points. We compute it via circumcircle of start, via, and a 3rd
+                        // synthetic point reflected through the start-via midpoint.
+                        Eigen::Vector3d mid = (pArcS + pArcV) * 0.5;
+                        Eigen::Vector3d sv = pArcV - pArcS;
+                        double svLen = sv.norm();
+
+                        if (svLen > 0.01) {
+                            // Create a synthetic 3rd point: reflect start across via
+                            // This gives us 3 non-coincident points on the circle
+                            Eigen::Vector3d pSynth = 2.0 * pArcV - pArcS;
+
+                            // But start, via, synth may be collinear if via = diameter opposite.
+                            // In that case center = midpoint(start, via)
+                            Eigen::Vector3d v1 = pArcV - pArcS;
+                            Eigen::Vector3d v2 = pSynth - pArcS;
+                            Eigen::Vector3d crossN = v1.cross(v2);
+
+                            if (crossN.norm() < 1e-6) {
+                                // Collinear: via is at 180° → center = midpoint
+                                center = mid;
+                                radius = svLen * 0.5;
+                                normal = Eigen::Vector3d::UnitZ();
+                            } else {
+                                // Use circumcenter of start, via, synth
+                                trajectory::CircularInterpolator::defineArc(
+                                    pArcS, pArcV, pSynth, center, radius, normal);
+                            }
+                            arcDefined = true;
+                        }
+                    } else {
+                        // Normal arc: 3 distinct points
+                        arcDefined = trajectory::CircularInterpolator::defineArc(
+                            pArcS, pArcV, pArcE, center, radius, normal);
+                    }
+
+                    if (arcDefined) {
+                        arcCenter = center;
+                        arcRadius = radius;
+                        arcNormal = normal;
+
+                        if (isHelix) {
+                            arcCenter.z() = pStart.z();
+                        }
+
+                        // Compute sweep angle
+                        arcStartDir = (pArcS - Eigen::Vector3d(center.x(), center.y(), center.z())).normalized();
+                        Eigen::Vector3d viaDir = (pArcV - Eigen::Vector3d(center.x(), center.y(), center.z())).normalized();
+
+                        if (startEqualsEnd) {
+                            // Full circle: sweep is determined by CA angle or default 360°
+                            // Determine direction from via point
+                            Eigen::Vector3d crossSV = arcStartDir.cross(viaDir);
+                            double signSV = crossSV.dot(arcNormal);
+
+                            if (hasCaAngle) {
+                                double caRad = std::abs(caAngleDeg) * M_PI / 180.0;
+                                arcSweepAngle = (signSV >= 0) ? caRad : -caRad;
+                            } else {
+                                // Default: full circle in via-point direction
+                                arcSweepAngle = (signSV >= 0) ? 2.0 * M_PI : -2.0 * M_PI;
+                            }
+                        } else {
+                            // Normal arc: compute from geometry
+                            Eigen::Vector3d endDir = (pArcE - Eigen::Vector3d(center.x(), center.y(), center.z())).normalized();
+                            double dotSE = std::clamp(arcStartDir.dot(endDir), -1.0, 1.0);
+                            double naturalAngle = std::acos(dotSE);
+
+                            Eigen::Vector3d crossSV = arcStartDir.cross(viaDir);
+                            Eigen::Vector3d crossSE = arcStartDir.cross(endDir);
+                            double signSV = crossSV.dot(arcNormal);
+                            double signSE = crossSE.dot(arcNormal);
+
+                            if (signSV >= 0 && signSE >= 0) {
+                                arcSweepAngle = naturalAngle;
+                            } else if (signSV >= 0 && signSE < 0) {
+                                arcSweepAngle = 2.0 * M_PI - naturalAngle;
+                            } else if (signSV < 0 && signSE >= 0) {
+                                arcSweepAngle = -naturalAngle;
+                            } else {
+                                arcSweepAngle = -(2.0 * M_PI - naturalAngle);
+                            }
+
+                            if (hasCaAngle) {
+                                double caRad = std::abs(caAngleDeg) * M_PI / 180.0;
+                                arcSweepAngle = (arcSweepAngle >= 0) ? caRad : -caRad;
+                            }
+                        }
+
+                        useArc = true;
+                        {
+                            char buf[256];
+                            snprintf(buf, sizeof(buf), "CIRC arc SUCCESS: center=[%.1f,%.1f,%.1f] R=%.1f sweep=%.1f deg %s",
+                                arcCenter.x(), arcCenter.y(), arcCenter.z(),
+                                arcRadius, arcSweepAngle * 180.0 / M_PI,
+                                isHelix ? "HELIX" : "");
+                            circDebugLog(buf);
+                        }
+                        LOG_INFO("CIRC arc: center=[{:.1f},{:.1f},{:.1f}] R={:.1f} sweep={:.1f}deg{}",
+                            arcCenter.x(), arcCenter.y(), arcCenter.z(),
+                            arcRadius, arcSweepAngle * 180.0 / M_PI,
+                            isHelix ? " HELIX" : "");
+                    } else {
+                        circDebugLog("CIRC arc FAILED: defineArc returned false → fallback to LIN");
+                        LOG_WARN("CIRC: cannot define arc, falling back to LIN");
+                    }
+                }
+
+                // Build aux orientation quaternion for CIRC orientation interpolation
+                Eigen::Quaterniond qAux = qStart;
+                if (useArc && auxValues.size() >= 6) {
+                    double auxRz = auxValues[3] * M_PI / 180.0;
+                    double auxRy = auxValues[4] * M_PI / 180.0;
+                    double auxRx = auxValues[5] * M_PI / 180.0;
+                    Eigen::Matrix3d R_aux;
+                    R_aux = Eigen::AngleAxisd(auxRz, Eigen::Vector3d::UnitZ())
+                          * Eigen::AngleAxisd(auxRy, Eigen::Vector3d::UnitY())
+                          * Eigen::AngleAxisd(auxRx, Eigen::Vector3d::UnitX());
+                    qAux = Eigen::Quaterniond(R_aux);
+                    qAux.normalize();
+                    if (qStart.dot(qAux) < 0) {
+                        qAux = Eigen::Quaterniond(-qAux.w(), -qAux.x(), -qAux.y(), -qAux.z());
+                    }
+                }
+
+                LOG_INFO("{} start pos=[{:.1f},{:.1f},{:.1f}] -> target pos=[{:.1f},{:.1f},{:.1f}]",
+                    useArc ? "CIRC" : "LIN", startX, startY, startZ, tx, ty, tz);
+
+                // CSV trajectory log for offline analysis
+                static std::ofstream trajLog;
+                static bool trajLogOpened = false;
+                if (!trajLogOpened) {
+                    trajLog.open("trajectory_debug.csv");
+                    trajLog << "segment,step,cmd_x,cmd_y,cmd_z,actual_x,actual_y,actual_z,j1,j2,j3,j4,j5,j6,ik_ok\n";
+                    trajLogOpened = true;
+                }
+
+                // For CIRC: ensure smooth arc (~3° per step max)
+                if (useArc && arcSweepAngle > 0.01) {
+                    int minArcSteps = static_cast<int>(std::abs(arcSweepAngle) / (3.0 * M_PI / 180.0));
+                    if (minArcSteps < 20) minArcSteps = 20;
+                    if (numSteps < minArcSteps) {
+                        LOG_DEBUG("CIRC: boosting steps {} -> {} for smooth arc", numSteps, minArcSteps);
+                        numSteps = minArcSteps;
+                        stepTimeMs = totalTimeMs / numSteps;
+                    }
+                }
 
                 int ikFailCount = 0;
                 for (int step = 1; step <= numSteps; step++) {
@@ -612,34 +1039,155 @@ bool RobotController::loadProgram(const std::string& source) {
                     double t = static_cast<double>(step) / numSteps;
                     double s = t * t * (3.0 - 2.0 * t);  // smoothstep
 
-                    // Interpolate Cartesian position and orientation
-                    std::array<double, 6> interpPose;
-                    interpPose[0] = startX + s * (tx - startX);
-                    interpPose[1] = startY + s * (ty - startY);
-                    interpPose[2] = startZ + s * (tz - startZ);
-                    interpPose[3] = startRx + s * (rx_deg - startRx);
-                    interpPose[4] = startRy + s * (ry_deg - startRy);
-                    interpPose[5] = startRz + s * (rz_deg - startRz);
+                    double interpX, interpY, interpZ;
+                    Eigen::Quaterniond qInterp;
 
-                    // Pure temporal continuity: use previous IK result as seed.
-                    // This is the standard approach (MoveIt, industrial controllers)
-                    // to maintain configuration consistency along Cartesian paths.
-                    auto stepIK = m_jogController->computeIK(interpPose, prevJoints);
+                    if (useArc) {
+                        // CIRC: interpolate along circular arc
+                        double angle = s * arcSweepAngle;
+                        Eigen::AngleAxisd rot(angle, arcNormal);
+                        Eigen::Vector3d dir = rot * arcStartDir;
+                        Eigen::Vector3d arcPos = arcCenter + arcRadius * dir;
+
+                        interpX = arcPos.x();
+                        interpY = arcPos.y();
+                        if (isHelix) {
+                            // Helix: arc computed in XY, Z ramps linearly
+                            interpZ = arcCenter.z() + s * helixDeltaZ;
+                        } else {
+                            // Planar 3D arc: Z comes directly from arc rotation
+                            interpZ = arcPos.z();
+                        }
+
+                        // Orientation based on $ORI_TYPE and $CIRC_TYPE
+                        int oriType = static_cast<int>(m_programExecutor->getSystemVariable("ORI_TYPE"));
+                        int circType = static_cast<int>(m_programExecutor->getSystemVariable("CIRC_TYPE"));
+
+                        if (circType == 1) {
+                            // === $CIRC_TYPE = #PATH: Tool tracking along arc ===
+
+                            // Path frame at start (angle=0)
+                            Eigen::Vector3d T0 = arcNormal.cross(arcStartDir).normalized();
+                            Eigen::Vector3d N0 = arcStartDir;
+                            Eigen::Vector3d B0 = T0.cross(N0);
+                            Eigen::Matrix3d pathFrame0;
+                            pathFrame0.col(0) = T0; pathFrame0.col(1) = N0; pathFrame0.col(2) = B0;
+
+                            // Relative offset at start
+                            Eigen::Matrix3d R_offset_start = pathFrame0.transpose() * qStart.toRotationMatrix();
+
+                            // Path frame at current angle θ
+                            double angle = s * arcSweepAngle;
+                            Eigen::AngleAxisd rot2(angle, arcNormal);
+                            Eigen::Vector3d dirTheta = rot2 * arcStartDir;
+                            Eigen::Vector3d T_theta = arcNormal.cross(dirTheta).normalized();
+                            Eigen::Vector3d N_theta = dirTheta;
+                            Eigen::Vector3d B_theta = T_theta.cross(N_theta);
+                            Eigen::Matrix3d pathFrameTheta;
+                            pathFrameTheta.col(0) = T_theta; pathFrameTheta.col(1) = N_theta; pathFrameTheta.col(2) = B_theta;
+
+                            if (oriType == 1) {
+                                // #CONSTANT: keep start offset throughout
+                                Eigen::Matrix3d R_result = pathFrameTheta * R_offset_start;
+                                qInterp = Eigen::Quaterniond(R_result).normalized();
+                            } else {
+                                // #VAR (default): SLERP offset from start to end
+                                Eigen::AngleAxisd rotEnd(arcSweepAngle, arcNormal);
+                                Eigen::Vector3d dirEnd = rotEnd * arcStartDir;
+                                Eigen::Vector3d T_end = arcNormal.cross(dirEnd).normalized();
+                                Eigen::Vector3d N_end = dirEnd;
+                                Eigen::Vector3d B_end = T_end.cross(N_end);
+                                Eigen::Matrix3d pathFrameEnd;
+                                pathFrameEnd.col(0) = T_end; pathFrameEnd.col(1) = N_end; pathFrameEnd.col(2) = B_end;
+
+                                Eigen::Matrix3d R_offset_end = pathFrameEnd.transpose() * qEnd.toRotationMatrix();
+
+                                Eigen::Quaterniond qOffStart(R_offset_start);
+                                Eigen::Quaterniond qOffEnd(R_offset_end);
+                                qOffStart.normalize(); qOffEnd.normalize();
+                                if (qOffStart.dot(qOffEnd) < 0) qOffEnd.coeffs() = -qOffEnd.coeffs();
+                                Eigen::Quaterniond qOffInterp = qOffStart.slerp(s, qOffEnd);
+
+                                Eigen::Matrix3d R_result = pathFrameTheta * qOffInterp.toRotationMatrix();
+                                qInterp = Eigen::Quaterniond(R_result).normalized();
+                            }
+                        } else if (oriType == 1) {
+                            // $ORI_TYPE = #CONSTANT, $CIRC_TYPE = #BASE: keep start orientation
+                            qInterp = qStart;
+                        } else {
+                            // Default: $ORI_TYPE = #VAR, $CIRC_TYPE = #BASE → simple SLERP
+                            qInterp = qStart.slerp(s, qEnd);
+                        }
+                    } else {
+                        // LIN: straight-line interpolation
+                        interpX = startX + s * (tx - startX);
+                        interpY = startY + s * (ty - startY);
+                        interpZ = startZ + s * (tz - startZ);
+                        qInterp = qStart.slerp(s, qEnd);
+                    }
+
+                    kinematics::TCPPose interpTcpPose;
+                    interpTcpPose.position = kinematics::Vector3d(interpX, interpY, interpZ);
+                    interpTcpPose.rotation = qInterp.toRotationMatrix();
+                    interpTcpPose.quaternion = kinematics::Quaterniond(interpTcpPose.rotation);
+                    interpTcpPose.rpy = kinematics::rotationToRPY(interpTcpPose.rotation);
+
+                    auto stepIK = m_jogController->computeIK(interpTcpPose, prevJoints);
+                    // If config flip rejected, retry without flip check — transition
+                    // between motion segments (CIRC→LIN) can legitimately change config
+                    if (!stepIK.has_value() && step <= 3) {
+                        stepIK = m_jogController->computeIK(interpTcpPose, prevJoints, /*skipConfigFlipCheck=*/true);
+                        if (stepIK.has_value()) {
+                            LOG_DEBUG("{} '{}': step {} IK recovered with skipFlipCheck",
+                                useArc ? "CIRC" : "LIN", pointName, step);
+                        }
+                    }
                     if (stepIK.has_value()) {
                         std::array<double, 6> stepJointsDeg;
                         for (int i = 0; i < 6; i++) {
                             stepJointsDeg[i] = stepIK->angles[i] * 180.0 / M_PI;
                         }
+
+                        // TWA singularity check: slow down near singularity
+                        if (m_jogController->getKDL()) {
+                            kinematics::Jacobian J = m_jogController->getKDL()->computeJacobian(stepIK->angles);
+                            double ps = kinematics::TwistDecomposition::computePS(J);
+                            if (ps > 50.0) {
+                                double scale = std::max(0.1, 50.0 / ps);
+                                int extraDelay = static_cast<int>(stepTimeMs * (1.0 / scale - 1.0));
+                                std::this_thread::sleep_for(std::chrono::milliseconds(extraDelay));
+                                LOG_DEBUG("LIN '{}': Singularity proximity, PS={:.1f}, extra delay={}ms",
+                                         pointName, ps, extraDelay);
+                            }
+                        }
+
+                        auto actualPose = m_jogController->getTcpPose();
+
+                        if (trajLog.is_open()) {
+                            trajLog << pointName << "," << step
+                                << "," << interpX << "," << interpY << "," << interpZ
+                                << "," << actualPose[0] << "," << actualPose[1] << "," << actualPose[2]
+                                << "," << stepJointsDeg[0] << "," << stepJointsDeg[1] << "," << stepJointsDeg[2]
+                                << "," << stepJointsDeg[3] << "," << stepJointsDeg[4] << "," << stepJointsDeg[5]
+                                << ",1\n";
+                        }
+
                         m_activeDriver->setJointPositionsDirect(stepJointsDeg);
                         for (int i = 0; i < 6; i++) prevJoints[i] = stepJointsDeg[i];
                     } else {
+                        if (trajLog.is_open()) {
+                            trajLog << pointName << "," << step
+                                << "," << interpX << "," << interpY << "," << interpZ
+                                << ",,,,,,,0\n";
+                        }
                         ikFailCount++;
                     }
 
                     std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(stepTimeMs)));
                 }
                 if (ikFailCount > 0) {
-                    LOG_WARN("LIN '{}': {} IK failures out of {} steps", pointName, ikFailCount, numSteps);
+                    LOG_WARN("{} '{}': {} IK failures out of {} steps",
+                        useArc ? "CIRC" : "LIN", pointName, ikFailCount, numSteps);
                 }
             }
 
@@ -662,6 +1210,29 @@ bool RobotController::loadProgram(const std::string& source) {
 
         m_programExecutor->setOutputCallback([this](int index, bool value) {
             LOG_INFO("$OUT[{}] = {}", index, value ? "TRUE" : "FALSE");
+        });
+
+        // Base frame change callback: map $BASE = BASE_DATA[n] to BaseFrameManager
+        m_programExecutor->setBaseChangeCallback([this](int baseIndex) {
+            if (!m_baseFrameManager) return;
+            if (baseIndex == 0) {
+                m_baseFrameManager->setActiveBase("world");
+                LOG_INFO("$BASE = BASE_DATA[0] -> active base = world");
+            } else {
+                auto bases = m_baseFrameManager->getAllBases();
+                int idx = 0;
+                for (const auto& b : bases) {
+                    if (idx == baseIndex) {
+                        m_baseFrameManager->setActiveBase(b.id);
+                        LOG_INFO("$BASE = BASE_DATA[{}] -> active base = {} ({})",
+                                 baseIndex, b.id, b.name);
+                        return;
+                    }
+                    idx++;
+                }
+                LOG_WARN("$BASE = BASE_DATA[{}]: index out of range ({} bases available)",
+                         baseIndex, static_cast<int>(bases.size()));
+            }
         });
     }
 
@@ -946,6 +1517,16 @@ void RobotController::controlLoop() {
     LOG_DEBUG("Control loop stopped");
 }
 
+void RobotController::saveBaseFrames() {
+    if (!m_baseFrameManager) return;
+    if (!m_workspacePath.empty()) {
+        auto wsFrames = std::filesystem::path(m_workspacePath) / "Frames";
+        std::filesystem::create_directories(wsFrames);
+        m_baseFrameManager->saveToDirectory(wsFrames.string());
+        LOG_INFO("Base frames saved to {}", wsFrames.string());
+    }
+}
+
 void RobotController::updateStatus() {
     std::lock_guard<std::mutex> lock(m_statusMutex);
 
@@ -1060,6 +1641,14 @@ void RobotController::publishStatus() {
             {"current_axis", jogState.currentAxis},
             {"current_direction", jogState.currentDirection},
             {"current_speed", jogState.currentSpeed}
+        };
+
+        // TWA singularity status
+        payload["singularity"] = {
+            {"ps_index", m_jogController->getCurrentPS()},
+            {"active", m_jogController->isSingularityActive()},
+            {"velocity_scale", m_jogController->getVelocityScale()},
+            {"critical_joint", m_jogController->getCriticalJoint()}
         };
     }
 
@@ -1618,12 +2207,12 @@ void RobotController::registerIpcHandlers() {
 
             LOG_INFO("SET_OPERATION_MODE request: mode={}", req.mode);
 
-            // Map mode string to RobotMode
+            // Map mode string to RobotMode (support both legacy and KUKA names)
             RobotMode targetMode = RobotMode::MANUAL;
-            if (req.mode == "MANUAL") targetMode = RobotMode::T1;
-            else if (req.mode == "TEST") targetMode = RobotMode::T2;
-            else if (req.mode == "AUTO") targetMode = RobotMode::AUTO;
-            else if (req.mode == "REMOTE") targetMode = RobotMode::AUTO;
+            if (req.mode == "MANUAL" || req.mode == "T1") targetMode = RobotMode::T1;
+            else if (req.mode == "TEST" || req.mode == "T2") targetMode = RobotMode::T2;
+            else if (req.mode == "AUTO" || req.mode == "AUT") targetMode = RobotMode::AUTO;
+            else if (req.mode == "REMOTE" || req.mode == "EXT") targetMode = RobotMode::AUTO;
 
             // Check preconditions
             auto status = getStatus();
@@ -1651,12 +2240,18 @@ void RobotController::registerIpcHandlers() {
                 response.success = true;
                 response.newMode = req.mode;
 
+                // Update jog speed cap based on mode (KSS 8.3 §3.5.12)
+                bool isT1 = (req.mode == "MANUAL" || req.mode == "T1");
+                if (m_jogController) {
+                    m_jogController->setSpeedCap(isT1 ? 250.0 : 10000.0);
+                }
+
                 // Publish mode changed event
                 OperationModeChangedEvent event;
                 event.previousMode = toString(status.mode);
                 event.newMode = req.mode;
-                event.maxLinearVelocity = (req.mode == "MANUAL") ? 250.0 : 2000.0;
-                event.maxJointVelocity = (req.mode == "MANUAL") ? 30.0 : 180.0;
+                event.maxLinearVelocity = isT1 ? 250.0 : 2000.0;
+                event.maxJointVelocity = isT1 ? 30.0 : 180.0;
                 auto eventMsg = Message::create(MessageType::OPERATION_MODE_CHANGED, event);
                 m_ipcServer->publish(eventMsg);
             } else {
@@ -1714,7 +2309,7 @@ void RobotController::registerIpcHandlers() {
         });
 
     // ========================================================================
-    // Base Frame Handlers
+    // Base Frame Handlers — connected to BaseFrameManager
     // ========================================================================
 
     // GET_BASE_LIST handler
@@ -1722,16 +2317,17 @@ void RobotController::registerIpcHandlers() {
         [this](const Message& request) -> nlohmann::json {
             GetBaseListResponse response;
 
-            // TODO: Connect to BaseFrameManager
-            // For now, return placeholder data
-            BaseFramePayload world;
-            world.id = "world";
-            world.name = "World Frame";
-            world.description = "Robot base coordinate system";
-            world.isActive = true;
-
-            response.bases.push_back(world);
-            response.activeBaseId = "world";
+            auto allBases = m_baseFrameManager->getAllBases();
+            for (const auto& b : allBases) {
+                BaseFramePayload bp;
+                bp.id = b.id;
+                bp.name = b.name;
+                bp.description = b.description;
+                bp.frame = FramePayload::fromFrame(b.frame);
+                bp.isActive = (b.id == m_baseFrameManager->getActiveBaseId());
+                response.bases.push_back(bp);
+            }
+            response.activeBaseId = m_baseFrameManager->getActiveBaseId();
 
             return response;
         });
@@ -1742,13 +2338,14 @@ void RobotController::registerIpcHandlers() {
             GetBaseRequest req = request.payload.get<GetBaseRequest>();
             GetBaseResponse response;
 
-            LOG_DEBUG("GET_BASE request: baseId={}", req.baseId);
-
-            if (req.baseId == "world") {
+            auto base = m_baseFrameManager->getBase(req.baseId);
+            if (base) {
                 response.success = true;
-                response.base.id = "world";
-                response.base.name = "World Frame";
-                response.base.isActive = true;
+                response.base.id = base->id;
+                response.base.name = base->name;
+                response.base.description = base->description;
+                response.base.frame = FramePayload::fromFrame(base->frame);
+                response.base.isActive = (base->id == m_baseFrameManager->getActiveBaseId());
             } else {
                 response.success = false;
                 response.error = "Base frame not found: " + req.baseId;
@@ -1763,10 +2360,20 @@ void RobotController::registerIpcHandlers() {
             CreateBaseRequest req = request.payload.get<CreateBaseRequest>();
             CreateBaseResponse response;
 
-            LOG_INFO("CREATE_BASE request: id={}, name={}", req.base.id, req.base.name);
+            LOG_INFO("CREATE_BASE: id={}, name={}", req.base.id, req.base.name);
 
-            // TODO: Connect to BaseFrameManager
-            response.success = true;
+            frame::BaseFrame newBase;
+            newBase.id = req.base.id;
+            newBase.name = req.base.name;
+            newBase.description = req.base.description;
+            newBase.frame = req.base.frame.toFrame();
+
+            response.success = m_baseFrameManager->createBase(newBase);
+            if (!response.success) {
+                response.error = "Failed to create base frame (ID may already exist)";
+            } else {
+                saveBaseFrames();
+            }
 
             return response;
         });
@@ -1777,10 +2384,20 @@ void RobotController::registerIpcHandlers() {
             UpdateBaseRequest req = request.payload.get<UpdateBaseRequest>();
             UpdateBaseResponse response;
 
-            LOG_INFO("UPDATE_BASE request: baseId={}", req.baseId);
+            LOG_INFO("UPDATE_BASE: baseId={}", req.baseId);
 
-            // TODO: Connect to BaseFrameManager
-            response.success = true;
+            frame::BaseFrame updated;
+            updated.id = req.baseId;
+            updated.name = req.base.name;
+            updated.description = req.base.description;
+            updated.frame = req.base.frame.toFrame();
+
+            response.success = m_baseFrameManager->updateBase(req.baseId, updated);
+            if (!response.success) {
+                response.error = "Failed to update base frame: " + req.baseId;
+            } else {
+                saveBaseFrames();
+            }
 
             return response;
         });
@@ -1791,14 +2408,18 @@ void RobotController::registerIpcHandlers() {
             DeleteBaseRequest req = request.payload.get<DeleteBaseRequest>();
             DeleteBaseResponse response;
 
-            LOG_INFO("DELETE_BASE request: baseId={}", req.baseId);
+            LOG_INFO("DELETE_BASE: baseId={}", req.baseId);
 
             if (req.baseId == "world") {
                 response.success = false;
                 response.error = "Cannot delete world frame";
             } else {
-                // TODO: Connect to BaseFrameManager
-                response.success = true;
+                response.success = m_baseFrameManager->deleteBase(req.baseId);
+                if (!response.success) {
+                    response.error = "Failed to delete base frame: " + req.baseId;
+                } else {
+                    saveBaseFrames();
+                }
             }
 
             return response;
@@ -1810,17 +2431,20 @@ void RobotController::registerIpcHandlers() {
             SelectBaseRequest req = request.payload.get<SelectBaseRequest>();
             SelectBaseResponse response;
 
-            LOG_INFO("SELECT_BASE request: baseId={}", req.baseId);
+            LOG_INFO("SELECT_BASE: baseId={}", req.baseId);
 
-            // TODO: Connect to BaseFrameManager
-            response.success = true;
-
-            // Publish base changed event
-            BaseChangedEvent event;
-            event.baseId = req.baseId;
-            event.baseName = req.baseId;
-            auto eventMsg = Message::create(MessageType::BASE_CHANGED, event);
-            m_ipcServer->publish(eventMsg);
+            response.success = m_baseFrameManager->setActiveBase(req.baseId);
+            if (!response.success) {
+                response.error = "Base frame not found: " + req.baseId;
+            } else {
+                // Publish base changed event
+                auto active = m_baseFrameManager->getActiveBase();
+                BaseChangedEvent event;
+                event.baseId = req.baseId;
+                event.baseName = active ? active->name : req.baseId;
+                auto eventMsg = Message::create(MessageType::BASE_CHANGED, event);
+                m_ipcServer->publish(eventMsg);
+            }
 
             return response;
         });
@@ -1830,11 +2454,17 @@ void RobotController::registerIpcHandlers() {
         [this](const Message& request) -> nlohmann::json {
             GetActiveBaseResponse response;
 
-            // TODO: Connect to BaseFrameManager
-            response.success = true;
-            response.base.id = "world";
-            response.base.name = "World Frame";
-            response.base.isActive = true;
+            auto active = m_baseFrameManager->getActiveBase();
+            if (active) {
+                response.success = true;
+                response.base.id = active->id;
+                response.base.name = active->name;
+                response.base.description = active->description;
+                response.base.frame = FramePayload::fromFrame(active->frame);
+                response.base.isActive = true;
+            } else {
+                response.success = false;
+            }
 
             return response;
         });
@@ -1845,11 +2475,13 @@ void RobotController::registerIpcHandlers() {
             StartBaseCalibrationRequest req = request.payload.get<StartBaseCalibrationRequest>();
             StartBaseCalibrationResponse response;
 
-            LOG_INFO("START_BASE_CALIBRATION request: method={}", req.method);
+            LOG_INFO("START_BASE_CALIBRATION: method={}", req.method);
 
-            // TODO: Connect to BaseFrameManager
+            auto method = frame::baseCalibrationMethodFromString(req.method);
+            m_baseFrameManager->startCalibration(method);
+
             response.success = true;
-            response.pointsRequired = (req.method == "FOUR_POINT") ? 4 : 3;
+            response.pointsRequired = (method == frame::BaseCalibrationMethod::FOUR_POINT) ? 4 : 3;
 
             return response;
         });
@@ -1860,15 +2492,29 @@ void RobotController::registerIpcHandlers() {
             RecordBasePointRequest req = request.payload.get<RecordBasePointRequest>();
             RecordBasePointResponse response;
 
-            LOG_INFO("RECORD_BASE_POINT request: pointIndex={}", req.pointIndex);
+            LOG_INFO("RECORD_BASE_POINT: pointIndex={}", req.pointIndex);
 
-            // TODO: Connect to BaseFrameManager
-            response.success = true;
+            // Convert vectors to arrays
+            std::array<double, 6> joints{};
+            for (size_t i = 0; i < std::min(req.jointAngles.size(), (size_t)6); i++)
+                joints[i] = req.jointAngles[i];
+
+            std::array<double, 3> tcp{};
+            for (size_t i = 0; i < std::min(req.tcpPosition.size(), (size_t)3); i++)
+                tcp[i] = req.tcpPosition[i];
+
+            response.success = m_baseFrameManager->recordCalibrationPoint(
+                req.pointIndex, joints, tcp);
             response.pointIndex = req.pointIndex;
-            response.pointName = (req.pointIndex == 0) ? "Origin" :
-                                 (req.pointIndex == 1) ? "X-Direction" : "XY-Plane";
-            response.totalPoints = 3;
-            response.recordedPoints = req.pointIndex + 1;
+            response.pointName = frame::getCalibrationPointName(req.pointIndex);
+
+            auto status = m_baseFrameManager->getCalibrationStatus();
+            response.totalPoints = status.pointsRequired;
+            response.recordedPoints = status.pointsRecorded;
+
+            if (!response.success) {
+                response.error = "Failed to record calibration point";
+            }
 
             return response;
         });
@@ -1878,11 +2524,20 @@ void RobotController::registerIpcHandlers() {
         [this](const Message& request) -> nlohmann::json {
             FinishBaseCalibrationResponse response;
 
-            LOG_INFO("FINISH_BASE_CALIBRATION request");
+            LOG_INFO("FINISH_BASE_CALIBRATION");
 
-            // TODO: Connect to BaseFrameManager
-            response.success = true;
-            response.calculatedFrame = FramePayload{100, 50, 0, 0, 0, 45};
+            auto calculatedFrame = m_baseFrameManager->calculateBaseFrame();
+            if (calculatedFrame) {
+                response.success = true;
+                response.calculatedFrame = FramePayload::fromFrame(*calculatedFrame);
+
+                LOG_INFO("Calibrated frame: ({:.1f}, {:.1f}, {:.1f}) rot({:.1f}, {:.1f}, {:.1f})",
+                    calculatedFrame->x, calculatedFrame->y, calculatedFrame->z,
+                    calculatedFrame->rx, calculatedFrame->ry, calculatedFrame->rz);
+            } else {
+                response.success = false;
+                response.error = "Calibration calculation failed";
+            }
 
             return response;
         });
@@ -1890,9 +2545,8 @@ void RobotController::registerIpcHandlers() {
     // CANCEL_BASE_CALIBRATION handler
     m_ipcServer->registerHandler(MessageType::CANCEL_BASE_CALIBRATION,
         [this](const Message& request) -> nlohmann::json {
-            LOG_INFO("CANCEL_BASE_CALIBRATION request");
-
-            // TODO: Connect to BaseFrameManager
+            LOG_INFO("CANCEL_BASE_CALIBRATION");
+            m_baseFrameManager->cancelCalibration();
             return nlohmann::json{{"success", true}};
         });
 
@@ -1901,11 +2555,18 @@ void RobotController::registerIpcHandlers() {
         [this](const Message& request) -> nlohmann::json {
             BaseCalibrationStatusResponse response;
 
-            // TODO: Connect to BaseFrameManager
-            response.state = "IDLE";
-            response.method = "THREE_POINT";
-            response.pointsRequired = 3;
-            response.pointsRecorded = 0;
+            auto status = m_baseFrameManager->getCalibrationStatus();
+            switch (status.state) {
+                case frame::BaseCalibrationState::IDLE:        response.state = "IDLE"; break;
+                case frame::BaseCalibrationState::IN_PROGRESS: response.state = "IN_PROGRESS"; break;
+                case frame::BaseCalibrationState::COMPLETED:   response.state = "COMPLETED"; break;
+                case frame::BaseCalibrationState::ERROR:       response.state = "ERROR"; break;
+            }
+            response.method = frame::baseCalibrationMethodToString(status.method);
+            response.pointsRequired = status.pointsRequired;
+            response.pointsRecorded = status.pointsRecorded;
+            response.currentPointName = status.currentPointName;
+            response.errorMessage = status.errorMessage;
 
             return response;
         });
