@@ -1,0 +1,36 @@
+DEF weld()
+  $TOOL = TOOL_DATA[1]
+  $BASE = BASE_DATA[0]
+
+  ; Velocity settings
+  $VEL.CP = 0.3
+
+  ; Go to home position
+  PTP pHome
+
+  ; Approach above weld area
+  LIN pApproach
+
+  ; Orientation: tool huong vao tam duong tron
+  $ORI_TYPE = 1
+  $CIRC_TYPE = 1
+
+  ; Toc do han 15mm/s
+  $VEL.CP = 0.015
+  LIN pWeldStart
+
+  ; Bat tin hieu han
+  $OUT[1] = TRUE
+
+  ; Han duong tron 360 do
+  CIRC pAux, pWeldStart, CA 360.0
+
+  ; Tat tin hieu han
+  $OUT[1] = FALSE
+
+  ; Rut ra
+  $VEL.CP = 0.3
+  LIN pApproach
+  PTP pHome
+
+END

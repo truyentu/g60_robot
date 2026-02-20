@@ -1,0 +1,22 @@
+DEF CircTest()
+  $TOOL = TOOL_DATA[1]
+  $BASE = BASE_DATA[0]
+
+  $VEL.CP = 0.3
+
+  ; ================================================================
+  ; Test: LIN + semicircle + LIN (giong SingTest pattern)
+  ; Line 1: X+ at Y=-200, Line 2: X- at Y=-100
+  ; Arc R=50 noi cuoi line 1 voi dau line 2
+  ; ================================================================
+
+  PTP pHome
+  PTP pStart
+
+  LIN L1e
+  CIRC A1m, L2s
+  LIN L2e
+
+  PTP pHome
+
+END

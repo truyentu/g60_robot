@@ -1,0 +1,54 @@
+DEF SingTest()
+  $TOOL = TOOL_DATA[1]
+  $BASE = BASE_DATA[0]
+
+  $VEL.CP = 0.3
+  $APO.CDIS = 5
+
+  ; ================================================================
+  ; HORIZONTAL RASTER — 3 lines along X in XY plane (Z=1465)
+  ; X: 820..1540, Y step 300mm, arc R=150mm
+  ; ================================================================
+
+  PTP pApproach
+  $VEL.CP = 0.2
+  LIN pStart
+
+  $VEL.CP = 0.3
+
+  LIN L1e
+  CIRC A1m, L2s
+  LIN L2e
+  CIRC A2m, L3s
+  LIN L3e
+
+  ; ================================================================
+  ; VERTICAL RASTER — 8 lines along Z in YZ plane (X=1200)
+  ; Perpendicular to horizontal raster
+  ; ================================================================
+
+  ; Reset joints via approach point (clears J4 drift from singularity)
+  PTP pApproach
+
+  PTP V1s
+  LIN V1e
+  CIRC VA1m, V2s
+  LIN V2e
+  CIRC VA2m, V3s
+  LIN V3e
+  CIRC VA3m, V4s
+  LIN V4e
+  CIRC VA4m, V5s
+  LIN V5e
+  CIRC VA5m, V6s
+  LIN V6e
+  CIRC VA6m, V7s
+  LIN V7e
+  CIRC VA7m, V8s
+  LIN V8e
+
+  $VEL.CP = 0.2
+  LIN pStart
+  PTP pApproach
+
+END

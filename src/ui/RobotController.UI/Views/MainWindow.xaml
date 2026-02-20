@@ -612,9 +612,7 @@
                         <Style TargetType="Border">
                             <Setter Property="Visibility" Value="Visible"/>
                             <Style.Triggers>
-                                <DataTrigger Binding="{Binding SelectedNavIndex}" Value="1">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                </DataTrigger>
+                                <!-- NavIndex=1 (Program Editor/Execute) keeps panel visible for jog+position -->
                                 <DataTrigger Binding="{Binding SelectedNavIndex}" Value="2">
                                     <Setter Property="Visibility" Value="Collapsed"/>
                                 </DataTrigger>

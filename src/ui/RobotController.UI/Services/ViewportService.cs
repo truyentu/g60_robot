@@ -19,8 +19,16 @@ public class PathSegment
 {
     public Point3D From { get; set; }
     public Point3D To { get; set; }
+    public Point3D? Via { get; set; }  // For CIRC: intermediate/auxiliary point
+    public double? CircAngle { get; set; }  // For CIRC: CA angle in degrees
     public string MotionType { get; set; } = "PTP"; // PTP, LIN, CIRC
     public string PointName { get; set; } = "";
+
+    /// <summary>
+    /// TWA Parameter of Singularity index (optional, for heatmap coloring).
+    /// null = use default color. Set by path optimizer or IPC status.
+    /// </summary>
+    public double? PSIndex { get; set; }
 }
 
 /// <summary>
@@ -1695,10 +1703,10 @@ public class ViewportService : IViewportService
     {
         return motionType.ToUpperInvariant() switch
         {
-            "PTP" => Color.FromRgb(60, 140, 255),     // Blue - joint move
-            "LIN" => Color.FromRgb(80, 255, 80),     // Green - linear
-            "CIRC" => Color.FromRgb(255, 100, 50),   // Orange-red - circular
-            _ => Color.FromRgb(200, 200, 200)                              // Gray - unknown
+            "PTP" => Color.FromRgb(80, 255, 80),      // Green - unified trace color
+            "LIN" => Color.FromRgb(80, 255, 80),      // Green - unified trace color
+            "CIRC" => Color.FromRgb(80, 255, 80),     // Green - unified trace color
+            _ => Color.FromRgb(80, 255, 80)            // Green - unified trace color
         };
     }
 
@@ -1895,6 +1903,194 @@ public class ViewportService : IViewportService
     // Path Preview (static path visualization)
     // ========================================================================
 
+    /// <summary>
+    /// Generate interpolated arc points from a CIRC segment (From, Via, To).
+    /// Uses 3-point circle fitting to find center, then sweeps the arc.
+    /// For CA 360, draws a full circle through all 3 points.
+    /// </summary>
+    /// <summary>
+    /// Map PS index to heatmap color: green (safe) → yellow (caution) → red (danger).
+    /// </summary>
+    private static System.Windows.Media.Color GetSingularityColor(double psIndex)
+    {
+        if (psIndex < 20.0)
+            return System.Windows.Media.Color.FromRgb(76, 175, 80);   // Green — safe
+        if (psIndex < 50.0)
+        {
+            // Interpolate green → yellow (20..50)
+            double t = (psIndex - 20.0) / 30.0;
+            byte r = (byte)(76 + t * (255 - 76));
+            byte g = (byte)(175 + t * (193 - 175));
+            byte b = (byte)(80 + t * (7 - 80));
+            return System.Windows.Media.Color.FromRgb(r, g, b);
+        }
+        // PS >= 50 → red
+        return System.Windows.Media.Color.FromRgb(244, 67, 54);       // Red — danger
+    }
+
+    private static void GenerateArcPoints(PathSegment seg, Point3DCollection points)
+    {
+        const string debugLog = @"E:\DEV_CONTEXT_PROJECTs\Robot_controller\debug_logs\circ_debug.txt";
+        if (!seg.Via.HasValue)
+        {
+            System.IO.File.AppendAllText(debugLog,
+                $"[GenerateArc] {seg.PointName}: Via=NULL → straight line fallback\n");
+            points.Add(seg.From);
+            points.Add(seg.To);
+            return;
+        }
+
+        System.IO.File.AppendAllText(debugLog,
+            $"[GenerateArc] {seg.PointName}: From=({seg.From.X:F1},{seg.From.Y:F1},{seg.From.Z:F1}) " +
+            $"Via=({seg.Via.Value.X:F1},{seg.Via.Value.Y:F1},{seg.Via.Value.Z:F1}) " +
+            $"To=({seg.To.X:F1},{seg.To.Y:F1},{seg.To.Z:F1})\n");
+
+        var p1 = seg.From;
+        var p2 = seg.Via.Value;
+        var p3 = seg.To;
+
+        // Vectors from p1
+        var v12 = new Vector3D(p2.X - p1.X, p2.Y - p1.Y, p2.Z - p1.Z);
+        var v13 = new Vector3D(p3.X - p1.X, p3.Y - p1.Y, p3.Z - p1.Z);
+
+        // Normal to the plane containing the 3 points
+        var normal = Vector3D.CrossProduct(v12, v13);
+        if (normal.Length < 1e-9)
+        {
+            // Collinear points — draw straight line
+            points.Add(p1);
+            points.Add(p3);
+            return;
+        }
+        normal.Normalize();
+
+        // Find circle center using perpendicular bisectors in the plane
+        // Midpoints
+        var m12 = new Point3D((p1.X + p2.X) / 2, (p1.Y + p2.Y) / 2, (p1.Z + p2.Z) / 2);
+        var m13 = new Point3D((p1.X + p3.X) / 2, (p1.Y + p3.Y) / 2, (p1.Z + p3.Z) / 2);
+
+        // Bisector directions (perpendicular to chord, in the plane)
+        var b12 = Vector3D.CrossProduct(v12, normal);
+        var b13 = Vector3D.CrossProduct(v13, normal);
+
+        // Solve: m12 + t*b12 = m13 + s*b13 (intersection of bisectors)
+        // Using least-squares approach for robustness
+        // m12 + t*b12 - m13 - s*b13 = 0
+        // => t*b12 - s*b13 = m13 - m12
+        var dm = new Vector3D(m13.X - m12.X, m13.Y - m12.Y, m13.Z - m12.Z);
+
+        // Solve 2x2 system using dot products
+        double a11 = Vector3D.DotProduct(b12, b12);
+        double a12 = -Vector3D.DotProduct(b12, b13);
+        double a22 = Vector3D.DotProduct(b13, b13);
+        double r1 = Vector3D.DotProduct(b12, dm);
+        double r2 = -Vector3D.DotProduct(b13, dm);
+
+        double det = a11 * a22 - a12 * a12;
+        if (Math.Abs(det) < 1e-12)
+        {
+            points.Add(p1);
+            points.Add(p3);
+            return;
+        }
+
+        double t = (r1 * a22 - a12 * r2) / det;
+
+        // Circle center
+        var center = new Point3D(
+            m12.X + t * b12.X,
+            m12.Y + t * b12.Y,
+            m12.Z + t * b12.Z);
+
+        double radius = Math.Sqrt(
+            (p1.X - center.X) * (p1.X - center.X) +
+            (p1.Y - center.Y) * (p1.Y - center.Y) +
+            (p1.Z - center.Z) * (p1.Z - center.Z));
+
+        // Build local coordinate system on the circle plane
+        var u = new Vector3D(p1.X - center.X, p1.Y - center.Y, p1.Z - center.Z);
+        u.Normalize();
+        var v = Vector3D.CrossProduct(normal, u);
+        v.Normalize();
+
+        // Angle of p2 (via) relative to p1
+        var vP2 = new Vector3D(p2.X - center.X, p2.Y - center.Y, p2.Z - center.Z);
+        double angle2 = Math.Atan2(Vector3D.DotProduct(vP2, v), Vector3D.DotProduct(vP2, u));
+
+        // Angle of p3 (target) relative to p1
+        var vP3 = new Vector3D(p3.X - center.X, p3.Y - center.Y, p3.Z - center.Z);
+        double angle3 = Math.Atan2(Vector3D.DotProduct(vP3, v), Vector3D.DotProduct(vP3, u));
+
+        // Determine sweep angle
+        double sweepAngle;
+        if (seg.CircAngle.HasValue)
+        {
+            // CA angle specified (e.g., 360 for full circle)
+            sweepAngle = seg.CircAngle.Value * Math.PI / 180.0;
+            // Determine direction from via point
+            if (angle2 < 0) sweepAngle = -Math.Abs(sweepAngle);
+        }
+        else
+        {
+            // Sweep from p1 through p2 to p3
+            // Normalize angles to [0, 2π)
+            if (angle2 < 0) angle2 += 2 * Math.PI;
+            if (angle3 < 0) angle3 += 2 * Math.PI;
+
+            // Check both CW and CCW paths — pick the one that passes through p2
+            double ccwSweep = angle3;           // positive (CCW) sweep from 0 to angle3
+            double cwSweep = angle3 - 2 * Math.PI; // negative (CW) sweep from 0 to angle3
+
+            // For CCW path: p2 (at angle2) should be between 0 and angle3
+            // For CW path: p2 (at angle2) should be between angle3-2π and 0
+            // i.e., angle2 > angle3 (since angle3-2π < 0, angle2 is in (angle3, 2π))
+            if (angle2 > 0 && angle2 < angle3)
+            {
+                // p2 is on the CCW path from p1 to p3
+                sweepAngle = ccwSweep;
+            }
+            else
+            {
+                // p2 is on the CW path from p1 to p3
+                sweepAngle = cwSweep;
+            }
+        }
+
+        // Generate interpolated points along the arc
+        int numSteps = Math.Max(36, (int)(Math.Abs(sweepAngle) / (Math.PI / 36)));
+        System.IO.File.AppendAllText(@"E:\DEV_CONTEXT_PROJECTs\Robot_controller\debug_logs\circ_debug.txt",
+            $"  => center=({center.X:F1},{center.Y:F1},{center.Z:F1}) R={radius:F1} " +
+            $"angle2={angle2 * 180 / Math.PI:F1}° angle3={angle3 * 180 / Math.PI:F1}° " +
+            $"sweep={sweepAngle * 180 / Math.PI:F1}° steps={numSteps}\n");
+        int pointsBefore = points.Count;
+        for (int i = 0; i < numSteps; i++)
+        {
+            double a1 = sweepAngle * i / numSteps;
+            double a2 = sweepAngle * (i + 1) / numSteps;
+
+            double cos1 = Math.Cos(a1), sin1 = Math.Sin(a1);
+            double cos2 = Math.Cos(a2), sin2 = Math.Sin(a2);
+
+            var pt1 = new Point3D(
+                center.X + radius * (cos1 * u.X + sin1 * v.X),
+                center.Y + radius * (cos1 * u.Y + sin1 * v.Y),
+                center.Z + radius * (cos1 * u.Z + sin1 * v.Z));
+            var pt2 = new Point3D(
+                center.X + radius * (cos2 * u.X + sin2 * v.X),
+                center.Y + radius * (cos2 * u.Y + sin2 * v.Y),
+                center.Z + radius * (cos2 * u.Z + sin2 * v.Z));
+
+            points.Add(pt1);
+            points.Add(pt2);
+
+            if (i < 3 || i == numSteps - 1) // log first 3 and last segment
+                System.IO.File.AppendAllText(@"E:\DEV_CONTEXT_PROJECTs\Robot_controller\debug_logs\circ_debug.txt",
+                    $"    seg[{i}]: ({pt1.X:F1},{pt1.Y:F1},{pt1.Z:F1})->({pt2.X:F1},{pt2.Y:F1},{pt2.Z:F1})\n");
+        }
+        System.IO.File.AppendAllText(@"E:\DEV_CONTEXT_PROJECTs\Robot_controller\debug_logs\circ_debug.txt",
+            $"  => added {points.Count - pointsBefore} points (total circPoints={points.Count})\n");
+    }
+
     public void ShowPathPreview(List<PathSegment> segments)
     {
         System.Windows.Application.Current.Dispatcher.Invoke(() =>
@@ -1909,9 +2105,13 @@ public class ViewportService : IViewportService
             var ptpPoints = new Point3DCollection();
             var linPoints = new Point3DCollection();
             var circPoints = new Point3DCollection();
+            // LIN segments with PSIndex get per-segment heatmap coloring
+            var heatmapSegments = new List<(Point3DCollection pts, System.Windows.Media.Color color)>();
+            bool hasAnyPSIndex = false;
 
             foreach (var seg in segments)
             {
+                Log.Debug("[ViewportService] Segment: MotionType={Type} Name={Name}", seg.MotionType, seg.PointName);
                 switch (seg.MotionType.ToUpperInvariant())
                 {
                     case "PTP":
@@ -1919,53 +2119,82 @@ public class ViewportService : IViewportService
                         ptpPoints.Add(seg.To);
                         break;
                     case "CIRC":
-                        circPoints.Add(seg.From);
-                        circPoints.Add(seg.To);
+                        GenerateArcPoints(seg, circPoints);
                         break;
                     default: // LIN
-                        linPoints.Add(seg.From);
-                        linPoints.Add(seg.To);
+                        if (seg.PSIndex.HasValue)
+                        {
+                            hasAnyPSIndex = true;
+                            var pts = new Point3DCollection { seg.From, seg.To };
+                            heatmapSegments.Add((pts, GetSingularityColor(seg.PSIndex.Value)));
+                        }
+                        else
+                        {
+                            linPoints.Add(seg.From);
+                            linPoints.Add(seg.To);
+                        }
                         break;
                 }
             }
 
-            // PTP: blue dashed (using thinner line as WPF 3D doesn't support dash natively)
+            // PTP: blue
             if (ptpPoints.Count > 0)
             {
                 var ptpVisual = new LinesVisual3D
                 {
                     Points = ptpPoints,
-                    Color = System.Windows.Media.Color.FromRgb(66, 133, 244),  // Blue
-                    Thickness = 1.5
+                    Color = System.Windows.Media.Color.FromRgb(66, 133, 244),
+                    Thickness = 3.0
                 };
                 _pathPreviewContainer.Children.Add(ptpVisual);
             }
 
-            // LIN: green solid
+            // LIN: green solid (segments without PSIndex)
             if (linPoints.Count > 0)
             {
                 var linVisual = new LinesVisual3D
                 {
                     Points = linPoints,
-                    Color = System.Windows.Media.Color.FromRgb(76, 175, 80),   // Green
-                    Thickness = 2.5
+                    Color = System.Windows.Media.Color.FromRgb(76, 175, 80),
+                    Thickness = 4.0
                 };
                 _pathPreviewContainer.Children.Add(linVisual);
             }
 
-            // CIRC: orange
+            Log.Information("[ViewportService] ShowPathPreview: PTP={PTP} LIN={LIN} CIRC={CIRC} container.Children={Children}",
+                ptpPoints.Count, linPoints.Count, circPoints.Count, _pathPreviewContainer.Children.Count);
+
+            // LIN heatmap: per-segment coloring by PS index
+            foreach (var (pts, color) in heatmapSegments)
+            {
+                var heatVisual = new LinesVisual3D
+                {
+                    Points = pts,
+                    Color = color,
+                    Thickness = 3.0  // Slightly thicker for heatmap visibility
+                };
+                _pathPreviewContainer.Children.Add(heatVisual);
+            }
+
+            // CIRC: bright yellow for maximum visibility
             if (circPoints.Count > 0)
             {
                 var circVisual = new LinesVisual3D
                 {
                     Points = circPoints,
-                    Color = System.Windows.Media.Color.FromRgb(255, 152, 0),   // Orange
-                    Thickness = 2.5
+                    Color = System.Windows.Media.Color.FromRgb(255, 255, 0),   // YELLOW
+                    Thickness = 8.0
                 };
                 _pathPreviewContainer.Children.Add(circVisual);
+                Log.Information("[ViewportService] CIRC rendered: {Count} points YELLOW", circPoints.Count);
             }
 
-            Log.Information("[ViewportService] Path preview: {Count} segments", segments.Count);
+            if (hasAnyPSIndex)
+                Log.Information("[ViewportService] Path preview with singularity heatmap: {HeatCount} colored segments",
+                    heatmapSegments.Count);
+
+            Log.Information("[ViewportService] Path preview: {Count} segments, PTP={PTP} LIN={LIN} CIRC={CIRC}",
+                segments.Count, ptpPoints.Count / 2, linPoints.Count / 2, circPoints.Count);
         });
     }
 
@@ -1973,9 +2202,11 @@ public class ViewportService : IViewportService
     {
         System.Windows.Application.Current.Dispatcher.Invoke(() =>
         {
-            // Remove existing marker visuals (ModelVisual3D children that aren't LinesVisual3D)
+            // Remove existing marker visuals (but NOT LinesVisual3D which are path lines)
             var markersToRemove = _pathPreviewContainer.Children
-                .OfType<ModelVisual3D>().ToList();
+                .OfType<ModelVisual3D>()
+                .Where(c => c is not LinesVisual3D)
+                .ToList();
             foreach (var m in markersToRemove)
                 _pathPreviewContainer.Children.Remove(m);
 

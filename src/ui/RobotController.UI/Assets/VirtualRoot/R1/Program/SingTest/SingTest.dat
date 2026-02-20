@@ -1,0 +1,71 @@
+DEFDAT SingTest
+  ;FOLD EXTERNAL DECLARATIONS; %{PE}
+  ;ENDFOLD
+
+  ; ================================================================
+  ; HORIZONTAL RASTER — 3 lines, step 300mm, arc R=150mm
+  ; X: 820..1540, Y: -300, 0, +300, Z=1465
+  ; ================================================================
+
+  DECL E6POS pApproach={X 1065.00, Y 0.00, Z 1829.00, A 0.00, B -10.00, C 0.00}
+  DECL E6POS pStart={X 820.00, Y -300.00, Z 1465.00, A 0.00, B 0.00, C 0.00}
+
+  ; LINE 1: X+ at Y=-300
+  DECL E6POS L1e={X 1540.00, Y -300.00, Z 1465.00, A 0.00, B 0.00, C 0.00}
+  DECL E6POS A1m={X 1690.00, Y -150.00, Z 1465.00, A 0.00, B 0.00, C 0.00}
+
+  ; LINE 2: X- at Y=0
+  DECL E6POS L2s={X 1540.00, Y 0.00, Z 1465.00, A 0.00, B 0.00, C 0.00}
+  DECL E6POS L2e={X 820.00, Y 0.00, Z 1465.00, A 0.00, B 0.00, C 0.00}
+  DECL E6POS A2m={X 670.00, Y 150.00, Z 1465.00, A 0.00, B 0.00, C 0.00}
+
+  ; LINE 3: X+ at Y=300
+  DECL E6POS L3s={X 820.00, Y 300.00, Z 1465.00, A 0.00, B 0.00, C 0.00}
+  DECL E6POS L3e={X 1540.00, Y 300.00, Z 1465.00, A 0.00, B 0.00, C 0.00}
+
+  ; ================================================================
+  ; VERTICAL RASTER — 8 lines along Z in YZ plane (X=1000)
+  ; X=1000, Y: -189..+189 (step 54mm), Z: 1300..1650
+  ; Smaller range, closer to robot center => less J4 rotation
+  ; ================================================================
+
+  ; VLINE 1: Z+ at Y=-189
+  DECL E6POS V1s={X 1000.00, Y -189.00, Z 1300.00, A 0.00, B 0.00, C 0.00}
+  DECL E6POS V1e={X 1000.00, Y -189.00, Z 1650.00, A 0.00, B 0.00, C 0.00}
+  DECL E6POS VA1m={X 1000.00, Y -162.00, Z 1677.00, A 0.00, B 0.00, C 0.00}
+
+  ; VLINE 2: Z- at Y=-135
+  DECL E6POS V2s={X 1000.00, Y -135.00, Z 1650.00, A 0.00, B 0.00, C 0.00}
+  DECL E6POS V2e={X 1000.00, Y -135.00, Z 1300.00, A 0.00, B 0.00, C 0.00}
+  DECL E6POS VA2m={X 1000.00, Y -108.00, Z 1273.00, A 0.00, B 0.00, C 0.00}
+
+  ; VLINE 3: Z+ at Y=-81
+  DECL E6POS V3s={X 1000.00, Y -81.00, Z 1300.00, A 0.00, B 0.00, C 0.00}
+  DECL E6POS V3e={X 1000.00, Y -81.00, Z 1650.00, A 0.00, B 0.00, C 0.00}
+  DECL E6POS VA3m={X 1000.00, Y -54.00, Z 1677.00, A 0.00, B 0.00, C 0.00}
+
+  ; VLINE 4: Z- at Y=-27
+  DECL E6POS V4s={X 1000.00, Y -27.00, Z 1650.00, A 0.00, B 0.00, C 0.00}
+  DECL E6POS V4e={X 1000.00, Y -27.00, Z 1300.00, A 0.00, B 0.00, C 0.00}
+  DECL E6POS VA4m={X 1000.00, Y 0.00, Z 1273.00, A 0.00, B 0.00, C 0.00}
+
+  ; VLINE 5: Z+ at Y=27
+  DECL E6POS V5s={X 1000.00, Y 27.00, Z 1300.00, A 0.00, B 0.00, C 0.00}
+  DECL E6POS V5e={X 1000.00, Y 27.00, Z 1650.00, A 0.00, B 0.00, C 0.00}
+  DECL E6POS VA5m={X 1000.00, Y 54.00, Z 1677.00, A 0.00, B 0.00, C 0.00}
+
+  ; VLINE 6: Z- at Y=81
+  DECL E6POS V6s={X 1000.00, Y 81.00, Z 1650.00, A 0.00, B 0.00, C 0.00}
+  DECL E6POS V6e={X 1000.00, Y 81.00, Z 1300.00, A 0.00, B 0.00, C 0.00}
+  DECL E6POS VA6m={X 1000.00, Y 108.00, Z 1273.00, A 0.00, B 0.00, C 0.00}
+
+  ; VLINE 7: Z+ at Y=135
+  DECL E6POS V7s={X 1000.00, Y 135.00, Z 1300.00, A 0.00, B 0.00, C 0.00}
+  DECL E6POS V7e={X 1000.00, Y 135.00, Z 1650.00, A 0.00, B 0.00, C 0.00}
+  DECL E6POS VA7m={X 1000.00, Y 162.00, Z 1677.00, A 0.00, B 0.00, C 0.00}
+
+  ; VLINE 8: Z- at Y=189
+  DECL E6POS V8s={X 1000.00, Y 189.00, Z 1650.00, A 0.00, B 0.00, C 0.00}
+  DECL E6POS V8e={X 1000.00, Y 189.00, Z 1300.00, A 0.00, B 0.00, C 0.00}
+
+ENDDAT

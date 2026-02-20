@@ -647,12 +647,12 @@ public class WorkspaceService
     private static string GenerateDefaultSrc(string name, string comment = "")
     {
         var cmt = string.IsNullOrWhiteSpace(comment) ? "New program" : comment;
-        return $"&ACCESS RV\n&REL 1\n&COMMENT {cmt}\n\nDEF {name}()\n  ;FOLD INI\n    ;FOLD BASISTECH INI\n      BAS(#INITMOV, 0)\n    ;ENDFOLD\n  ;ENDFOLD\n\n  ;FOLD PTP HOME Vel=100% DEFAULT\n    PTP HOME Vel=100% DEFAULT\n  ;ENDFOLD\n\nEND\n";
+        return $"&ACCESS RV\n&REL 1\n&COMMENT {cmt}\n\nDEF {name}()\n  ;FOLD INI\n    ;FOLD BASISTECH INI\n      BAS(#INITMOV, 0)\n    ;ENDFOLD\n  ;ENDFOLD\n\n  ;FOLD PTP HOME Vel=100% DEFAULT\n    $VEL.CP = 1.00\n    PTP HOME Vel=100% DEFAULT\n  ;ENDFOLD\n\n  ; === USER PROGRAM ===\n\n\n  ; === END USER PROGRAM ===\n\n  ;FOLD PTP HOME Vel=100% DEFAULT\n    $VEL.CP = 1.00\n    PTP HOME Vel=100% DEFAULT\n  ;ENDFOLD\n\nEND\n";
     }
 
     private static string GenerateDefaultDat(string name)
     {
-        return $"DEFDAT {name}\n  ;FOLD EXTERNAL DECLARATIONS; %{{PE}}\n  ;ENDFOLD\n\n  DECL E6POS HOME={{A1 0.0, A2 -90.0, A3 90.0, A4 0.0, A5 0.0, A6 0.0}}\n\nENDDAT\n";
+        return $"DEFDAT {name}\n  ;FOLD EXTERNAL DECLARATIONS; %{{PE}}\n  ;ENDFOLD\n\n  DECL E6POS HOME={{X 600.00, Y 0.00, Z 700.00, A 0.00, B 90.00, C 0.00}}\n\nENDDAT\n";
     }
 
     // ===== Legacy compatibility: SeedCatalogFromSource =====

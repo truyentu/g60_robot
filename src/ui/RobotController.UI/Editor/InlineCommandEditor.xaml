@@ -4,7 +4,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
-             d:DesignWidth="500" d:DesignHeight="40">
+             d:DesignWidth="700" d:DesignHeight="40">
 
     <!-- KUKA-Style Inline Form: appears below the current command line -->
     <Border Background="#C8C8C8" BorderBrush="#007ACC" BorderThickness="1"
@@ -13,8 +13,10 @@
             <DropShadowEffect Color="Black" BlurRadius="8" ShadowDepth="2" Opacity="0.4"/>
         </Border.Effect>
 
-        <Grid>
+        <StackPanel Orientation="Horizontal">
+            <!-- ============================================================ -->
             <!-- Motion Instruction Form: PTP/LIN/CIRC -->
+            <!-- ============================================================ -->
             <StackPanel Orientation="Horizontal"
                         Visibility="{Binding IsMotionCommand, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}">
 
@@ -27,16 +29,51 @@
                           Background="#FFFFFF" Foreground="#222222"
                           BorderBrush="#999999"/>
 
-                <!-- Target (read-only label) -->
+                <!-- Target -->
                 <TextBlock Foreground="#CE9178" VerticalAlignment="Center"
-                           FontSize="11" FontWeight="SemiBold" Margin="10,0,0,0">
+                           FontSize="11" FontWeight="SemiBold" Margin="10,0,0,0"
+                           Visibility="{Binding IsInsertMode, Converter={StaticResource InverseBoolToVisibilityConverter}, FallbackValue=Visible}">
                     <Run Text="Target: "/>
                     <Run Text="{Binding TargetName}"/>
                 </TextBlock>
 
+                <!-- Target (INSERT mode: editable + Teach button) -->
+                <StackPanel Orientation="Horizontal" Margin="10,0,0,0"
+                            Visibility="{Binding IsInsertMode, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}">
+                    <TextBlock Text="Target:" Foreground="#555555" VerticalAlignment="Center" FontSize="11" Margin="0,0,4,0"/>
+                    <TextBox Text="{Binding TargetName, UpdateSourceTrigger=PropertyChanged}"
+                             Width="80" FontSize="11" VerticalContentAlignment="Center"/>
+                    <Button Content="Teach" Click="TeachTargetPoint_Click"
+                            Background="#9C27B0" Foreground="White"
+                            Padding="6,2" Margin="4,0" BorderThickness="0" FontSize="10" Cursor="Hand"
+                            ToolTip="Record current robot position as target point"/>
+                </StackPanel>
+
+                <!-- CIRC: Aux Point (visible only for CIRC) -->
+                <StackPanel Orientation="Horizontal" Margin="10,0,0,0"
+                            Visibility="{Binding IsCircMotion, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}">
+                    <TextBlock Text="Aux:" Foreground="#555555" VerticalAlignment="Center" FontSize="11" Margin="0,0,4,0"/>
+                    <TextBox Text="{Binding AuxPointName, UpdateSourceTrigger=PropertyChanged}"
+                             Width="80" FontSize="11" VerticalContentAlignment="Center"/>
+                    <Button Content="Teach" Click="TeachAuxPoint_Click"
+                            Background="#9C27B0" Foreground="White"
+                            Padding="6,2" Margin="4,0" BorderThickness="0" FontSize="10" Cursor="Hand"
+                            ToolTip="Record current robot position as auxiliary point"
+                            Visibility="{Binding IsInsertMode, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}"/>
+                </StackPanel>
+
+                <!-- CIRC: CA Angle (visible only for CIRC) -->
+                <StackPanel Orientation="Horizontal" Margin="6,0,0,0"
+                            Visibility="{Binding IsCircMotion, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}">
+                    <CheckBox Content="CA" IsChecked="{Binding UseCaAngle}" VerticalAlignment="Center" FontSize="10"/>
+                    <TextBox Text="{Binding CaAngle, StringFormat=F1, UpdateSourceTrigger=PropertyChanged}"
+                             Width="50" FontSize="11" Margin="4,0" VerticalContentAlignment="Center"
+                             IsEnabled="{Binding UseCaAngle}"/>
+                </StackPanel>
+
                 <Rectangle Width="1" Fill="#999999" Margin="10,2"/>
 
-                <!-- Approximation Dropdown (KRL: C_PTP, C_DIS, C_VEL, C_ORI) -->
+                <!-- Approximation Dropdown -->
                 <TextBlock Text="Approx:" Foreground="#555555" VerticalAlignment="Center"
                            FontSize="11" Margin="10,0,4,0"/>
                 <ComboBox ItemsSource="{Binding AvailableApproximations}"
@@ -46,7 +83,9 @@
                           BorderBrush="#999999"/>
             </StackPanel>
 
+            <!-- ============================================================ -->
             <!-- ArcStart Form -->
+            <!-- ============================================================ -->
             <StackPanel Orientation="Horizontal"
                         Visibility="{Binding IsArcStartCommand, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}">
 
@@ -79,6 +118,89 @@
                     <Run Text="{Binding SelectedJob.Voltage, StringFormat={}{0:F1}V, FallbackValue=''}"/>
                 </TextBlock>
             </StackPanel>
-        </Grid>
+
+            <!-- ============================================================ -->
+            <!-- Velocity Form: $VEL.CP = N -->
+            <!-- ============================================================ -->
+            <StackPanel Orientation="Horizontal"
+                        Visibility="{Binding IsVelocityCommand, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}">
+                <TextBlock Text="Variable:" Foreground="#555555" VerticalAlignment="Center" FontSize="11"/>
+                <ComboBox ItemsSource="{Binding VelocityVariables}"
+                          SelectedItem="{Binding VelocityVariable, Mode=TwoWay}"
+                          Width="120" FontSize="11" Margin="4,0"
+                          Background="#FFFFFF" Foreground="#222222" BorderBrush="#999999"/>
+                <TextBlock Text="=" Foreground="#555555" VerticalAlignment="Center" FontSize="11" Margin="4,0"/>
+                <TextBox Text="{Binding VelocityValue, StringFormat=F2, UpdateSourceTrigger=PropertyChanged}"
+                         Width="60" FontSize="11" VerticalContentAlignment="Center"/>
+                <TextBlock Text="m/s" Foreground="#777777" VerticalAlignment="Center" FontSize="10" Margin="4,0"/>
+            </StackPanel>
+
+            <!-- ============================================================ -->
+            <!-- Wait Form: WAIT SEC N / WAIT FOR condition -->
+            <!-- ============================================================ -->
+            <StackPanel Orientation="Horizontal"
+                        Visibility="{Binding IsWaitCommand, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}">
+                <TextBlock Text="WAIT" Foreground="#569CD6" VerticalAlignment="Center" FontSize="11" FontWeight="SemiBold"/>
+                <ComboBox ItemsSource="{Binding WaitTypes}"
+                          SelectedItem="{Binding WaitType, Mode=TwoWay}"
+                          Width="60" FontSize="11" Margin="4,0"
+                          Background="#FFFFFF" Foreground="#222222" BorderBrush="#999999"/>
+                <!-- Time input (visible when WaitType=SEC) -->
+                <TextBox Text="{Binding WaitTime, StringFormat=F1, UpdateSourceTrigger=PropertyChanged}"
+                         Width="50" FontSize="11" Margin="4,0" VerticalContentAlignment="Center"
+                         Visibility="{Binding IsWaitTimerMode, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Visible}"/>
+                <TextBlock Text="sec" Foreground="#777777" FontSize="10" Margin="2,0" VerticalAlignment="Center"
+                           Visibility="{Binding IsWaitTimerMode, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Visible}"/>
+                <!-- Condition input (visible when WaitType=FOR) -->
+                <TextBox Text="{Binding WaitCondition, UpdateSourceTrigger=PropertyChanged}"
+                         Width="200" FontSize="11" Margin="4,0" VerticalContentAlignment="Center"
+                         Visibility="{Binding IsWaitConditionMode, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}"/>
+            </StackPanel>
+
+            <!-- ============================================================ -->
+            <!-- Output Form: $OUT[N] = TRUE/FALSE -->
+            <!-- ============================================================ -->
+            <StackPanel Orientation="Horizontal"
+                        Visibility="{Binding IsOutputCommand, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}">
+                <TextBlock Text="$OUT[" Foreground="#569CD6" VerticalAlignment="Center" FontSize="11" FontWeight="SemiBold"/>
+                <TextBox Text="{Binding OutputIndex, UpdateSourceTrigger=PropertyChanged}"
+                         Width="35" FontSize="11" VerticalContentAlignment="Center"/>
+                <TextBlock Text="] =" Foreground="#569CD6" VerticalAlignment="Center" FontSize="11" FontWeight="SemiBold"/>
+                <ComboBox ItemsSource="{Binding BoolValues}"
+                          SelectedItem="{Binding OutputValueStr, Mode=TwoWay}"
+                          Width="75" FontSize="11" Margin="4,0"
+                          Background="#FFFFFF" Foreground="#222222" BorderBrush="#999999"/>
+            </StackPanel>
+
+            <!-- ============================================================ -->
+            <!-- Comment Form: ; user text -->
+            <!-- ============================================================ -->
+            <StackPanel Orientation="Horizontal"
+                        Visibility="{Binding IsCommentCommand, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}">
+                <TextBlock Text=";" Foreground="#6A9955" VerticalAlignment="Center"
+                           FontSize="13" FontWeight="Bold" Margin="0,0,4,0"/>
+                <TextBox Text="{Binding CommentText, UpdateSourceTrigger=PropertyChanged}"
+                         Width="400" FontSize="11" VerticalContentAlignment="Center"
+                         ToolTip="Enter comment text"/>
+            </StackPanel>
+
+            <!-- ============================================================ -->
+            <!-- INSERT Mode: Insert / Cancel / FOLD checkbox -->
+            <!-- ============================================================ -->
+            <StackPanel Orientation="Horizontal" Margin="10,0,0,0"
+                        Visibility="{Binding IsInsertMode, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}">
+                <Rectangle Width="1" Fill="#999999" Margin="4,2"/>
+                <CheckBox Content="FOLD" IsChecked="{Binding WrapInFold}"
+                          VerticalAlignment="Center" Margin="6,0" FontSize="10"
+                          ToolTip="Wrap instruction in ;FOLD / ;ENDFOLD block"/>
+                <Button Content="Insert" Click="InsertConfirm_Click"
+                        Background="#388E3C" Foreground="White"
+                        Padding="12,2" Margin="4,0" BorderThickness="0" FontSize="11" Cursor="Hand"
+                        ToolTip="Insert generated KRL code at caret position"/>
+                <Button Content="Cancel" Click="InsertCancel_Click"
+                        Background="#B8B8B8" Foreground="#333333"
+                        Padding="8,2" Margin="4,0" BorderThickness="0" FontSize="11" Cursor="Hand"/>
+            </StackPanel>
+        </StackPanel>
     </Border>
 </UserControl>

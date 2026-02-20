@@ -80,6 +80,11 @@ public partial class ProgramEditor : UserControl
         CodeEditor.TextArea.TextEntering += OnTextEntering;
         CodeEditor.TextArea.TextEntered += OnTextEntered;
 
+        // Inline form events (INSERT mode)
+        InlineEditor.InsertRequested += OnInsertRequested;
+        InlineEditor.CancelRequested += (_, _) => { InlineFormPopup.IsOpen = false; };
+        InlineEditor.TeachPointRequested += OnTeachPointFromForm;
+
         // Initialize editor with default program and subscribe to changes
         DataContextChanged += (s, e) =>
         {
@@ -331,6 +336,10 @@ public partial class ProgramEditor : UserControl
         // Create VM on first use
         _inlineCommandVm ??= new SelectedCommandViewModel(OnInlineFormUpdateLine);
 
+        // Don't interrupt INSERT mode when caret moves
+        if (_inlineCommandVm.FormMode == InlineFormMode.Insert && InlineFormPopup.IsOpen)
+            return;
+
         // Only re-parse if we moved to a different line
         if (lineNumber == _lastInlineFormLine && InlineFormPopup.IsOpen) return;
         _lastInlineFormLine = lineNumber;
@@ -377,6 +386,67 @@ public partial class ProgramEditor : UserControl
         else
         {
             TouchUpButtonPopup.IsOpen = false;
+        }
+    }
+
+    // ========================================================================
+    // Insert Instruction (Command Palette)
+    // ========================================================================
+
+    private void InsertPTP_Click(object sender, RoutedEventArgs e) => ShowInsertForm(InlineCommandType.Motion, "PTP");
+    private void InsertLIN_Click(object sender, RoutedEventArgs e) => ShowInsertForm(InlineCommandType.Motion, "LIN");
+    private void InsertCIRC_Click(object sender, RoutedEventArgs e) => ShowInsertForm(InlineCommandType.Motion, "CIRC");
+    private void InsertVelocity_Click(object sender, RoutedEventArgs e) => ShowInsertForm(InlineCommandType.Velocity);
+    private void InsertWait_Click(object sender, RoutedEventArgs e) => ShowInsertForm(InlineCommandType.Wait);
+    private void InsertOutput_Click(object sender, RoutedEventArgs e) => ShowInsertForm(InlineCommandType.Output);
+    private void InsertComment_Click(object sender, RoutedEventArgs e) => ShowInsertForm(InlineCommandType.Comment);
+
+    private void ShowInsertForm(InlineCommandType type, string? motionType = null)
+    {
+        // Close command palette popup
+        InsertInstructionToggle.IsChecked = false;
+
+        _inlineCommandVm ??= new SelectedCommandViewModel(OnInlineFormUpdateLine);
+
+        var lineNumber = CodeEditor.TextArea.Caret.Line;
+        _inlineCommandVm.InitForInsert(type, lineNumber);
+
+        if (motionType != null)
+        {
+            _inlineCommandVm.MotionType = motionType;
+        }
+
+        InlineEditor.DataContext = _inlineCommandVm;
+        PositionPopupBelowLine(InlineFormPopup, lineNumber);
+        InlineFormPopup.IsOpen = true;
+    }
+
+    private void OnInsertRequested(object? sender, string krlText)
+    {
+        InlineFormPopup.IsOpen = false;
+
+        var offset = CodeEditor.CaretOffset;
+        var line = CodeEditor.Document.GetLineByOffset(offset);
+
+        // Insert AFTER current line
+        CodeEditor.Document.Insert(line.EndOffset, "\n" + krlText);
+
+        // Move caret to end of inserted text
+        CodeEditor.CaretOffset = line.EndOffset + 1 + krlText.Length;
+    }
+
+    private async void OnTeachPointFromForm(object? sender, string pointType)
+    {
+        if (DataContext is ProgramEditorViewModel vm)
+        {
+            var pointName = await vm.TeachPointForFormAsync();
+            if (_inlineCommandVm != null && !string.IsNullOrEmpty(pointName))
+            {
+                if (pointType == "target")
+                    _inlineCommandVm.TargetName = pointName;
+                else if (pointType == "aux")
+                    _inlineCommandVm.AuxPointName = pointName;
+            }
         }
     }
 

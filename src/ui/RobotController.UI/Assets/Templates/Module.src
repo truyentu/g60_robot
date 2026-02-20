@@ -3,14 +3,19 @@
 &COMMENT {COMMENT}
 
 DEF {NAME}()
-  ;FOLD INI
-    ;FOLD BASISTECH INI
-      BAS(#INITMOV, 0)
-    ;ENDFOLD
+  $TOOL = TOOL_DATA[1]
+  $BASE = BASE_DATA[0]
+
+  ; Velocity settings
+  $VEL.CP = 0.3
+
+  ; Go to home position
+  PTP HOME
+
+  ;FOLD MAIN
   ;ENDFOLD
 
-  ;FOLD PTP HOME Vel=100% DEFAULT
-    PTP HOME Vel=100% DEFAULT
-  ;ENDFOLD
+  ; Return home
+  PTP HOME
 
 END

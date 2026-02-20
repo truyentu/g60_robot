@@ -30,7 +30,8 @@ public partial class ModeOption : ObservableObject
 }
 
 /// <summary>
-/// ViewModel for Operation Mode management
+/// ViewModel for Operation Mode management (KUKA KSS 8.3 §3.5.3, §4.12)
+/// Modes: T1 (Manual), T2 (Test), AUT (Automatic), EXT (Automatic External)
 /// </summary>
 public partial class ModeViewModel : ObservableObject
 {
@@ -38,10 +39,10 @@ public partial class ModeViewModel : ObservableObject
 
     // Current mode
     [ObservableProperty]
-    private string _currentMode = "MANUAL";
+    private string _currentMode = "T1";
 
     [ObservableProperty]
-    private Brush _modeColor = Brushes.Yellow;
+    private Brush _modeColor = Brushes.Gold;
 
     [ObservableProperty]
     private double _maxLinearVelocity = 250.0;
@@ -54,6 +55,16 @@ public partial class ModeViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _safetyFenceRequired;
+
+    // Mode-dependent feature flags
+    [ObservableProperty]
+    private bool _isJogEnabled = true;
+
+    [ObservableProperty]
+    private bool _isTeachEnabled = true;
+
+    [ObservableProperty]
+    private bool _isProgramStartEnabled = true;
 
     // Mode selection
     [ObservableProperty]
@@ -72,17 +83,17 @@ public partial class ModeViewModel : ObservableObject
     [ObservableProperty]
     private bool _isCheckingRequirements;
 
+    // Popup open state
+    [ObservableProperty]
+    private bool _isModePopupOpen;
+
     public ObservableCollection<ModeOption> AvailableModes { get; } = new();
     public ObservableCollection<string> MissingRequirements { get; } = new();
 
     public ModeViewModel(IIpcClientService ipcClient)
     {
         _ipcClient = ipcClient;
-
-        // Initialize available modes
         InitializeModes();
-
-        // Subscribe to mode change events
         _ipcClient.OperationModeChanged += OnOperationModeChanged;
     }
 
@@ -90,37 +101,37 @@ public partial class ModeViewModel : ObservableObject
     {
         AvailableModes.Add(new ModeOption
         {
-            Name = "MANUAL",
-            DisplayName = "MANUAL (T1)",
-            Description = "Teaching mode: Max 250mm/s, Deadman required",
+            Name = "T1",
+            DisplayName = "T1",
+            Description = "Manual Reduced Velocity — Max 250mm/s, Jog + Teach enabled",
             Color = Brushes.Gold
         });
 
         AvailableModes.Add(new ModeOption
         {
-            Name = "TEST",
-            DisplayName = "TEST (T2)",
-            Description = "Test mode: Full speed, Operator supervision",
+            Name = "T2",
+            DisplayName = "T2",
+            Description = "Manual High Velocity — Full speed, Program run only",
             Color = Brushes.Orange
         });
 
         AvailableModes.Add(new ModeOption
         {
-            Name = "AUTO",
-            DisplayName = "AUTO",
-            Description = "Automatic mode: Full speed, Safety fence required",
+            Name = "AUT",
+            DisplayName = "AUT",
+            Description = "Automatic — Full speed, Start/Stop from UI",
             Color = Brushes.LimeGreen
         });
 
         AvailableModes.Add(new ModeOption
         {
-            Name = "REMOTE",
-            DisplayName = "REMOTE",
-            Description = "External control: PLC control, Full safety system",
+            Name = "EXT",
+            DisplayName = "EXT",
+            Description = "Automatic External — PLC control",
             Color = Brushes.DodgerBlue
         });
 
-        // Select MANUAL by default
+        // Select T1 by default
         SelectedMode = AvailableModes[0];
         AvailableModes[0].IsSelected = true;
     }
@@ -129,12 +140,134 @@ public partial class ModeViewModel : ObservableObject
     {
         return mode switch
         {
+            "T1" => Brushes.Gold,
+            "T2" => Brushes.Orange,
+            "AUT" => Brushes.LimeGreen,
+            "EXT" => Brushes.DodgerBlue,
+            // Legacy names for backward compat with IPC
             "MANUAL" => Brushes.Gold,
             "TEST" => Brushes.Orange,
             "AUTO" => Brushes.LimeGreen,
             "REMOTE" => Brushes.DodgerBlue,
             _ => Brushes.Gray
         };
+    }
+
+    private string NormalizeModeToKuka(string mode)
+    {
+        return mode switch
+        {
+            "MANUAL" => "T1",
+            "TEST" => "T2",
+            "AUTO" => "AUT",
+            "REMOTE" => "EXT",
+            _ => mode
+        };
+    }
+
+    private void ApplyModeConstraints(string mode)
+    {
+        switch (mode)
+        {
+            case "T1":
+                IsJogEnabled = true;
+                IsTeachEnabled = true;
+                IsProgramStartEnabled = true;
+                MaxLinearVelocity = 250.0;
+                DeadmanRequired = true;
+                SafetyFenceRequired = false;
+                break;
+            case "T2":
+                IsJogEnabled = false;
+                IsTeachEnabled = false;
+                IsProgramStartEnabled = true;
+                MaxLinearVelocity = double.MaxValue;
+                DeadmanRequired = true;
+                SafetyFenceRequired = false;
+                break;
+            case "AUT":
+                IsJogEnabled = false;
+                IsTeachEnabled = false;
+                IsProgramStartEnabled = true;
+                MaxLinearVelocity = double.MaxValue;
+                DeadmanRequired = false;
+                SafetyFenceRequired = true;
+                break;
+            case "EXT":
+                IsJogEnabled = false;
+                IsTeachEnabled = false;
+                IsProgramStartEnabled = false; // PLC controls start
+                MaxLinearVelocity = double.MaxValue;
+                DeadmanRequired = false;
+                SafetyFenceRequired = true;
+                break;
+        }
+    }
+
+    [RelayCommand]
+    private void ToggleModePopup()
+    {
+        IsModePopupOpen = !IsModePopupOpen;
+    }
+
+    [RelayCommand]
+    private void SetMode(ModeOption? mode)
+    {
+        if (mode == null || mode.Name == CurrentMode)
+        {
+            IsModePopupOpen = false;
+            return;
+        }
+
+        // Confirmation: warn if switching away from T1 (jog/teach will be disabled)
+        if (CurrentMode == "T1" && (mode.Name == "T2" || mode.Name == "AUT" || mode.Name == "EXT"))
+        {
+            var result = System.Windows.MessageBox.Show(
+                $"Switch to {mode.DisplayName}?\n\n" +
+                "Jog and Teach functions will be disabled.\n" +
+                (mode.Name == "T2" ? "Speed limit (250mm/s) will be removed." : "") +
+                (mode.Name == "AUT" ? "Automatic mode — safety gate required." : "") +
+                (mode.Name == "EXT" ? "External mode — PLC controls Start/Stop." : ""),
+                "Change Operating Mode",
+                System.Windows.MessageBoxButton.OKCancel,
+                System.Windows.MessageBoxImage.Warning);
+
+            if (result != System.Windows.MessageBoxResult.OK)
+            {
+                IsModePopupOpen = false;
+                return;
+            }
+        }
+
+        // Update selection
+        foreach (var m in AvailableModes)
+            m.IsSelected = m.Name == mode.Name;
+
+        SelectedMode = mode;
+        CurrentMode = mode.Name;
+        ModeColor = GetModeColor(mode.Name);
+        ApplyModeConstraints(mode.Name);
+
+        IsModePopupOpen = false;
+        Log.Information("Mode switched to {Mode}", mode.Name);
+
+        // Also push to IPC if connected
+        _ = PushModeToIpcAsync(mode.Name);
+    }
+
+    private async Task PushModeToIpcAsync(string mode)
+    {
+        if (!_ipcClient.IsConnected)
+            return;
+
+        try
+        {
+            await _ipcClient.SetOperationModeAsync(mode);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to push mode {Mode} to IPC", mode);
+        }
     }
 
     [RelayCommand]
@@ -148,21 +281,17 @@ public partial class ModeViewModel : ObservableObject
             var response = await _ipcClient.GetOperationModeAsync();
             if (response != null)
             {
-                CurrentMode = response.Mode;
-                ModeColor = GetModeColor(response.Mode);
-                MaxLinearVelocity = response.MaxLinearVelocity;
+                var kukaMode = NormalizeModeToKuka(response.Mode);
+                CurrentMode = kukaMode;
+                ModeColor = GetModeColor(kukaMode);
                 MaxJointVelocity = response.MaxJointVelocity;
-                DeadmanRequired = response.DeadmanRequired;
-                SafetyFenceRequired = response.SafetyFenceRequired;
+                ApplyModeConstraints(kukaMode);
 
-                // Update selection
                 foreach (var mode in AvailableModes)
                 {
-                    mode.IsSelected = mode.Name == response.Mode;
+                    mode.IsSelected = mode.Name == kukaMode;
                     if (mode.IsSelected)
-                    {
                         SelectedMode = mode;
-                    }
                 }
             }
         }
@@ -179,8 +308,6 @@ public partial class ModeViewModel : ObservableObject
             return;
 
         SelectedMode = mode;
-
-        // Check requirements for this mode
         await CheckRequirementsAsync(mode.Name);
     }
 
@@ -271,22 +398,21 @@ public partial class ModeViewModel : ObservableObject
     {
         System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
         {
-            CurrentMode = e.NewMode;
-            ModeColor = GetModeColor(e.NewMode);
-            MaxLinearVelocity = e.MaxLinearVelocity;
+            var kukaMode = NormalizeModeToKuka(e.NewMode);
+            CurrentMode = kukaMode;
+            ModeColor = GetModeColor(kukaMode);
             MaxJointVelocity = e.MaxJointVelocity;
+            ApplyModeConstraints(kukaMode);
 
-            // Update selection
             foreach (var mode in AvailableModes)
             {
-                mode.IsSelected = mode.Name == e.NewMode;
+                mode.IsSelected = mode.Name == kukaMode;
                 if (mode.IsSelected)
-                {
                     SelectedMode = mode;
-                }
             }
 
-            Log.Information("Operation mode changed: {Previous} -> {New}", e.PreviousMode, e.NewMode);
+            Log.Information("Operation mode changed: {Previous} -> {New}",
+                NormalizeModeToKuka(e.PreviousMode), kukaMode);
         });
     }
 }

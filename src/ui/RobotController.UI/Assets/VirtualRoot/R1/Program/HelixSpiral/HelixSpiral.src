@@ -1,0 +1,45 @@
+DEF HelixSpiral()
+  $TOOL = TOOL_DATA[1]
+  $BASE = BASE_DATA[0]
+
+  ; Velocity settings
+  $VEL.CP = 0.3
+  $APO.CDIS = 5
+
+  ; Go to home position
+  PTP pHome
+
+  ; Approach above helix center
+  LIN pApproach
+
+  ; Move to helix start point
+  $VEL.CP = 0.1
+  LIN pStart
+
+  ; ============================
+  ; Helix: 5 revolutions
+  ; Phi 250mm, Z pitch 30mm
+  ; ============================
+  $VEL.CP = 0.05
+
+  ; Revolution 1: Z=400 -> Z=430
+  CIRC hAux1, hEnd1, CA 360.0
+
+  ; Revolution 2: Z=430 -> Z=460
+  CIRC hAux2, hEnd2, CA 360.0
+
+  ; Revolution 3: Z=460 -> Z=490
+  CIRC hAux3, hEnd3, CA 360.0
+
+  ; Revolution 4: Z=490 -> Z=520
+  CIRC hAux4, hEnd4, CA 360.0
+
+  ; Revolution 5: Z=520 -> Z=550
+  CIRC hAux5, hEnd5, CA 360.0
+
+  ; Return home
+  $VEL.CP = 0.3
+  LIN pApproach
+  PTP pHome
+
+END

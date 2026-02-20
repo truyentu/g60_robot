@@ -93,6 +93,34 @@ public static partial class RegexHelper
     public static partial Regex ArcEndRegex();
 
     // ========================================================================
+    // Inline Form Patterns (Velocity, Wait, Output)
+    // ========================================================================
+
+    /// <summary>
+    /// Match velocity assignment: $VEL.CP = 0.1 or $VEL_AXIS[1] = 100
+    /// Groups: [1]=Variable (e.g. "$VEL.CP"), [2]=Value
+    /// </summary>
+    [GeneratedRegex(@"(\$VEL(?:\.\w+|\w*\[\d+\]))\s*=\s*([\d\.\-eE]+)",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled)]
+    public static partial Regex VelocityAssignRegex();
+
+    /// <summary>
+    /// Match WAIT SEC N or WAIT FOR condition
+    /// Groups: [1]=keyword (SEC or FOR), [2]=time (SEC mode), [3]=condition (FOR mode)
+    /// </summary>
+    [GeneratedRegex(@"WAIT\s+(SEC\s+([\d\.\-eE]+)|FOR\s+(.+))",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled)]
+    public static partial Regex WaitRegex();
+
+    /// <summary>
+    /// Match $OUT[N] = TRUE/FALSE
+    /// Groups: [1]=Index, [2]=Value (TRUE/FALSE)
+    /// </summary>
+    [GeneratedRegex(@"\$OUT\s*\[\s*(\d+)\s*\]\s*=\s*(TRUE|FALSE)",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled)]
+    public static partial Regex OutputRegex();
+
+    // ========================================================================
     // Helper Methods
     // ========================================================================
 

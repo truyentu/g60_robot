@@ -381,10 +381,13 @@ END";
     partial void OnIsOnMotionLineChanged(bool value) => ModifyPositionCommand.NotifyCanExecuteChanged();
     partial void OnCaretTargetNameChanged(string value) => ModifyPositionCommand.NotifyCanExecuteChanged();
 
+    private bool _isPreviewingPath;
+
     partial void OnProgramSourceChanged(string value)
     {
         // Auto-clear path preview when program source changes
-        if (IsPathPreviewVisible)
+        // But NOT if we're in the middle of PreviewPath() call
+        if (IsPathPreviewVisible && !_isPreviewingPath)
         {
             _viewportService.ClearPathPreview();
             IsPathPreviewVisible = false;
@@ -1209,6 +1212,55 @@ END";
         }
     }
 
+    /// <summary>
+    /// Teach a point from the inline form (INSERT mode).
+    /// Returns the auto-generated point name, or null on failure.
+    /// </summary>
+    public async Task<string?> TeachPointForFormAsync()
+    {
+        try
+        {
+            var status = await _ipcClient.GetStatusAsync();
+            if (status?.TcpPosition == null || status.TcpPosition.Count < 6)
+            {
+                ShowToast("Cannot teach: no TCP position available", "error");
+                return null;
+            }
+
+            string pointName = GenerateNextPointName();
+            var tcp = status.TcpPosition;
+
+            var point = new PointInfo
+            {
+                Name = pointName,
+                X = tcp[0], Y = tcp[1], Z = tcp[2],
+                Rx = tcp[3], Ry = tcp[4], Rz = tcp[5]
+            };
+
+            Points.Add(point);
+            _datDeclarations.Add(new DatDeclaration
+            {
+                Type = "E6POS",
+                Name = pointName,
+                RawValue = $"{{X {point.X:F2}, Y {point.Y:F2}, Z {point.Z:F2}, A {point.Rx:F2}, B {point.Ry:F2}, C {point.Rz:F2}}}"
+            });
+
+            EnsureDatFile();
+            SaveDatFile();
+
+            await _ipcClient.SetPointAsync(pointName, tcp.ToArray());
+
+            ShowToast($"Taught {pointName}: ({point.X:F1}, {point.Y:F1}, {point.Z:F1})");
+            return pointName;
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Teach failed: {ex.Message}", "error", 5000);
+            Log.Error(ex, "Failed to teach point from inline form");
+            return null;
+        }
+    }
+
     [RelayCommand]
     private async Task RefreshPointsAsync()
     {
@@ -1463,6 +1515,22 @@ END";
     [RelayCommand]
     private void PreviewPath()
     {
+        _isPreviewingPath = true;
+        try
+        {
+            PreviewPathCore();
+        }
+        finally
+        {
+            _isPreviewingPath = false;
+        }
+    }
+
+    private void PreviewPathCore()
+    {
+        const string debugLog = @"E:\DEV_CONTEXT_PROJECTs\Robot_controller\debug_logs\circ_debug.txt";
+        System.IO.File.WriteAllText(debugLog, $"=== CIRC Debug Log === {DateTime.Now:yyyy-MM-dd HH:mm:ss}\n\n");
+
         if (string.IsNullOrWhiteSpace(ProgramSource))
         {
             ShowToast("No program loaded", "error", 3000);
@@ -1470,7 +1538,10 @@ END";
         }
 
         // Parse motion statements from .src
-        var motionRegex = new Regex(@"^\s*(PTP|LIN|CIRC)\s+(\w+)", RegexOptions.IgnoreCase | RegexOptions.Multiline);
+        // CIRC has 2 points + optional CA angle: CIRC pAux, pTarget, CA 360.0
+        var motionRegex = new Regex(
+            @"^\s*(PTP|LIN|CIRC)\s+(\w+)(?:\s*,\s*(\w+))?(?:\s*,\s*CA\s+([\d.]+))?",
+            RegexOptions.IgnoreCase | RegexOptions.Multiline);
         var matches = motionRegex.Matches(ProgramSource);
 
         if (matches.Count == 0)
@@ -1493,6 +1564,14 @@ END";
                 pointLookup[key] = new Point3D(coords.x, coords.y, coords.z);
         }
 
+        // Debug: dump pointLookup
+        System.IO.File.AppendAllText(debugLog,
+            $"pointLookup has {pointLookup.Count} entries (Points={Points.Count}, inline={inlineCache.Count}):\n");
+        foreach (var kvp in pointLookup.Take(30))
+            System.IO.File.AppendAllText(debugLog,
+                $"  {kvp.Key} = ({kvp.Value.X:F1}, {kvp.Value.Y:F1}, {kvp.Value.Z:F1})\n");
+        System.IO.File.AppendAllText(debugLog, "\n");
+
         // Build segments and markers
         var segments = new List<PathSegment>();
         var markers = new List<WaypointMarker>();
@@ -1502,36 +1581,110 @@ END";
         for (int i = 0; i < matches.Count; i++)
         {
             var motionType = matches[i].Groups[1].Value.ToUpperInvariant();
-            var targetName = matches[i].Groups[2].Value.ToUpperInvariant();
 
-            if (!pointLookup.TryGetValue(targetName, out var targetPos))
-                continue;
-
-            // Add segment from last point to this target
-            if (lastPoint.HasValue)
+            if (motionType == "CIRC")
             {
-                segments.Add(new PathSegment
-                {
-                    From = lastPoint.Value,
-                    To = targetPos,
-                    MotionType = motionType,
-                    PointName = matches[i].Groups[2].Value
-                });
-            }
+                // CIRC pAux, pTarget, CA angle
+                // Group 2 = aux point, Group 3 = target point, Group 4 = CA angle
+                var auxName = matches[i].Groups[2].Value.ToUpperInvariant();
+                var circTargetName = matches[i].Groups[3].Success
+                    ? matches[i].Groups[3].Value.ToUpperInvariant()
+                    : auxName; // fallback if only 1 point
 
-            // Add waypoint marker (only once per unique point)
-            if (!usedPoints.Contains(targetName))
+                bool auxFound = pointLookup.TryGetValue(auxName, out var auxPos);
+                if (!auxFound)
+                    System.IO.File.AppendAllText(@"E:\DEV_CONTEXT_PROJECTs\Robot_controller\debug_logs\circ_debug.txt",
+                        $"[WARN] Aux point '{auxName}' NOT FOUND in pointLookup ({pointLookup.Count} points)\n");
+                if (!pointLookup.TryGetValue(circTargetName, out var circTargetPos))
+                    continue;
+
+                double? caAngle = null;
+                if (matches[i].Groups[4].Success &&
+                    double.TryParse(matches[i].Groups[4].Value,
+                        System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out var ca))
+                    caAngle = ca;
+
+                if (lastPoint.HasValue)
+                {
+                    var via = auxFound ? auxPos : (Point3D?)null;
+                    System.IO.File.AppendAllText(debugLog,
+                        $"[CIRC] #{i}: auxName={auxName} auxFound={auxFound} " +
+                        $"From=({lastPoint.Value.X:F1},{lastPoint.Value.Y:F1},{lastPoint.Value.Z:F1}) " +
+                        (via.HasValue ? $"Via=({via.Value.X:F1},{via.Value.Y:F1},{via.Value.Z:F1}) " : "Via=NULL ") +
+                        $"To=({circTargetPos.X:F1},{circTargetPos.Y:F1},{circTargetPos.Z:F1}) " +
+                        $"CA={caAngle}\n");
+                    segments.Add(new PathSegment
+                    {
+                        From = lastPoint.Value,
+                        To = circTargetPos,
+                        Via = via,
+                        CircAngle = caAngle,
+                        MotionType = motionType,
+                        PointName = matches[i].Groups[3].Success
+                            ? matches[i].Groups[3].Value
+                            : matches[i].Groups[2].Value
+                    });
+                }
+
+                // Add waypoint markers for aux and target
+                if (auxPos != default && !usedPoints.Contains(auxName))
+                {
+                    markers.Add(new WaypointMarker
+                    {
+                        Position = auxPos,
+                        Label = matches[i].Groups[2].Value,
+                        IsEndpoint = false
+                    });
+                    usedPoints.Add(auxName);
+                }
+                if (!usedPoints.Contains(circTargetName))
+                {
+                    markers.Add(new WaypointMarker
+                    {
+                        Position = circTargetPos,
+                        Label = matches[i].Groups[3].Success
+                            ? matches[i].Groups[3].Value
+                            : matches[i].Groups[2].Value,
+                        IsEndpoint = i == matches.Count - 1
+                    });
+                    usedPoints.Add(circTargetName);
+                }
+
+                lastPoint = circTargetPos;
+            }
+            else
             {
-                markers.Add(new WaypointMarker
-                {
-                    Position = targetPos,
-                    Label = matches[i].Groups[2].Value,
-                    IsEndpoint = i == 0 || i == matches.Count - 1
-                });
-                usedPoints.Add(targetName);
-            }
+                // PTP or LIN — Group 2 = target point
+                var targetName = matches[i].Groups[2].Value.ToUpperInvariant();
 
-            lastPoint = targetPos;
+                if (!pointLookup.TryGetValue(targetName, out var targetPos))
+                    continue;
+
+                if (lastPoint.HasValue)
+                {
+                    segments.Add(new PathSegment
+                    {
+                        From = lastPoint.Value,
+                        To = targetPos,
+                        MotionType = motionType,
+                        PointName = matches[i].Groups[2].Value
+                    });
+                }
+
+                if (!usedPoints.Contains(targetName))
+                {
+                    markers.Add(new WaypointMarker
+                    {
+                        Position = targetPos,
+                        Label = matches[i].Groups[2].Value,
+                        IsEndpoint = i == 0 || i == matches.Count - 1
+                    });
+                    usedPoints.Add(targetName);
+                }
+
+                lastPoint = targetPos;
+            }
         }
 
         if (segments.Count == 0)
@@ -1543,7 +1696,10 @@ END";
         _viewportService.ShowPathPreview(segments);
         _viewportService.ShowWaypointMarkers(markers);
         IsPathPreviewVisible = true;
-        ShowToast($"Path preview: {segments.Count} segments, {markers.Count} waypoints");
+        int circCount = segments.Count(s => s.MotionType.Equals("CIRC", StringComparison.OrdinalIgnoreCase));
+        int linCount = segments.Count(s => s.MotionType.Equals("LIN", StringComparison.OrdinalIgnoreCase));
+        int ptpCount = segments.Count(s => s.MotionType.Equals("PTP", StringComparison.OrdinalIgnoreCase));
+        ShowToast($"Path: {ptpCount} PTP + {linCount} LIN + {circCount} CIRC, {markers.Count} waypoints");
     }
 
     [RelayCommand]
@@ -1639,6 +1795,95 @@ END";
         {
             ShowToast($"Teach failed: {ex.Message}", "error", 5000);
             Log.Error(ex, "Teach & Insert failed");
+        }
+    }
+
+    [RelayCommand]
+    private async Task TeachAsHomeAsync()
+    {
+        try
+        {
+            // 1. Get current TCP position
+            var tcpPose = _viewportService.GetCurrentTcpPose();
+            if (tcpPose == null || tcpPose.Length < 6)
+            {
+                var status = await _ipcClient.GetStatusAsync();
+                if (status?.TcpPosition == null || status.TcpPosition.Count < 6)
+                {
+                    ShowToast("Cannot get robot position", "error", 5000);
+                    return;
+                }
+                tcpPose = status.TcpPosition.ToArray();
+            }
+
+            // 2. Build E6POS raw value
+            var rawValue = $"{{X {tcpPose[0]:F2}, Y {tcpPose[1]:F2}, Z {tcpPose[2]:F2}, A {tcpPose[3]:F2}, B {tcpPose[4]:F2}, C {tcpPose[5]:F2}}}";
+
+            // 3. Find ALL home-like points in _datDeclarations (HOME, pHome, etc.)
+            var homeDecls = _datDeclarations.Where(d =>
+                d.Name.Equals("HOME", StringComparison.OrdinalIgnoreCase) ||
+                d.Name.Equals("pHome", StringComparison.OrdinalIgnoreCase)).ToList();
+
+            var updatedNames = new List<string>();
+
+            if (homeDecls.Count > 0)
+            {
+                foreach (var decl in homeDecls)
+                {
+                    decl.RawValue = rawValue;
+                    decl.Type = "E6POS";
+                    updatedNames.Add(decl.Name);
+                }
+            }
+            else
+            {
+                // No home point exists — add HOME
+                _datDeclarations.Insert(0, new DatDeclaration
+                {
+                    Type = "E6POS",
+                    Name = "HOME",
+                    RawValue = rawValue
+                });
+                updatedNames.Add("HOME");
+            }
+
+            // 4. Update Points collection for all home-like points
+            var homePoints = Points.Where(p =>
+                p.Name.Equals("HOME", StringComparison.OrdinalIgnoreCase) ||
+                p.Name.Equals("pHome", StringComparison.OrdinalIgnoreCase)).ToList();
+
+            if (homePoints.Count > 0)
+            {
+                foreach (var hp in homePoints)
+                {
+                    hp.X = tcpPose[0]; hp.Y = tcpPose[1]; hp.Z = tcpPose[2];
+                    hp.Rx = tcpPose[3]; hp.Ry = tcpPose[4]; hp.Rz = tcpPose[5];
+                }
+            }
+            else
+            {
+                Points.Insert(0, new PointInfo
+                {
+                    Name = updatedNames[0],
+                    X = tcpPose[0], Y = tcpPose[1], Z = tcpPose[2],
+                    Rx = tcpPose[3], Ry = tcpPose[4], Rz = tcpPose[5]
+                });
+            }
+
+            // 5. Save .dat file
+            EnsureDatFile();
+            SaveDatFile();
+
+            // 6. Toast notification
+            var names = string.Join(", ", updatedNames);
+            ShowToast($"{names} set to ({tcpPose[0]:F1}, {tcpPose[1]:F1}, {tcpPose[2]:F1})");
+            Log.Information("Teach as HOME: {Names} at ({X:F1}, {Y:F1}, {Z:F1})",
+                names, tcpPose[0], tcpPose[1], tcpPose[2]);
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Teach HOME failed: {ex.Message}", "error", 5000);
+            Log.Error(ex, "Teach as HOME failed");
         }
     }
 
@@ -1807,5 +2052,149 @@ END";
             _viewportService.SetTraceMotionType("LIN");
         else if (line.StartsWith("CIRC", StringComparison.OrdinalIgnoreCase))
             _viewportService.SetTraceMotionType("CIRC");
+    }
+
+    // ==========================================================================
+    // TWA: Spin Angle Optimization (MPSO)
+    // ==========================================================================
+
+    [ObservableProperty]
+    private bool _isOptimizing;
+
+    [ObservableProperty]
+    private double _optimizationProgress;
+
+    [ObservableProperty]
+    private string _optimizationStatus = "";
+
+    /// <summary>
+    /// Extract LIN waypoints from current program and optimize spin angles
+    /// to avoid wrist singularity.
+    /// </summary>
+    [RelayCommand]
+    private async Task OptimizePathAsync()
+    {
+        if (string.IsNullOrEmpty(ProgramSource) || Points.Count < 2)
+        {
+            ShowToast("Need at least 2 waypoints for optimization", "warning");
+            return;
+        }
+
+        if (!_ipcClient.IsConnected)
+        {
+            ShowToast("IPC not connected — cannot compute IK", "error");
+            return;
+        }
+
+        try
+        {
+            IsOptimizing = true;
+            OptimizationStatus = "Extracting LIN waypoints...";
+
+            // Extract LIN points from program
+            var weldPath = ExtractWeldPath();
+            if (weldPath.Points.Count < 2)
+            {
+                ShowToast("No LIN motion points found in program", "warning");
+                return;
+            }
+
+            // Get current joint positions as IK seed
+            double[]? seedJointsDeg = null;
+            var status = await _ipcClient.GetStatusAsync();
+            if (status?.Joints?.Count >= 6)
+                seedJointsDeg = status.Joints.ToArray();
+
+            // MA2010 joint limits in radians
+            var jointLimitsRad = new (double min, double max)[]
+            {
+                (-Math.PI, Math.PI),               // J1: ±180°
+                (-135 * Math.PI/180, 45 * Math.PI/180),  // J2
+                (-60 * Math.PI/180, 150 * Math.PI/180),  // J3
+                (-Math.PI, Math.PI),               // J4: ±180°
+                (-120 * Math.PI/180, 120 * Math.PI/180),  // J5
+                (-2 * Math.PI, 2 * Math.PI),       // J6: ±360°
+            };
+
+            var kinProxy = new IpcKinematicsProxy(_ipcClient, jointLimitsRad, seedJointsDeg);
+
+            OptimizationStatus = $"Optimizing {weldPath.Points.Count} waypoints (MPSO)...";
+
+            var optimizer = new SpinAngleOptimizer();
+            optimizer.ProgressChanged += (iter, cost, pct) =>
+            {
+                System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                {
+                    OptimizationProgress = pct;
+                    OptimizationStatus = $"Iteration {iter}/100: cost = {cost:F2}";
+                });
+            };
+
+            var result = await optimizer.OptimizeAsync(weldPath, kinProxy);
+
+            // Apply optimized spin angles back to Points collection
+            foreach (var pt in weldPath.Points)
+            {
+                var pointInfo = Points.FirstOrDefault(p =>
+                    p.Name.Equals(pt.PointName, StringComparison.OrdinalIgnoreCase));
+                if (pointInfo != null)
+                    pointInfo.Rz = pt.SpinAngle;
+            }
+
+            ShowToast($"Optimized! Cost improved {result.ImprovementPercent:F0}%, " +
+                      $"elapsed: {result.ElapsedTime.TotalSeconds:F1}s",
+                      "success", 5000);
+        }
+        catch (OperationCanceledException)
+        {
+            ShowToast("Optimization cancelled", "info");
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Optimization failed: {ex.Message}", "error", 5000);
+            Log.Error(ex, "Path optimization failed");
+        }
+        finally
+        {
+            IsOptimizing = false;
+            OptimizationProgress = 0;
+            OptimizationStatus = "";
+        }
+    }
+
+    /// <summary>
+    /// Extract LIN motion waypoints from current program into a WeldPath.
+    /// </summary>
+    private WeldPath ExtractWeldPath()
+    {
+        var path = new WeldPath { ProgramName = ProgramName ?? "" };
+        var lines = ProgramSource.Split('\n');
+        var linRegex = new Regex(@"^\s*LIN\s+(\w+)", RegexOptions.IgnoreCase);
+
+        foreach (var line in lines)
+        {
+            var match = linRegex.Match(line);
+            if (!match.Success) continue;
+
+            string pointName = match.Groups[1].Value;
+
+            // Find point in Points collection
+            var pointInfo = Points.FirstOrDefault(p =>
+                p.Name.Equals(pointName, StringComparison.OrdinalIgnoreCase));
+            if (pointInfo == null) continue;
+
+            path.Points.Add(new WeldPathPoint
+            {
+                X = pointInfo.X,
+                Y = pointInfo.Y,
+                Z = pointInfo.Z,
+                WorkAngle = pointInfo.Rx,
+                TravelAngle = pointInfo.Ry,
+                SpinAngle = pointInfo.Rz,
+                PointName = pointName
+            });
+        }
+
+        return path;
     }
 }

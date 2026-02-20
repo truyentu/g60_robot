@@ -1,0 +1,22 @@
+DEFDAT PipeWeld
+  ;FOLD EXTERNAL DECLARATIONS; %{PE}
+  ;ENDFOLD
+
+  ; Pipe center: X=600, Y=0
+  ; Pipe radius: 125mm
+  ; Tool orientation: always pointing toward pipe center (radial inward)
+  ;
+  ; Start/End at 3 o'clock (+X): tool points -X → A=180, B=90, C=0
+  ; Aux at 12 o'clock (+Y):     tool points -Y → A=-90, B=90, C=0
+
+  DECL E6POS pHome={X 1320.65, Y 0.00, Z 861.11, A 0.00, B 59.91, C 0.00}
+  DECL E6POS pApproach={X 600.00, Y 0.00, Z 600.00, A 0.00, B 90.00, C 0.00}
+  DECL E6POS pStart={X 725.00, Y 0.00, Z 400.00, A 180.00, B 90.00, C 0.00}
+  DECL E6POS hAux1={X 600.00, Y 125.00, Z 407.50, A -90.00, B 90.00, C 0.00}
+  DECL E6POS hEnd1={X 725.00, Y 0.00, Z 430.00, A 180.00, B 90.00, C 0.00}
+  DECL E6POS hAux2={X 600.00, Y 125.00, Z 437.50, A -90.00, B 90.00, C 0.00}
+  DECL E6POS hEnd2={X 725.00, Y 0.00, Z 460.00, A 180.00, B 90.00, C 0.00}
+  DECL E6POS hAux3={X 600.00, Y 125.00, Z 467.50, A -90.00, B 90.00, C 0.00}
+  DECL E6POS hEnd3={X 725.00, Y 0.00, Z 490.00, A 180.00, B 90.00, C 0.00}
+
+ENDDAT

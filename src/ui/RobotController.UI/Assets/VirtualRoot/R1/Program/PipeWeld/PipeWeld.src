@@ -1,0 +1,45 @@
+DEF PipeWeld()
+  $TOOL = TOOL_DATA[1]
+  $BASE = BASE_DATA[0]
+
+  ; === Orientation control: tool tracks along arc ===
+  $ORI_TYPE = #VAR
+  $CIRC_TYPE = #PATH
+
+  ; Velocity settings
+  $VEL.CP = 0.3
+  $APO.CDIS = 5
+
+  ; Go to home position
+  PTP pHome
+
+  ; Approach above pipe center
+  LIN pApproach
+
+  ; Move to weld start (tool pointing at pipe center)
+  $VEL.CP = 0.1
+  LIN pStart
+
+  ; ====================================
+  ; Pipe Weld: 3 revolutions
+  ; Pipe center X=600, Y=0, Radius=125mm
+  ; Z pitch 30mm per revolution
+  ; Tool always points toward pipe center
+  ; ====================================
+  $VEL.CP = 0.05
+
+  ; Revolution 1: Z=400 -> Z=430
+  CIRC hAux1, hEnd1, CA 360.0
+
+  ; Revolution 2: Z=430 -> Z=460
+  CIRC hAux2, hEnd2, CA 360.0
+
+  ; Revolution 3: Z=460 -> Z=490
+  CIRC hAux3, hEnd3, CA 360.0
+
+  ; Return home
+  $VEL.CP = 0.3
+  LIN pApproach
+  PTP pHome
+
+END
